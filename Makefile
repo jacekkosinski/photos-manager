@@ -1,4 +1,4 @@
-.PHONY: help install test lint format type-check docs clean pre-commit coverage
+.PHONY: help install test lint format format-check type-check docs clean pre-commit coverage check-all
 
 # Default target
 .DEFAULT_GOAL := help
@@ -71,7 +71,7 @@ clean: ## Clean up generated files
 	find . -type f -name "*.pyo" -delete
 	find . -type f -name ".coverage" -delete
 
-check-all: lint type-check docstring-check test ## Run all checks (lint, type-check, docstrings, tests)
+check-all: lint format-check type-check docstring-check test pre-commit ## Run all quality checks
 
 build: ## Build the package
 	poetry build
