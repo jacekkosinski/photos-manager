@@ -154,6 +154,8 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
 
     Raises:
         SystemExit: If any of the following conditions occur:
+            - JSON file does not contain an array (must be a list/array at root level)
+            - JSON array contains non-object items (all items must be dictionaries)
             - JSON file is missing required fields (md5, path, sha1, size, date)
             - JSON file contains invalid/malformed JSON syntax
             - JSON file cannot be read (permission denied, file not found, etc.)
@@ -192,9 +194,23 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
             # Parse and validate JSON
             data = json.loads(content)
 
+            # Validate that data is a list
+            if not isinstance(data, list):
+                raise SystemExit(
+                    f"Error: JSON file {file_path} must contain an array of objects, "
+                    f"got {type(data).__name__}"
+                )
+
+            # Validate that all items are dictionaries
+            if not all(isinstance(item, dict) for item in data):
+                raise SystemExit(f"Error: JSON file {file_path} must contain an array of objects")
+
             # Check required fields
             if not all(required_json_fields.issubset(set(item.keys())) for item in data):
-                raise SystemExit(f"Error: JSON file {file_path} is missing required fields.")
+                raise SystemExit(
+                    f"Error: JSON file {file_path} is missing required fields "
+                    f"(md5, path, sha1, size, date)"
+                )
 
             # Sum sizes and count files
             total_bytes += sum(item["size"] for item in data)
