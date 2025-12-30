@@ -19,7 +19,8 @@ file is expected to contain an array of objects with the following required fiel
 
 Usage:
     ./mkversion.py --archive /path/to/archive
-    ./mkversion.py -a /path/to/archive --output custom.json
+    ./mkversion.py -a /path/to/archive -o custom.json
+    ./mkversion.py --archive /path/to/archive --output version.json
     python -m photos_manager.mkversion --archive /path/to/archive
 
 The version string follows the format "photos-SIZE-COUNT" where:
@@ -202,19 +203,19 @@ def main() -> int:
     to final JSON output.
 
     Workflow:
-        1. Parses command line arguments (archive path and output file)
+        1. Parses command line arguments (archive path and optional output file)
         2. Validates that the archive path exists and is readable
         3. Recursively finds all JSON files in the archive directory
         4. Validates and processes each JSON file
         5. Calculates aggregate statistics (total size, file count)
         6. Generates version string in format "photos-SIZE-COUNT"
         7. Captures timestamps (last modification, verification time)
-        8. Writes version information as formatted JSON to output file
+        8. Writes version information as formatted JSON to output file or stdout
 
     Command-line Arguments:
         -a, --archive ARCH_PATH: Path to archive directory (default: /share/photos)
-        --output OUTPUT_FILE: Output file path (default: .version.json)
-                             Use '-' to write to stdout instead of file
+        -o, --output OUTPUT_FILE: Output file path (optional)
+                                 If not specified, writes to stdout
 
     Returns:
         int: Exit code indicating success or failure
@@ -231,8 +232,8 @@ def main() -> int:
             - Output file cannot be written (permission denied, disk full, etc.)
 
     Output:
-        Writes JSON object to the specified output file (or stdout if '-')
-        with the following structure:
+        Writes JSON object to the specified output file, or to stdout if no
+        output file is specified, with the following structure:
             {
                 "version": str,         # Format: "photos-{TB:.3f}-{count%1000}"
                 "total_bytes": int,     # Total size in bytes
@@ -247,21 +248,28 @@ def main() -> int:
             }
 
     Examples:
-        >>> # Run with default archive path and output file
+        >>> # Run with default archive path (outputs to stdout)
         >>> sys.exit(main())
-        # Creates .version.json in current directory
+        {
+            "version": "photos-2.456-234",
+            ...
+        }
 
-        >>> # Command line usage with custom paths
-        $ ./mkversion.py --archive /mnt/photos/archive --output version.json
-        # Creates version.json with archive info
-
-        $ ./mkversion.py -a /share/photos --output -
+        >>> # Command line usage - output to stdout (default)
+        $ ./mkversion.py --archive /mnt/photos/archive
         {
             "version": "photos-2.456-234",
             "total_bytes": 2701131776000,
             ...
         }
-        # Outputs to stdout when using '-' as output
+
+        >>> # Save to file with -o flag
+        $ ./mkversion.py -a /share/photos -o version.json
+        # Creates version.json with archive info
+
+        >>> # Save to file with --output flag
+        $ ./mkversion.py --archive /data/photos --output .version.json
+        # Creates .version.json in current directory
 
     Note:
         The function uses timezone-aware timestamps in ISO 8601 format.
@@ -278,10 +286,11 @@ def main() -> int:
         help="Archive path (default: /share/photos)",
     )
     parser.add_argument(
+        "-o",
         "--output",
         dest="output_file",
-        default=".version.json",
-        help="Output file path (default: .version.json, use '-' for stdout)",
+        default=None,
+        help="Output file path (if not specified, writes to stdout)",
     )
     args = parser.parse_args()
 
@@ -324,7 +333,7 @@ def main() -> int:
     output_json = json.dumps(output, indent=4)
 
     # Write to file or stdout
-    if args.output_file == "-":
+    if args.output_file is None:
         print(output_json)
     else:
         try:
