@@ -3,18 +3,44 @@
 
 This script processes JSON files in a specified directory, validates their
 content, and generates a version file with metadata including:
-- Total size
-- File count
-- Last modification timestamp
-- File hashes
-- A formatted version string
+- Total size in bytes and terabytes
+- Total file count across all JSON files
+- Last modification timestamp of the most recently modified JSON file
+- SHA1 hashes of each JSON file for integrity verification
+- A formatted version string for easy identification
+
+The script recursively scans a directory tree for JSON files, where each JSON
+file is expected to contain an array of objects with the following required fields:
+    - md5: MD5 hash of the file
+    - path: File path
+    - sha1: SHA1 hash of the file
+    - size: File size in bytes
+    - date: File date/timestamp
 
 Usage:
     ./mkversion.py -a /path/to/archive
+    python -m photos_manager.mkversion -a /path/to/archive
 
 The version string follows the format "photos-SIZE-COUNT" where:
-- SIZE is the total content size in terabytes
-- COUNT is the last three digits of the total file count
+- SIZE is the total content size in terabytes (3 decimal places)
+- COUNT is the last three digits of the total file count (modulo 1000)
+
+Example output:
+    {
+        "version": "photos-2.456-234",
+        "total_bytes": 2701131776000,
+        "file_count": 12234,
+        "last_modified": "2025-12-30T12:34:56+01:00",
+        "last_verified": "2025-12-30T13:45:23+01:00",
+        "files": {
+            "archive1.json": "a1b2c3d4e5f6...",
+            "archive2.json": "f6e5d4c3b2a1..."
+        }
+    }
+
+Exit codes:
+    0 (os.EX_OK): Success
+    1 (SystemExit): Error occurred (invalid directory, no JSON files, validation failure)
 """
 
 import argparse
@@ -31,7 +57,42 @@ BYTES_PER_TB = 2**40
 
 
 def find_json_files(directory: str) -> list[tuple[float, str]]:
-    """Find all JSON files in a directory and return with modification times."""
+    """Find all JSON files in a directory tree and return with modification times.
+
+    Recursively walks through the directory tree starting from the specified
+    directory and collects all files with .json extension. For each JSON file
+    found, retrieves its modification time and full path.
+
+    The results are sorted by modification time in descending order (most
+    recently modified first).
+
+    Args:
+        directory: Path to the root directory to search for JSON files.
+            Can be an absolute or relative path string.
+
+    Returns:
+        A list of tuples, where each tuple contains:
+            - float: Modification time as Unix timestamp (seconds since epoch)
+            - str: Absolute path to the JSON file
+
+        The list is sorted by modification time in descending order.
+
+    Raises:
+        SystemExit: If no JSON files are found in the directory tree.
+
+    Warnings:
+        Files that cannot be accessed due to permission errors or OS errors
+        are skipped with a warning message printed to stdout. The function
+        continues processing other files.
+
+    Examples:
+        >>> files = find_json_files("/path/to/archive")
+        >>> files[0]
+        (1703945123.456789, '/path/to/archive/data/file1.json')
+        >>> # Most recently modified file is first
+        >>> len(files)
+        42
+    """
     json_files = []
     for root, _, files in os.walk(directory):
         for file in files:
@@ -52,7 +113,47 @@ def find_json_files(directory: str) -> list[tuple[float, str]]:
 def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str, str]]:
     """Validate JSON files and extract size and count information.
 
-    Returns (total_bytes, files_count, file_hashes).
+    Processes each JSON file to:
+    1. Calculate SHA1 hash of the entire JSON file (for integrity checking)
+    2. Parse and validate JSON structure
+    3. Verify all required fields are present in each JSON object
+    4. Sum up total bytes from all 'size' fields
+    5. Count total number of entries across all files
+
+    Each JSON file must contain an array of objects, where each object has
+    the required fields: md5, path, sha1, size, and date.
+
+    Args:
+        file_paths: List of absolute or relative file paths to JSON files
+            that need to be validated and processed.
+
+    Returns:
+        A tuple containing three elements:
+            - int: Total bytes - sum of all 'size' fields from all JSON entries
+            - int: Total count - total number of objects across all JSON files
+            - dict[str, str]: Mapping of JSON filenames (basename only) to their
+              SHA1 hash (hex digest)
+
+    Raises:
+        SystemExit: If any of the following conditions occur:
+            - JSON file is missing required fields (md5, path, sha1, size, date)
+            - JSON file contains invalid/malformed JSON syntax
+            - JSON file cannot be read (permission denied, file not found, etc.)
+
+    Note:
+        SHA1 is used for file integrity verification only (usedforsecurity=False),
+        not for cryptographic security purposes. This satisfies security linters
+        while maintaining compatibility with existing hash formats.
+
+    Examples:
+        >>> paths = ['/archive/file1.json', '/archive/file2.json']
+        >>> total, count, hashes = validate_and_process_json(paths)
+        >>> total
+        1234567890
+        >>> count
+        5432
+        >>> hashes
+        {'file1.json': 'a1b2c3...', 'file2.json': 'd4e5f6...'}
     """
     required_json_fields = {"md5", "path", "sha1", "size", "date"}
 
@@ -95,16 +196,67 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
 def main() -> int:
     """Main function that processes JSON files and generates a version JSON.
 
-    The function:
-    1. Parses command line arguments
-    2. Validates the archive path
-    3. Finds and processes JSON files
-    4. Calculates total size and file counts
-    5. Generates version information and timestamps
-    6. Outputs the result as formatted JSON
+    This is the main entry point for the mkversion utility. It orchestrates
+    the entire version generation process from command-line argument parsing
+    to final JSON output.
+
+    Workflow:
+        1. Parses command line arguments (archive path with -a flag)
+        2. Validates that the archive path exists and is readable
+        3. Recursively finds all JSON files in the archive directory
+        4. Validates and processes each JSON file
+        5. Calculates aggregate statistics (total size, file count)
+        6. Generates version string in format "photos-SIZE-COUNT"
+        7. Captures timestamps (last modification, verification time)
+        8. Outputs complete version information as formatted JSON to stdout
+
+    Command-line Arguments:
+        -a ARCH_PATH: Path to archive directory (default: /work)
 
     Returns:
-        int: Exit code (os.EX_OK on success)
+        int: Exit code indicating success or failure
+            - os.EX_OK (0): Successful execution
+            - 1 (SystemExit): Error occurred during processing
+
+    Raises:
+        SystemExit: If any of the following errors occur:
+            - Archive directory does not exist or is not a directory
+            - Archive directory is not readable (permission denied)
+            - No JSON files found in the archive directory
+            - JSON validation fails (missing fields, invalid format)
+            - File I/O errors during processing
+
+    Output:
+        Prints JSON object to stdout with the following structure:
+            {
+                "version": str,         # Format: "photos-{TB:.3f}-{count%1000}"
+                "total_bytes": int,     # Total size in bytes
+                "file_count": int,      # Total number of entries
+                "last_modified": str,   # ISO 8601 timestamp with timezone
+                "last_verified": str,   # ISO 8601 timestamp with timezone
+                "files": {              # Mapping of filename to SHA1 hash
+                    "file1.json": str,
+                    "file2.json": str,
+                    ...
+                }
+            }
+
+    Examples:
+        >>> # Run with default archive path
+        >>> sys.exit(main())
+
+        >>> # Command line usage
+        $ ./mkversion.py -a /mnt/photos/archive
+        {
+            "version": "photos-2.456-234",
+            "total_bytes": 2701131776000,
+            ...
+        }
+
+    Note:
+        The function uses timezone-aware timestamps in ISO 8601 format.
+        Version string uses last 3 digits of file count (modulo 1000) to
+        keep version string concise while still providing uniqueness.
     """
     parser = argparse.ArgumentParser(description="Generate version JSON")
     parser.add_argument(
