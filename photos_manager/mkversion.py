@@ -17,6 +17,10 @@ file is expected to contain an array of objects with the following required fiel
     - size: File size in bytes
     - date: File date/timestamp
 
+Note: Files ending with 'version.json' (e.g., .version.json, archive.version.json)
+are automatically excluded from processing as they contain version metadata rather
+than photo archive data.
+
 Usage:
     ./mkversion.py --archive /path/to/archive
     ./mkversion.py -a /path/to/archive -o custom.json
@@ -65,6 +69,9 @@ def find_json_files(directory: str) -> list[tuple[float, str]]:
     directory and collects all files with .json extension. For each JSON file
     found, retrieves its modification time and full path.
 
+    Files ending with 'version.json' are automatically excluded as they contain
+    version metadata rather than photo archive data.
+
     The results are sorted by modification time in descending order (most
     recently modified first).
 
@@ -87,18 +94,27 @@ def find_json_files(directory: str) -> list[tuple[float, str]]:
         are skipped with a warning message printed to stdout. The function
         continues processing other files.
 
+    Note:
+        Files matching the pattern '*version.json' are excluded:
+        - .version.json (generated version file)
+        - archive.version.json
+        - data_version.json
+        - etc.
+
     Examples:
         >>> files = find_json_files("/path/to/archive")
         >>> files[0]
         (1703945123.456789, '/path/to/archive/data/file1.json')
         >>> # Most recently modified file is first
+        >>> # .version.json is automatically excluded
         >>> len(files)
         42
     """
     json_files = []
     for root, _, files in os.walk(directory):
         for file in files:
-            if file.endswith(".json"):
+            # Skip version.json files (they have different structure)
+            if file.endswith(".json") and not file.endswith("version.json"):
                 try:
                     path = Path(root) / file
                     mtime = path.stat().st_mtime
