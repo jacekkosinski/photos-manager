@@ -362,7 +362,7 @@ def main() -> int:
         "last_verified": last_verified,
         "files": file_hashes,
     }
-    output_json = json.dumps(output, indent=4)
+    output_json = json.dumps(output, ensure_ascii=False, indent=4)
 
     # Write to file or stdout
     if args.output_file is None:

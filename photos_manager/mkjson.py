@@ -40,6 +40,11 @@ def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
     Returns:
         Tuple containing SHA-1 and MD5 checksums as hex strings.
         Returns (None, None) if file cannot be read.
+
+    Warnings:
+        Files that cannot be accessed due to permission errors or OS errors
+        are skipped with a warning message printed to stdout. The function
+        returns (None, None) to allow processing to continue with other files.
     """
     sha1_hash = hashlib.sha1(usedforsecurity=False)
     md5_hash = hashlib.md5(usedforsecurity=False)
@@ -51,7 +56,7 @@ def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
                 sha1_hash.update(byte_block)
                 md5_hash.update(byte_block)
     except OSError as e:
-        print(f"Error reading file {file_path}: {e}", file=sys.stderr)
+        print(f"Warning: Could not access {file_path}: {e}")
         return None, None
 
     return sha1_hash.hexdigest(), md5_hash.hexdigest()
@@ -60,13 +65,44 @@ def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
 def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
     """Collect information about all files in a given directory.
 
+    Recursively walks through the directory tree starting from the specified
+    directory and collects metadata for each file found. For each file,
+    calculates SHA-1 and MD5 checksums, retrieves file size and modification
+    time with timezone information.
+
     Args:
-        directory: Directory path to scan recursively.
-        time_zone: Time zone for modification time formatting.
+        directory: Directory path to scan recursively. Can be an absolute or
+            relative path string.
+        time_zone: Time zone identifier (e.g., 'UTC', 'Europe/Warsaw') for
+            formatting modification timestamps. Uses zoneinfo for timezone handling.
 
     Returns:
-        List of dictionaries containing file information with keys:
-        path, sha1, md5, date, size.
+        A list of dictionaries, where each dictionary contains file metadata
+        with the following keys:
+            - path (str): Absolute path to the file
+            - sha1 (str): SHA-1 checksum as hex string
+            - md5 (str): MD5 checksum as hex string
+            - date (str): Modification time in ISO 8601 format with timezone
+            - size (int): File size in bytes
+
+    Warnings:
+        Files that cannot be accessed due to permission errors or OS errors
+        during checksum calculation are skipped with a warning message. The
+        function continues processing other files.
+
+        If the directory itself cannot be accessed, a warning is printed to
+        stderr and an empty list is returned.
+
+    Examples:
+        >>> files = get_file_info("/path/to/photos", "Europe/Warsaw")
+        >>> files[0]
+        {
+            'path': '/path/to/photos/image.jpg',
+            'sha1': 'a1b2c3...',
+            'md5': 'd4e5f6...',
+            'date': '2025-01-04T12:34:56+0100',
+            'size': 1234567
+        }
     """
     local_tz = ZoneInfo(time_zone)
     file_info_list: list[dict[str, str | int]] = []
@@ -100,19 +136,32 @@ def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
                     }
                 )
     except OSError as e:
-        print(f"Error accessing directory {directory}: {e}", file=sys.stderr)
+        print(f"Warning: Error accessing directory {directory}: {e}", file=sys.stderr)
 
     return file_info_list
 
 
 def extract_numbers(path: str) -> tuple[int, int, str]:
-    """Extract numbers from a given path.
+    """Extract numbers from a given path for numerical sorting.
+
+    Searches for numeric patterns in the parent directory name and filename,
+    extracting the first number found in each. This is used for sorting files
+    numerically rather than alphabetically.
 
     Args:
-        path: Path string to extract numbers from.
+        path: Path string to extract numbers from. Can be absolute or relative.
 
     Returns:
-        Tuple of (directory number, filename number, filename).
+        A tuple containing three elements:
+            - int: First number found in parent directory name, or 0 if none
+            - int: First number found in filename, or 0 if none
+            - str: The filename (basename of the path)
+
+    Examples:
+        >>> extract_numbers("/archive/batch_42/photo_123.jpg")
+        (42, 123, 'photo_123.jpg')
+        >>> extract_numbers("/photos/no_numbers/image.png")
+        (0, 0, 'image.png')
     """
     # Extract numbers from the second directory
     path_obj = Path(path)
@@ -131,11 +180,28 @@ def extract_numbers(path: str) -> tuple[int, int, str]:
 def load_json(file_path: str) -> list[dict[str, str | int]] | None:
     """Load JSON data from a file.
 
+    Reads a JSON file and parses it into a list of dictionaries containing
+    file metadata. This is a utility function for loading previously generated
+    JSON files.
+
     Args:
-        file_path: Path to the JSON file.
+        file_path: Path to the JSON file to load. Can be absolute or relative.
 
     Returns:
-        List of dictionaries containing file information, or None on error.
+        List of dictionaries containing file information with keys matching
+        the output format (path, sha1, md5, date, size), or None if the file
+        cannot be read or parsed.
+
+    Note:
+        This function prints error messages to stderr and returns None on
+        failure, rather than raising exceptions. It's designed for use cases
+        where the calling code should continue execution even if loading fails.
+
+    Examples:
+        >>> data = load_json("archive.json")
+        >>> if data:
+        ...     print(f"Loaded {len(data)} file entries")
+        Loaded 42 file entries
     """
     try:
         path = Path(file_path)
@@ -153,12 +219,45 @@ def load_json(file_path: str) -> list[dict[str, str | int]] | None:
         return None
 
 
-def main() -> None:
+def main() -> int:
     """Generate JSON file with file information from a directory.
 
     This is the main entry point that processes command-line arguments,
     scans the directory, optionally merges with existing JSON, validates
     for duplicates, sorts results, and writes output JSON file.
+
+    The output JSON file is named after the source directory (e.g., scanning
+    '/path/to/photos' creates 'photos.json') and contains an array of objects
+    with file metadata (path, sha1, md5, date, size).
+
+    Command-line Arguments:
+        directory: Path to source directory (required positional argument)
+        --merge JSON: Path to existing JSON file to merge with current scan
+        --time-zone TZ: Timezone for timestamps (default: system timezone)
+        --sort-by-number: Sort by numeric patterns in directory/filename
+        --sort-by-dir: Sort by directory name then timestamp
+        (default sorting: by modification date then filename)
+
+    Returns:
+        int: Exit code indicating success or failure
+            - os.EX_OK (0): Successful execution
+            - 1 (SystemExit): Error occurred during processing
+
+    Raises:
+        SystemExit: If any of the following errors occur:
+            - Source directory does not exist or is not a directory
+            - Merge file cannot be read or contains invalid JSON
+            - Duplicate paths, SHA-1, or MD5 hashes detected
+            - Output file cannot be written
+
+    Examples:
+        >>> # Scan directory and create JSON
+        >>> sys.exit(main())  # Called with: ./mkjson.py /path/to/photos
+        File information written to photos.json
+
+        >>> # Merge with existing data
+        >>> # ./mkjson.py /new/photos --merge old.json
+        >>> sys.exit(main())
     """
     # Set up command-line argument parsing
     parser = argparse.ArgumentParser(
@@ -188,11 +287,7 @@ def main() -> None:
 
     # Ensure the directory exists
     if not Path(args.directory).is_dir():
-        print(
-            f"Error: The specified path '{args.directory}' is not a valid directory.",
-            file=sys.stderr,
-        )
-        return
+        raise SystemExit(f"Error: The specified path '{args.directory}' is not a valid directory.")
 
     # Get file information
     file_info_list = get_file_info(args.directory, args.time_zone)
@@ -204,15 +299,14 @@ def main() -> None:
             with merge_path.open(encoding="utf-8") as json_file:
                 merge_data = json.load(json_file)
                 file_info_list.extend(merge_data)
-        except FileNotFoundError:
-            print(f"The specified merge file '{args.merge}' does not exist.")
-            return
-        except json.JSONDecodeError:
-            print(
-                f"Error: JSON file '{args.merge}' contains an invalid format.",
-                file=sys.stderr,
-            )
-            return
+        except FileNotFoundError as exception:
+            raise SystemExit(
+                f"Error: The specified merge file '{args.merge}' does not exist."
+            ) from exception
+        except json.JSONDecodeError as exception:
+            raise SystemExit(
+                f"Error: JSON file '{args.merge}' contains an invalid format."
+            ) from exception
 
     # Checks for duplicate 'path', 'sha1', and 'md5' in the list
     for key in ["path", "sha1", "md5"]:
@@ -221,11 +315,7 @@ def main() -> None:
 
         if duplicates:
             duplicates_str = sorted(str(dup) for dup in duplicates)
-            print(
-                f"Error: Duplicate {key} found: {', '.join(duplicates_str)}",
-                file=sys.stderr,
-            )
-            return
+            raise SystemExit(f"Error: Duplicate {key} found: {', '.join(duplicates_str)}")
 
     # Sort file information
     if args.sort_by_number:
@@ -260,10 +350,13 @@ def main() -> None:
             json.dump(sorted_file_info, json_file, ensure_ascii=False, indent=4)
             json_file.write("\n")  # Ensure newline at end of file
         print(f"File information written to {output_json}")
-    except OSError as e:
-        print(f"Error writing to JSON file {output_json}: {e}", file=sys.stderr)
-        return
+    except OSError as exception:
+        raise SystemExit(
+            f"Error: Could not write to output file '{output_json}': {exception}"
+        ) from exception
+
+    return os.EX_OK
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
