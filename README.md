@@ -1,6 +1,8 @@
 # Photos Manager CLI
 
-Modern command-line tool for managing photos built with Python 3.12.
+Modern command-line tool for managing photo archives built with Python 3.12.
+
+This toolkit provides utilities for generating and managing metadata about photo collections, including checksum calculation, file tracking, and version management.
 
 ## Features
 
@@ -10,6 +12,9 @@ Modern command-line tool for managing photos built with Python 3.12.
 - 📚 Google-style docstrings with interrogate validation
 - 🔧 Pre-commit hooks for code quality
 - 🎯 Linting and formatting with Ruff
+- 🔐 SHA-1 and MD5 checksum generation
+- 📦 JSON-based metadata tracking
+- 🌍 Timezone-aware timestamps
 
 ## Prerequisites
 
@@ -42,6 +47,103 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
+## Available Commands
+
+### mkjson - Generate File Metadata
+
+Generate a JSON file containing metadata (checksums, sizes, timestamps) for all files in a directory.
+
+```bash
+# Basic usage - scan directory and create JSON
+mkjson /path/to/photos
+
+# Merge with existing JSON file
+mkjson /path/to/new-photos --merge existing.json
+
+# Sort by numeric patterns in filenames
+mkjson /path/to/photos --sort-by-number
+
+# Specify timezone for timestamps
+mkjson /path/to/photos --time-zone Europe/Warsaw
+```
+
+**Output format:**
+```json
+[
+    {
+        "path": "/path/to/photos/image.jpg",
+        "sha1": "a1b2c3d4e5f6...",
+        "md5": "d4e5f6g7h8i9...",
+        "date": "2025-01-04T12:34:56+0100",
+        "size": 1234567
+    }
+]
+```
+
+### mkversion - Generate Archive Version Info
+
+Generate version metadata from a collection of JSON files (created by mkjson).
+
+```bash
+# Basic usage - output to stdout
+mkversion /path/to/archive
+
+# Save to file
+mkversion /path/to/archive --output version.json
+mkversion /path/to/archive -o .version.json
+```
+
+**Output format:**
+```json
+{
+    "version": "photos-2.456-234",
+    "total_bytes": 2701131776000,
+    "file_count": 12234,
+    "last_modified": "2025-01-04T12:34:56+01:00",
+    "last_verified": "2025-01-04T13:45:23+01:00",
+    "files": {
+        "archive1.json": "a1b2c3d4e5f6...",
+        "archive2.json": "f6e5d4c3b2a1..."
+    }
+}
+```
+
+**Version string format:** `photos-{TB:.3f}-{count%1000}`
+- TB: Total size in terabytes (3 decimal places)
+- count%1000: Last three digits of total file count
+
+### Common Workflows
+
+#### 1. Create archive metadata from scratch
+
+```bash
+# Step 1: Scan photos directory and generate metadata
+mkjson /photos/2024 --time-zone Europe/Warsaw
+
+# Step 2: Generate version info from all JSON files
+mkversion /photos --output /photos/.version.json
+```
+
+#### 2. Add new photos to existing archive
+
+```bash
+# Scan new photos and merge with existing metadata
+mkjson /photos/2025 --merge /photos/2024.json
+
+# Update version info
+mkversion /photos --output /photos/.version.json
+```
+
+#### 3. Verify archive integrity
+
+```bash
+# Generate current metadata
+mkjson /photos/backup --output current.json
+
+# Compare with original (manual diff or use external tools)
+diff original.json current.json
+```
+
 ## Setup Pre-commit Hooks
 
 ```bash
@@ -59,27 +161,33 @@ pre-commit run --all-files
 ```
 photos-manager-cli/
 ├── photos_manager/
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── cli.py
-│   └── commands/
+│   ├── __init__.py          # Package initialization
+│   ├── mkjson.py           # Generate file metadata JSON
+│   └── mkversion.py        # Generate archive version info
 ├── tests/
 │   ├── __init__.py
-│   └── test_cli.py
-├── docs/
-├── pyproject.toml
-├── .pre-commit-config.yaml
-└── README.md
+│   ├── test_mkjson.py      # Tests for mkjson
+│   └── test_mkversion.py   # Tests for mkversion
+├── pyproject.toml          # Project configuration
+├── .pre-commit-config.yaml # Pre-commit hooks config
+├── .editorconfig           # Editor settings
+├── Makefile                # Development commands
+├── LICENSE                 # MIT License
+├── README.md               # This file
+└── QUICKSTART.md           # Quick start guide
 ```
 
-### Running the CLI
+### Running the Tools
 
 ```bash
 # Using Poetry
-poetry run photos --help
+poetry run mkjson /path/to/photos
+poetry run mkversion /path/to/archive
 
 # Or after activating the virtual environment
-photos --help
+poetry shell
+mkjson /path/to/photos
+mkversion /path/to/archive
 ```
 
 ### Code Quality Tools

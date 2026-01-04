@@ -26,18 +26,45 @@ poetry run pre-commit install
 
 ```bash
 # Using Poetry
-poetry run photos --help
+poetry run mkjson --help
+poetry run mkversion --help
 
 # Or activate shell first
 poetry shell
-photos --help
+mkjson --help
+mkversion --help
 ```
 
-## 4. Run Your First Command
+## 4. Run Your First Commands
+
+### Generate metadata for a photo directory
 
 ```bash
-photos hello --name "Your Name"
-photos version
+# Create a test directory with some files
+mkdir -p test_photos
+echo "test image 1" > test_photos/photo1.jpg
+echo "test image 2" > test_photos/photo2.jpg
+
+# Generate JSON metadata
+mkjson test_photos
+
+# This creates test_photos.json with checksums, sizes, and timestamps
+cat test_photos.json
+```
+
+### Generate version info from JSON files
+
+```bash
+# Create a directory with JSON files (from mkjson)
+mkdir -p archive
+cp test_photos.json archive/
+
+# Generate version information
+mkversion archive
+
+# Or save to file
+mkversion archive --output archive/.version.json
+cat archive/.version.json
 ```
 
 ## 5. Development Commands
@@ -61,45 +88,51 @@ make help
 ```
 photos-manager-cli/
 ├── photos_manager/       # Main source code
-│   ├── cli.py           # CLI entry point
-│   └── commands/        # CLI commands (add yours here)
+│   ├── __init__.py      # Package initialization
+│   ├── mkjson.py        # Generate file metadata JSON
+│   └── mkversion.py     # Generate archive version info
 ├── tests/               # Test files
-├── docs/                # Documentation
+│   ├── test_mkjson.py   # Tests for mkjson
+│   └── test_mkversion.py # Tests for mkversion
+├── Makefile             # Development commands
 └── pyproject.toml       # Project configuration
 ```
 
-## 7. Adding a New Command
+## 7. Common Use Cases
 
-1. **Create command file** in `photos_manager/commands/`:
+### Archive a photo collection
 
-```python
-"""My new command."""
+```bash
+# 1. Scan your entire photo collection
+mkjson /photos/2024 --time-zone Europe/Warsaw
 
+# 2. Generate version info
+mkversion /photos --output /photos/.version.json
 
-def my_command(option: str) -> None:
-    """Do something useful.
-
-    Args:
-        option: Some option for the command.
-    """
-    print(f"Processing: {option}")
+# 3. Verify integrity later by regenerating and comparing
+mkjson /photos/2024 --output current.json
+diff 2024.json current.json
 ```
 
-2. **Register in `cli.py`**:
+### Merge multiple photo directories
 
-```python
-from photos_manager.commands.my_command import my_command
+```bash
+# Scan first directory
+mkjson /photos/january
 
-# Register your command in the CLI
+# Scan second directory and merge
+mkjson /photos/february --merge january.json
+
+# Result: february.json contains both january and february photos
 ```
 
-3. **Add tests** in `tests/test_my_command.py`:
+### Sort photos numerically
 
-```python
-def test_my_command():
-    """Test my new command."""
-    # Add your test logic here
-    pass
+```bash
+# If your photos are named: IMG_001.jpg, IMG_002.jpg, etc.
+mkjson /photos --sort-by-number
+
+# Results will be sorted: 1, 2, 3... instead of 1, 10, 11, 2, 20...
 ```
 
 ## 8. Before Committing
@@ -134,10 +167,10 @@ make pre-commit
 
 ## 10. Next Steps
 
-- Read the full [README.md](README.md)
-- Check [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines
-- Browse [documentation](docs/)
-- Start building your features!
+- Read the full [README.md](README.md) for detailed documentation
+- Explore the source code in `photos_manager/`
+- Check test examples in `tests/`
+- Try the commands with your own photo collections!
 
 ## Useful Commands Reference
 
