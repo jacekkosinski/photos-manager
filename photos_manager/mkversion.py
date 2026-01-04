@@ -22,10 +22,10 @@ are automatically excluded from processing as they contain version metadata rath
 than photo archive data.
 
 Usage:
-    ./mkversion.py --archive /path/to/archive
-    ./mkversion.py -a /path/to/archive -o custom.json
-    ./mkversion.py --archive /path/to/archive --output version.json
-    python -m photos_manager.mkversion --archive /path/to/archive
+    ./mkversion.py /path/to/archive
+    ./mkversion.py /path/to/archive --output custom.json
+    ./mkversion.py /path/to/archive -o version.json
+    python -m photos_manager.mkversion /path/to/archive
 
 The version string follows the format "photos-SIZE-COUNT" where:
 - SIZE is the total content size in terabytes (3 decimal places)
@@ -245,7 +245,7 @@ def main() -> int:
         8. Writes version information as formatted JSON to output file or stdout
 
     Command-line Arguments:
-        -a, --archive ARCH_PATH: Path to archive directory (default: /share/photos)
+        directory: Path to archive directory (required positional argument)
         -o, --output OUTPUT_FILE: Output file path (optional)
                                  If not specified, writes to stdout
 
@@ -280,15 +280,8 @@ def main() -> int:
             }
 
     Examples:
-        >>> # Run with default archive path (outputs to stdout)
-        >>> sys.exit(main())
-        {
-            "version": "photos-2.456-234",
-            ...
-        }
-
         >>> # Command line usage - output to stdout (default)
-        $ ./mkversion.py --archive /mnt/photos/archive
+        $ ./mkversion.py /mnt/photos/archive
         {
             "version": "photos-2.456-234",
             "total_bytes": 2701131776000,
@@ -296,11 +289,11 @@ def main() -> int:
         }
 
         >>> # Save to file with -o flag
-        $ ./mkversion.py -a /share/photos -o version.json
+        $ ./mkversion.py /share/photos -o version.json
         # Creates version.json with archive info
 
         >>> # Save to file with --output flag
-        $ ./mkversion.py --archive /data/photos --output .version.json
+        $ ./mkversion.py /data/photos --output .version.json
         # Creates .version.json in current directory
 
     Note:
@@ -310,13 +303,7 @@ def main() -> int:
         Output file is created/overwritten atomically to prevent corruption.
     """
     parser = argparse.ArgumentParser(description="Generate version JSON")
-    parser.add_argument(
-        "-a",
-        "--archive",
-        dest="arch_path",
-        default="/share/photos",
-        help="Archive path (default: /share/photos)",
-    )
+    parser.add_argument("directory", type=str, help="Path to the archive directory")
     parser.add_argument(
         "-o",
         "--output",
@@ -326,15 +313,15 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Validate arch_path
-    arch_path = Path(args.arch_path)
-    if not arch_path.is_dir() or not os.access(args.arch_path, os.R_OK):
+    # Validate directory
+    directory_path = Path(args.directory)
+    if not directory_path.is_dir() or not os.access(args.directory, os.R_OK):
         raise SystemExit(
-            f"Error: The directory '{args.arch_path}' does not exist or is not readable."
+            f"Error: The directory '{args.directory}' does not exist or is not readable."
         )
 
     # Find JSON files
-    json_files_with_mtimes = find_json_files(args.arch_path)
+    json_files_with_mtimes = find_json_files(args.directory)
     json_files = [path for (_, path) in json_files_with_mtimes]
 
     # Process JSON files
