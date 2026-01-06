@@ -219,50 +219,14 @@ def load_json(file_path: str) -> list[dict[str, str | int]] | None:
         return None
 
 
-def main() -> int:
-    """Generate JSON file with file information from a directory.
+def setup_parser(parser: argparse.ArgumentParser) -> None:
+    """Configure argument parser for mkjson command.
 
-    This is the main entry point that processes command-line arguments,
-    scans the directory, optionally merges with existing JSON, validates
-    for duplicates, sorts results, and writes output JSON file.
+    Adds all command-line arguments for the mkjson tool to the provided parser.
 
-    The output JSON file is named after the source directory (e.g., scanning
-    '/path/to/photos' creates 'photos.json') and contains an array of objects
-    with file metadata (path, sha1, md5, date, size).
-
-    Command-line Arguments:
-        directory: Path to source directory (required positional argument)
-        --merge JSON: Path to existing JSON file to merge with current scan
-        --time-zone TZ: Timezone for timestamps (default: system timezone)
-        --sort-by-number: Sort by numeric patterns in directory/filename
-        --sort-by-dir: Sort by directory name then timestamp
-        (default sorting: by modification date then filename)
-
-    Returns:
-        int: Exit code indicating success or failure
-            - os.EX_OK (0): Successful execution
-            - 1 (SystemExit): Error occurred during processing
-
-    Raises:
-        SystemExit: If any of the following errors occur:
-            - Source directory does not exist or is not a directory
-            - Merge file cannot be read or contains invalid JSON
-            - Duplicate paths, SHA-1, or MD5 hashes detected
-            - Output file cannot be written
-
-    Examples:
-        >>> # Scan directory and create JSON
-        >>> sys.exit(main())  # Called with: ./mkjson.py /path/to/photos
-        File information written to photos.json
-
-        >>> # Merge with existing data
-        >>> # ./mkjson.py /new/photos --merge old.json
-        >>> sys.exit(main())
+    Args:
+        parser: ArgumentParser instance to configure with mkjson arguments.
     """
-    # Set up command-line argument parsing
-    parser = argparse.ArgumentParser(
-        description="Generate JSON file with file information from a given directory."
-    )
     parser.add_argument("directory", type=str, help="Path to the source directory")
     parser.add_argument(
         "--merge", required=False, metavar="JSON", help="Path to the JSON file to merge"
@@ -283,8 +247,44 @@ def main() -> int:
         action="store_true",
         help="Sort files first by directory name and then by modification timestamp",
     )
-    args = parser.parse_args()
 
+
+def run(args: argparse.Namespace) -> int:
+    """Execute mkjson command with parsed arguments.
+
+    Scans the directory, optionally merges with existing JSON, validates
+    for duplicates, sorts results, and writes output JSON file.
+
+    The output JSON file is named after the source directory (e.g., scanning
+    '/path/to/photos' creates 'photos.json') and contains an array of objects
+    with file metadata (path, sha1, md5, date, size).
+
+    Args:
+        args: Parsed command-line arguments with fields:
+            - directory: Path to source directory
+            - merge: Optional path to JSON file to merge with
+            - time_zone: Timezone for timestamps
+            - sort_by_number: Sort by numeric patterns
+            - sort_by_dir: Sort by directory name then timestamp
+
+    Returns:
+        int: Exit code indicating success or failure
+            - os.EX_OK (0): Successful execution
+            - 1 (SystemExit): Error occurred during processing
+
+    Raises:
+        SystemExit: If any of the following errors occur:
+            - Source directory does not exist or is not a directory
+            - Merge file cannot be read or contains invalid JSON
+            - Duplicate paths, SHA-1, or MD5 hashes detected
+            - Output file cannot be written
+
+    Examples:
+        >>> # Scan directory and create JSON
+        >>> args = parser.parse_args(['/path/to/photos'])
+        >>> exit_code = run(args)
+        File information written to photos.json
+    """
     # Ensure the directory exists
     if not Path(args.directory).is_dir():
         raise SystemExit(f"Error: The specified path '{args.directory}' is not a valid directory.")
@@ -356,6 +356,28 @@ def main() -> int:
         ) from exception
 
     return os.EX_OK
+
+
+def main() -> int:
+    """Main entry point for standalone execution.
+
+    Creates argument parser, configures it with setup_parser(),
+    parses command-line arguments, and executes run().
+
+    This function exists for backward compatibility and standalone
+    execution. The unified CLI uses setup_parser() and run() directly.
+
+    Returns:
+        int: Exit code from run()
+            - os.EX_OK (0): Successful execution
+            - 1+: Error occurred during processing
+    """
+    parser = argparse.ArgumentParser(
+        description="Generate JSON file with file information from a given directory."
+    )
+    setup_parser(parser)
+    args = parser.parse_args()
+    return run(args)
 
 
 if __name__ == "__main__":

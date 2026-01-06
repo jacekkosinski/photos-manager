@@ -346,51 +346,14 @@ def set_json_timestamps(
         )
 
 
-def main() -> int:
-    """Set timestamps for files, directories, and JSON files based on metadata.
+def setup_parser(parser: argparse.ArgumentParser) -> None:
+    """Configure argument parser for setmtime command.
 
-    This is the main entry point that processes command-line arguments and
-    coordinates timestamp updates for files, directories, and JSON metadata
-    files based on the newest file information.
+    Adds all command-line arguments for the setmtime tool to the provided parser.
 
-    For each JSON file provided:
-    1. Optionally updates all file timestamps (with --all flag)
-    2. Updates directory timestamps to match newest file in each directory
-    3. Updates JSON file and its corresponding directory timestamps
-
-    The script expects JSON files to have corresponding directories with the
-    same base name (e.g., 'photos.json' corresponds to 'photos/' directory).
-
-    Command-line Arguments:
-        json_files: One or more JSON files containing file metadata (required)
-        -a, --all: Update timestamps for all individual files (optional)
-        -n, --dry-run: Print changes without actually modifying timestamps (optional)
-
-    Returns:
-        int: Exit code indicating success or failure
-            - os.EX_OK (0): Successful execution
-            - 1 (SystemExit): Error occurred during processing
-
-    Raises:
-        SystemExit: If JSON files are invalid, empty, missing required fields,
-            or if corresponding directories don't exist.
-
-    Examples:
-        >>> # Dry run to see what would change
-        >>> sys.exit(main())  # Called with: ./setmtime.py archive.json --dry-run
-
-        >>> # Update all file timestamps plus directories and JSON file
-        >>> # ./setmtime.py photos.json --all
-        >>> sys.exit(main())
-
-        >>> # Process multiple JSON files
-        >>> # ./setmtime.py archive1.json archive2.json
-        >>> sys.exit(main())
+    Args:
+        parser: ArgumentParser instance to configure with setmtime arguments.
     """
-    # Set up command-line argument parsing
-    parser = argparse.ArgumentParser(
-        description="Set timestamps for directories and JSON files based on newest file metadata."
-    )
     parser.add_argument(
         "json_files", nargs="+", help="One or more JSON files containing file metadata"
     )
@@ -406,8 +369,42 @@ def main() -> int:
         action="store_true",
         help="Print what will be done without actually setting timestamps",
     )
-    args = parser.parse_args()
 
+
+def run(args: argparse.Namespace) -> int:
+    """Execute setmtime command with parsed arguments.
+
+    Processes each JSON file and coordinates timestamp updates for files,
+    directories, and JSON metadata files based on the newest file information.
+
+    For each JSON file provided:
+    1. Optionally updates all file timestamps (with --all flag)
+    2. Updates directory timestamps to match newest file in each directory
+    3. Updates JSON file and its corresponding directory timestamps
+
+    The script expects JSON files to have corresponding directories with the
+    same base name (e.g., 'photos.json' corresponds to 'photos/' directory).
+
+    Args:
+        args: Parsed command-line arguments with fields:
+            - json_files: List of JSON files containing file metadata
+            - all: Whether to update all individual file timestamps
+            - dry_run: Whether to preview changes without modifying
+
+    Returns:
+        int: Exit code indicating success or failure
+            - os.EX_OK (0): Successful execution
+            - 1 (SystemExit): Error occurred during processing
+
+    Raises:
+        SystemExit: If JSON files are invalid, empty, missing required fields,
+            or if corresponding directories don't exist.
+
+    Examples:
+        >>> args = parser.parse_args(['archive.json', '--dry-run'])
+        >>> exit_code = run(args)
+        Set timestamp for directory '/photos' to match file ...
+    """
     # Iterate over each JSON file
     for json_file in args.json_files:
         json_path = Path(json_file)
@@ -451,6 +448,28 @@ def main() -> int:
             continue
 
     return os.EX_OK
+
+
+def main() -> int:
+    """Main entry point for standalone execution.
+
+    Creates argument parser, configures it with setup_parser(),
+    parses command-line arguments, and executes run().
+
+    This function exists for backward compatibility and standalone
+    execution. The unified CLI uses setup_parser() and run() directly.
+
+    Returns:
+        int: Exit code from run()
+            - os.EX_OK (0): Successful execution
+            - 1+: Error occurred during processing
+    """
+    parser = argparse.ArgumentParser(
+        description="Set timestamps for directories and JSON files based on newest file metadata."
+    )
+    setup_parser(parser)
+    args = parser.parse_args()
+    return run(args)
 
 
 if __name__ == "__main__":

@@ -25,18 +25,21 @@ poetry run pre-commit install
 ## 3. Verify Installation
 
 ```bash
-# Using Poetry
-poetry run mkjson --help
-poetry run mkversion --help
-poetry run setmtime --help
-poetry run verify --help
+# Using Poetry - unified CLI (recommended)
+poetry run photos --help
+poetry run photos mkjson --help
+poetry run photos mkversion --help
+poetry run photos setmtime --help
+poetry run photos verify --help
 
 # Or activate shell first
 poetry shell
+photos --help
+photos mkjson --help
+
+# Legacy individual commands (still work)
 mkjson --help
 mkversion --help
-setmtime --help
-verify --help
 ```
 
 ## 4. Run Your First Commands
@@ -49,8 +52,8 @@ mkdir -p test_photos
 echo "test image 1" > test_photos/photo1.jpg
 echo "test image 2" > test_photos/photo2.jpg
 
-# Generate JSON metadata
-mkjson test_photos
+# Generate JSON metadata using unified CLI
+photos mkjson test_photos
 
 # This creates test_photos.json with checksums, sizes, and timestamps
 cat test_photos.json
@@ -64,10 +67,10 @@ mkdir -p archive
 cp test_photos.json archive/
 
 # Generate version information
-mkversion archive
+photos mkversion archive
 
 # Or save to file
-mkversion archive --output archive/.version.json
+photos mkversion archive --output archive/.version.json
 cat archive/.version.json
 ```
 
@@ -112,16 +115,16 @@ photos-manager-cli/
 
 ```bash
 # 1. Scan your entire photo collection
-mkjson /photos/2024 --time-zone Europe/Warsaw
+photos mkjson /photos/2024 --time-zone Europe/Warsaw
 
 # 2. Generate version info
-mkversion /photos --output /photos/.version.json
+photos mkversion /photos --output /photos/.version.json
 
 # 3. Verify integrity
-verify /photos
+photos verify /photos
 
 # 4. Full verification with checksums (time-consuming)
-verify /photos --all --check-timestamps
+photos verify /photos --all --check-timestamps
 ```
 
 ### Restore timestamps after copying from archive
@@ -131,23 +134,23 @@ verify /photos --all --check-timestamps
 # Use setmtime to restore original timestamps
 
 # Preview changes first
-setmtime /photos/2024.json --dry-run
+photos setmtime /photos/2024.json --dry-run
 
 # Update directory timestamps only (fast)
-setmtime /photos/2024.json
+photos setmtime /photos/2024.json
 
 # Update all file and directory timestamps
-setmtime /photos/2024.json --all
+photos setmtime /photos/2024.json --all
 ```
 
 ### Merge multiple photo directories
 
 ```bash
 # Scan first directory
-mkjson /photos/january
+photos mkjson /photos/january
 
 # Scan second directory and merge
-mkjson /photos/february --merge january.json
+photos mkjson /photos/february --merge january.json
 
 # Result: february.json contains both january and february photos
 ```
@@ -156,7 +159,7 @@ mkjson /photos/february --merge january.json
 
 ```bash
 # If your photos are named: IMG_001.jpg, IMG_002.jpg, etc.
-mkjson /photos --sort-by-number
+photos mkjson /photos --sort-by-number
 
 # Results will be sorted: 1, 2, 3... instead of 1, 10, 11, 2, 20...
 ```
@@ -191,12 +194,37 @@ Run manually to see errors:
 make pre-commit
 ```
 
-## 10. Next Steps
+## 10. Building Standalone Binary
+
+For production deployment, build a standalone binary that doesn't require Python:
+
+```bash
+# Install Nuitka
+pip install nuitka
+
+# Install build dependencies (Debian/Ubuntu)
+sudo apt-get install gcc g++ ccache patchelf
+
+# Build the binary
+./build.sh
+
+# Test the binary
+./dist/photos --help
+./dist/photos mkjson /path/to/photos
+
+# Deploy to target system
+scp dist/photos user@server:/usr/local/bin/
+```
+
+See [BUILD.md](BUILD.md) for detailed build instructions, deployment guide, and troubleshooting.
+
+## 11. Next Steps
 
 - Read the full [README.md](README.md) for detailed documentation
 - Explore the source code in `photos_manager/`
 - Check test examples in `tests/`
 - Try the commands with your own photo collections!
+- Build and deploy the standalone binary (see [BUILD.md](BUILD.md))
 
 ## Useful Commands Reference
 

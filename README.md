@@ -49,22 +49,47 @@ pip install -e ".[dev]"
 
 ## Available Commands
 
+The photos-manager CLI provides a unified `photos` command with subcommands for each tool:
+
+```bash
+photos <command> [options]
+```
+
+**Available commands:**
+- `mkjson` - Generate JSON file with file metadata
+- `mkversion` - Generate archive version information
+- `setmtime` - Update file timestamps based on metadata
+- `verify` - Verify archive integrity
+
+### Quick Start
+
+```bash
+# Show all available commands
+photos --help
+
+# Get help for specific command
+photos mkjson --help
+photos mkversion --help
+photos setmtime --help
+photos verify --help
+```
+
 ### mkjson - Generate File Metadata
 
 Generate a JSON file containing metadata (checksums, sizes, timestamps) for all files in a directory.
 
 ```bash
 # Basic usage - scan directory and create JSON
-mkjson /path/to/photos
+photos mkjson /path/to/photos
 
 # Merge with existing JSON file
-mkjson /path/to/new-photos --merge existing.json
+photos mkjson /path/to/new-photos --merge existing.json
 
 # Sort by numeric patterns in filenames
-mkjson /path/to/photos --sort-by-number
+photos mkjson /path/to/photos --sort-by-number
 
 # Specify timezone for timestamps
-mkjson /path/to/photos --time-zone Europe/Warsaw
+photos mkjson /path/to/photos --time-zone Europe/Warsaw
 ```
 
 **Output format:**
@@ -86,11 +111,11 @@ Generate version metadata from a collection of JSON files (created by mkjson).
 
 ```bash
 # Basic usage - output to stdout
-mkversion /path/to/archive
+photos mkversion /path/to/archive
 
 # Save to file
-mkversion /path/to/archive --output version.json
-mkversion /path/to/archive -o .version.json
+photos mkversion /path/to/archive --output version.json
+photos mkversion /path/to/archive -o .version.json
 ```
 
 **Output format:**
@@ -118,16 +143,16 @@ Update file and directory modification timestamps based on JSON metadata (create
 
 ```bash
 # Preview changes without applying them
-setmtime photos.json --dry-run
+photos setmtime photos.json --dry-run
 
 # Update directory timestamps only (default)
-setmtime photos.json
+photos setmtime photos.json
 
 # Update all file timestamps plus directories
-setmtime photos.json --all
+photos setmtime photos.json --all
 
 # Process multiple JSON files
-setmtime archive1.json archive2.json --all
+photos setmtime archive1.json archive2.json --all
 ```
 
 **What it updates:**
@@ -146,16 +171,16 @@ Verify archive integrity by checking files against JSON metadata.
 
 ```bash
 # Basic verification (existence and size only)
-verify /path/to/archive
+photos verify /path/to/archive
 
 # Full verification with checksums (time-consuming)
-verify /path/to/archive --all
+photos verify /path/to/archive --all
 
 # Verify with timestamps
-verify /path/to/archive --check-timestamps
+photos verify /path/to/archive --check-timestamps
 
 # Full verification with all checks
-verify /path/to/archive --all --check-timestamps --tolerance 2
+photos verify /path/to/archive --all --check-timestamps --tolerance 2
 ```
 
 **What it verifies:**
@@ -179,33 +204,33 @@ verify /path/to/archive --all --check-timestamps --tolerance 2
 
 ```bash
 # Step 1: Scan photos directory and generate metadata
-mkjson /photos/2024 --time-zone Europe/Warsaw
+photos mkjson /photos/2024 --time-zone Europe/Warsaw
 
 # Step 2: Generate version info from all JSON files
-mkversion /photos --output /photos/.version.json
+photos mkversion /photos --output /photos/.version.json
 ```
 
 #### 2. Add new photos to existing archive
 
 ```bash
 # Scan new photos and merge with existing metadata
-mkjson /photos/2025 --merge /photos/2024.json
+photos mkjson /photos/2025 --merge /photos/2024.json
 
 # Update version info
-mkversion /photos --output /photos/.version.json
+photos mkversion /photos --output /photos/.version.json
 ```
 
 #### 3. Verify archive integrity
 
 ```bash
 # Quick verification (file existence and sizes)
-verify /photos/archive
+photos verify /photos/archive
 
 # Full verification with checksums
-verify /photos/archive --all --check-timestamps
+photos verify /photos/archive --all --check-timestamps
 
 # After the verification, you can also regenerate metadata to compare
-mkjson /photos/backup --output current.json
+photos mkjson /photos/backup --output current.json
 diff original.json current.json
 ```
 
@@ -216,13 +241,13 @@ diff original.json current.json
 # Use setmtime to restore original timestamps from metadata
 
 # Preview what will be changed
-setmtime /photos/restored/2024.json --dry-run
+photos setmtime /photos/restored/2024.json --dry-run
 
 # Update directory timestamps only
-setmtime /photos/restored/2024.json
+photos setmtime /photos/restored/2024.json
 
 # Update all file and directory timestamps
-setmtime /photos/restored/2024.json --all
+photos setmtime /photos/restored/2024.json --all
 ```
 
 ## Setup Pre-commit Hooks
@@ -267,20 +292,50 @@ photos-manager-cli/
 
 ### Running the Tools
 
+#### Using the Unified CLI
+
+The recommended way to use photos-manager is through the unified `photos` command:
+
 ```bash
 # Using Poetry
-poetry run mkjson /path/to/photos
-poetry run mkversion /path/to/archive
-poetry run setmtime /path/to/photos.json
-poetry run verify /path/to/archive
+poetry run photos mkjson /path/to/photos
+poetry run photos mkversion /path/to/archive
+poetry run photos setmtime /path/to/photos.json
+poetry run photos verify /path/to/archive
 
 # Or after activating the virtual environment
 poetry shell
+photos mkjson /path/to/photos
+photos mkversion /path/to/archive
+photos setmtime /path/to/photos.json
+photos verify /path/to/archive --all
+```
+
+#### Individual Commands (Legacy)
+
+For backward compatibility, individual commands are still available:
+
+```bash
 mkjson /path/to/photos
 mkversion /path/to/archive
 setmtime /path/to/photos.json
 verify /path/to/archive --all
 ```
+
+#### Standalone Binary
+
+For production deployment, you can build a standalone binary that doesn't require Python:
+
+```bash
+# Build the binary using Nuitka
+./build.sh
+
+# The binary will be created in dist/photos
+./dist/photos --help
+./dist/photos mkjson /path/to/photos
+```
+
+See [BUILD.md](BUILD.md) for detailed build instructions and deployment guide.
 
 ### Code Quality Tools
 

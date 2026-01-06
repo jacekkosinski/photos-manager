@@ -541,43 +541,14 @@ def verify_version_file(
     return len(errors) == 0, errors
 
 
-def main() -> int:
-    """Verify archive integrity based on JSON metadata.
+def setup_parser(parser: argparse.ArgumentParser) -> None:
+    """Configure argument parser for verify command.
 
-    This is the main entry point that processes command-line arguments and
-    performs comprehensive verification of photo archives including file
-    existence, sizes, timestamps, and optionally checksums.
+    Adds all command-line arguments for the verify tool to the provided parser.
 
-    The script scans the specified directory for JSON metadata files and
-    optionally a .version.json file, then performs verification:
-    1. Verifies all files exist and are accessible
-    2. Verifies file sizes match metadata
-    3. Optionally verifies file timestamps (with --check-timestamps)
-    4. Optionally verifies SHA-1 and MD5 checksums (with --all, time-consuming)
-    5. Optionally verifies directory timestamps (with --check-timestamps)
-    6. Optionally verifies JSON file timestamps (with --check-timestamps)
-    7. If .version.json found, verifies version integrity
-
-    Command-line Arguments:
-        directory: Path to archive directory containing JSON files (required)
-        -a, --all: Verify SHA-1 and MD5 checksums (time-consuming, optional)
-        -t, --check-timestamps: Verify file and directory timestamps (optional)
-        --tolerance: Timestamp tolerance in seconds (default: 1)
-
-    Returns:
-        int: Exit code indicating success or failure
-            - os.EX_OK (0): All verifications passed
-            - 1: One or more verifications failed
-
-    Examples:
-        >>> # Basic verification (existence and size only)
-        >>> sys.exit(main())  # Called with: ./verify.py /path/to/archive
-
-        >>> # Full verification with checksums
-        >>> # ./verify.py /path/to/archive --all --check-timestamps
-        >>> sys.exit(main())
+    Args:
+        parser: ArgumentParser instance to configure with verify arguments.
     """
-    parser = argparse.ArgumentParser(description="Verify archive integrity based on JSON metadata.")
     parser.add_argument("directory", type=str, help="Path to the archive directory")
     parser.add_argument(
         "-a",
@@ -597,8 +568,43 @@ def main() -> int:
         default=1,
         help="Timestamp tolerance in seconds (default: 1)",
     )
-    args = parser.parse_args()
 
+
+def run(args: argparse.Namespace) -> int:
+    """Execute verify command with parsed arguments.
+
+    Performs comprehensive verification of photo archives including file
+    existence, sizes, timestamps, and optionally checksums.
+
+    The script scans the specified directory for JSON metadata files and
+    optionally a .version.json file, then performs verification:
+    1. Verifies all files exist and are accessible
+    2. Verifies file sizes match metadata
+    3. Optionally verifies file timestamps (with check_timestamps flag)
+    4. Optionally verifies SHA-1 and MD5 checksums (with all flag, time-consuming)
+    5. Optionally verifies directory timestamps (with check_timestamps flag)
+    6. Optionally verifies JSON file timestamps (with check_timestamps flag)
+    7. If .version.json found, verifies version integrity
+
+    Args:
+        args: Parsed command-line arguments with fields:
+            - directory: Path to archive directory containing JSON files
+            - all: Whether to verify SHA-1 and MD5 checksums (time-consuming)
+            - check_timestamps: Whether to verify file and directory timestamps
+            - tolerance: Timestamp tolerance in seconds
+
+    Returns:
+        int: Exit code indicating success or failure
+            - os.EX_OK (0): All verifications passed
+            - 1: One or more verifications failed
+
+    Examples:
+        >>> args = parser.parse_args(['/path/to/archive'])
+        >>> exit_code = run(args)
+        Scanning directory: /path/to/archive
+        Found 2 JSON metadata file(s)
+        ...
+    """
     # Validate directory
     directory_path = Path(args.directory)
     if not directory_path.is_dir() or not os.access(args.directory, os.R_OK):
@@ -724,6 +730,26 @@ def main() -> int:
 
     print(f"  Result: FAIL - Verification failed with {total_errors} error(s)", file=sys.stderr)
     return 1
+
+
+def main() -> int:
+    """Main entry point for standalone execution.
+
+    Creates argument parser, configures it with setup_parser(),
+    parses command-line arguments, and executes run().
+
+    This function exists for backward compatibility and standalone
+    execution. The unified CLI uses setup_parser() and run() directly.
+
+    Returns:
+        int: Exit code from run()
+            - os.EX_OK (0): All verifications passed
+            - 1: One or more verifications failed
+    """
+    parser = argparse.ArgumentParser(description="Verify archive integrity based on JSON metadata.")
+    setup_parser(parser)
+    args = parser.parse_args()
+    return run(args)
 
 
 if __name__ == "__main__":

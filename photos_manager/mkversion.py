@@ -227,82 +227,14 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
     return total_bytes, files_count, file_hashes
 
 
-def main() -> int:
-    """Main function that processes JSON files and generates a version JSON.
+def setup_parser(parser: argparse.ArgumentParser) -> None:
+    """Configure argument parser for mkversion command.
 
-    This is the main entry point for the mkversion utility. It orchestrates
-    the entire version generation process from command-line argument parsing
-    to final JSON output.
+    Adds all command-line arguments for the mkversion tool to the provided parser.
 
-    Workflow:
-        1. Parses command line arguments (archive path and optional output file)
-        2. Validates that the archive path exists and is readable
-        3. Recursively finds all JSON files in the archive directory
-        4. Validates and processes each JSON file
-        5. Calculates aggregate statistics (total size, file count)
-        6. Generates version string in format "photos-SIZE-COUNT"
-        7. Captures timestamps (last modification, verification time)
-        8. Writes version information as formatted JSON to output file or stdout
-
-    Command-line Arguments:
-        directory: Path to archive directory (required positional argument)
-        -o, --output OUTPUT_FILE: Output file path (optional)
-                                 If not specified, writes to stdout
-
-    Returns:
-        int: Exit code indicating success or failure
-            - os.EX_OK (0): Successful execution
-            - 1 (SystemExit): Error occurred during processing
-
-    Raises:
-        SystemExit: If any of the following errors occur:
-            - Archive directory does not exist or is not a directory
-            - Archive directory is not readable (permission denied)
-            - No JSON files found in the archive directory
-            - JSON validation fails (missing fields, invalid format)
-            - File I/O errors during processing (reading JSON or writing output)
-            - Output file cannot be written (permission denied, disk full, etc.)
-
-    Output:
-        Writes JSON object to the specified output file, or to stdout if no
-        output file is specified, with the following structure:
-            {
-                "version": str,         # Format: "photos-{TB:.3f}-{count%1000}"
-                "total_bytes": int,     # Total size in bytes
-                "file_count": int,      # Total number of entries
-                "last_modified": str,   # ISO 8601 timestamp with timezone
-                "last_verified": str,   # ISO 8601 timestamp with timezone
-                "files": {              # Mapping of filename to SHA1 hash
-                    "file1.json": str,
-                    "file2.json": str,
-                    ...
-                }
-            }
-
-    Examples:
-        >>> # Command line usage - output to stdout (default)
-        $ ./mkversion.py /mnt/photos/archive
-        {
-            "version": "photos-2.456-234",
-            "total_bytes": 2701131776000,
-            ...
-        }
-
-        >>> # Save to file with -o flag
-        $ ./mkversion.py /share/photos -o version.json
-        # Creates version.json with archive info
-
-        >>> # Save to file with --output flag
-        $ ./mkversion.py /data/photos --output .version.json
-        # Creates .version.json in current directory
-
-    Note:
-        The function uses timezone-aware timestamps in ISO 8601 format.
-        Version string uses last 3 digits of file count (modulo 1000) to
-        keep version string concise while still providing uniqueness.
-        Output file is created/overwritten atomically to prevent corruption.
+    Args:
+        parser: ArgumentParser instance to configure with mkversion arguments.
     """
-    parser = argparse.ArgumentParser(description="Generate version JSON")
     parser.add_argument("directory", type=str, help="Path to the archive directory")
     parser.add_argument(
         "-o",
@@ -311,8 +243,55 @@ def main() -> int:
         default=None,
         help="Output file path (if not specified, writes to stdout)",
     )
-    args = parser.parse_args()
 
+
+def run(args: argparse.Namespace) -> int:
+    """Execute mkversion command with parsed arguments.
+
+    Processes JSON files and generates a version JSON with aggregate statistics,
+    version string, timestamps, and file hashes.
+
+    Workflow:
+        1. Validates that the archive path exists and is readable
+        2. Recursively finds all JSON files in the archive directory
+        3. Validates and processes each JSON file
+        4. Calculates aggregate statistics (total size, file count)
+        5. Generates version string in format "photos-SIZE-COUNT"
+        6. Captures timestamps (last modification, verification time)
+        7. Writes version information as formatted JSON to output file or stdout
+
+    Args:
+        args: Parsed command-line arguments with fields:
+            - directory: Path to archive directory
+            - output_file: Optional output file path (None for stdout)
+
+    Returns:
+        int: Exit code indicating success or failure
+            - os.EX_OK (0): Successful execution
+            - 1 (SystemExit): Error occurred during processing
+
+    Raises:
+        SystemExit: If any of the following errors occur:
+            - Archive directory does not exist or is not readable
+            - No JSON files found in the archive directory
+            - JSON validation fails (missing fields, invalid format)
+            - Output file cannot be written
+
+    Output:
+        Writes JSON object with structure:
+            {
+                "version": "photos-{TB:.3f}-{count%1000}",
+                "total_bytes": int,
+                "file_count": int,
+                "last_modified": str,   # ISO 8601 timestamp
+                "last_verified": str,   # ISO 8601 timestamp
+                "files": {filename: sha1_hash, ...}
+            }
+
+    Examples:
+        >>> args = parser.parse_args(['/path/to/archive'])
+        >>> exit_code = run(args)
+    """
     # Validate directory
     directory_path = Path(args.directory)
     if not directory_path.is_dir() or not os.access(args.directory, os.R_OK):
@@ -364,6 +343,26 @@ def main() -> int:
             ) from exception
 
     return os.EX_OK
+
+
+def main() -> int:
+    """Main entry point for standalone execution.
+
+    Creates argument parser, configures it with setup_parser(),
+    parses command-line arguments, and executes run().
+
+    This function exists for backward compatibility and standalone
+    execution. The unified CLI uses setup_parser() and run() directly.
+
+    Returns:
+        int: Exit code from run()
+            - os.EX_OK (0): Successful execution
+            - 1+: Error occurred during processing
+    """
+    parser = argparse.ArgumentParser(description="Generate version JSON")
+    setup_parser(parser)
+    args = parser.parse_args()
+    return run(args)
 
 
 if __name__ == "__main__":
