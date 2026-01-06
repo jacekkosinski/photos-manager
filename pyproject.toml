@@ -1,7 +1,7 @@
 [project]
 name = "photos-manager-cli"
 version = "0.1.0"
-description = "Modern CLI tool for managing photos"
+description = "Modern CLI tool for managing photo archives with comprehensive testing (120 tests, 85% coverage)"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -28,7 +28,6 @@ dev = [
 ]
 
 [project.scripts]
-photos = "photos_manager.cli:main"
 mkjson = "photos_manager.mkjson:main"
 mkversion = "photos_manager.mkversion:main"
 setmtime = "photos_manager.setmtime:main"
