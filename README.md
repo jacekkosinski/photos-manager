@@ -140,6 +140,39 @@ setmtime archive1.json archive2.json --all
 - Ensure directory timestamps reflect their actual content
 - Keep filesystem timestamps synchronized with photo metadata
 
+### verify - Verify Archive Integrity
+
+Verify archive integrity by checking files against JSON metadata.
+
+```bash
+# Basic verification (existence and size only)
+verify /path/to/archive
+
+# Full verification with checksums (time-consuming)
+verify /path/to/archive --all
+
+# Verify with timestamps
+verify /path/to/archive --check-timestamps
+
+# Full verification with all checks
+verify /path/to/archive --all --check-timestamps --tolerance 2
+```
+
+**What it verifies:**
+- **File existence**: All files listed in JSON metadata exist
+- **File sizes**: Actual file sizes match metadata
+- **Checksums** (with `--all`): SHA-1 and MD5 hashes match metadata (time-consuming)
+- **Timestamps** (with `--check-timestamps`): File mtimes match metadata
+- **Directory timestamps** (with `--check-timestamps`): Directory mtimes match newest file
+- **JSON timestamps** (with `--check-timestamps`): JSON file mtimes match newest entry
+- **Version file**: If .version.json exists, verifies totals and file hashes
+
+**Use cases:**
+- Detect data corruption in archives
+- Verify backup integrity after restore
+- Check for missing or modified files
+- Validate archive consistency before/after migration
+
 ### Common Workflows
 
 #### 1. Create archive metadata from scratch
@@ -165,10 +198,14 @@ mkversion /photos --output /photos/.version.json
 #### 3. Verify archive integrity
 
 ```bash
-# Generate current metadata
-mkjson /photos/backup --output current.json
+# Quick verification (file existence and sizes)
+verify /photos/archive
 
-# Compare with original (manual diff or use external tools)
+# Full verification with checksums
+verify /photos/archive --all --check-timestamps
+
+# After the verification, you can also regenerate metadata to compare
+mkjson /photos/backup --output current.json
 diff original.json current.json
 ```
 
@@ -210,7 +247,8 @@ photos-manager-cli/
 │   ├── __init__.py          # Package initialization
 │   ├── mkjson.py           # Generate file metadata JSON
 │   ├── mkversion.py        # Generate archive version info
-│   └── setmtime.py         # Update file timestamps from metadata
+│   ├── setmtime.py         # Update file timestamps from metadata
+│   └── verify.py           # Verify archive integrity
 ├── tests/
 │   ├── __init__.py
 │   ├── test_mkjson.py      # Tests for mkjson
@@ -232,12 +270,14 @@ photos-manager-cli/
 poetry run mkjson /path/to/photos
 poetry run mkversion /path/to/archive
 poetry run setmtime /path/to/photos.json
+poetry run verify /path/to/archive
 
 # Or after activating the virtual environment
 poetry shell
 mkjson /path/to/photos
 mkversion /path/to/archive
 setmtime /path/to/photos.json
+verify /path/to/archive --all
 ```
 
 ### Code Quality Tools

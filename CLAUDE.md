@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Photos Manager CLI is a Python 3.12+ toolkit for managing photo archives. It provides three main utilities:
+Photos Manager CLI is a Python 3.12+ toolkit for managing photo archives. It provides four main utilities:
 
 1. **mkjson** - Scans directories and generates JSON metadata files containing checksums (SHA-1, MD5), file sizes, and timestamps for all files
 2. **mkversion** - Aggregates multiple JSON metadata files to generate version information with total size, file count, and integrity hashes
 3. **setmtime** - Updates file and directory modification timestamps based on JSON metadata, useful for restoring original timestamps after copying from archives
+4. **verify** - Verifies archive integrity by checking files against JSON metadata, including existence, sizes, checksums, and timestamps
 
 ## Development Commands
 
@@ -70,19 +71,21 @@ make check-all
 poetry run mkjson /path/to/photos
 poetry run mkversion /path/to/archive
 poetry run setmtime /path/to/photos.json
+poetry run verify /path/to/archive
 
 # Or after activating virtual environment
 poetry shell
 mkjson /path/to/photos
 mkversion /path/to/archive
 setmtime /path/to/photos.json --dry-run
+verify /path/to/archive --all
 ```
 
 ## Architecture
 
 ### Core Utilities
 
-All three utilities (`mkjson.py`, `mkversion.py`, and `setmtime.py`) are standalone scripts that follow a unified implementation style:
+All four utilities (`mkjson.py`, `mkversion.py`, `setmtime.py`, and `verify.py`) are standalone scripts that follow a unified implementation style:
 
 - Fully type-annotated with strict mypy compliance
 - Comprehensive Google-style docstrings
@@ -158,6 +161,43 @@ All three utilities (`mkjson.py`, `mkversion.py`, and `setmtime.py`) are standal
 - Synchronizing filesystem timestamps with photo metadata
 - Ensuring directory timestamps reflect newest content
 
+### verify.py
+
+**Purpose**: Verify archive integrity by checking files against JSON metadata
+
+**Key functions**:
+- `find_json_files(directory)` - Finds all JSON metadata files in directory (excluding *version.json)
+- `find_version_file(directory)` - Locates .version.json file if present
+- `verify_file_entry(entry, verify_checksums)` - Verifies single file: existence, size, optionally checksums
+- `verify_timestamps(entry, tolerance_seconds)` - Verifies file mtime matches metadata
+- `verify_directory_timestamps(data)` - Verifies directory mtimes match newest file
+- `verify_json_file_timestamp(json_file, data)` - Verifies JSON file mtime matches newest entry
+- `verify_version_file(version_file, json_files, all_data)` - Verifies version file integrity
+- `calculate_checksums(file_path)` - Computes SHA-1 and MD5 for verification
+- `main()` - CLI entry point that orchestrates all verification checks
+
+**Expected input**: Directory containing JSON metadata files and optionally .version.json
+
+**Verification levels**:
+- **Basic** (default): File existence and size verification
+- **With --check-timestamps**: Adds mtime verification for files, directories, and JSON files
+- **With --all**: Adds SHA-1 and MD5 checksum verification (time-consuming)
+- **With --tolerance N**: Allows N seconds tolerance for timestamp comparisons
+
+**Key features**:
+- Comprehensive integrity checking at multiple levels
+- Automatic discovery of JSON files and version file in directory
+- Progress indicators for large archives during checksum verification
+- Detailed error reporting with file-level granularity
+- Returns exit code 0 on success, 1 on any verification failure
+- Validates version file totals (file_count, total_bytes) and JSON file hashes
+
+**Use cases**:
+- Detecting data corruption in long-term archives
+- Verifying backup integrity after restore operations
+- Checking for missing or modified files
+- Validating archive consistency before/after migrations
+
 ### Project Structure
 
 ```
@@ -165,7 +205,8 @@ photos_manager/
 ├── __init__.py
 ├── mkjson.py           # Directory scanner and metadata generator
 ├── mkversion.py        # Version aggregator for JSON files
-└── setmtime.py         # Timestamp updater based on metadata
+├── setmtime.py         # Timestamp updater based on metadata
+└── verify.py           # Archive integrity verifier
 
 tests/
 ├── __init__.py
