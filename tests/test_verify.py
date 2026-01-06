@@ -4,9 +4,10 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
+from _pytest.capture import CaptureFixture
 
 from photos_manager.verify import (
     calculate_checksums,
@@ -15,6 +16,7 @@ from photos_manager.verify import (
     find_version_file,
     load_json,
     load_version_json,
+    main,
     verify_directory_timestamps,
     verify_file_entry,
     verify_json_file_timestamp,
@@ -585,3 +587,327 @@ class TestVerifyVersionFile:
 
         assert success is False
         assert any("missing required field" in err for err in errors)
+
+
+class TestMain:
+    """Tests for main function."""
+
+    def test_verifies_valid_archive(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main verifies valid archive without errors."""
+        # Create test file
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_content = b"Test image data"
+        test_file.write_bytes(test_content)
+
+        # Calculate actual checksums
+        sha1, md5 = calculate_checksums(str(test_file))
+
+        # Create JSON file
+        json_file = tmp_path / "photos.json"
+        data = [
+            {
+                "path": str(test_file),
+                "size": len(test_content),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2024-01-01T12:00:00+0000",
+            }
+        ]
+        json_file.write_text(json.dumps(data))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Scanning directory" in captured.out
+        assert "Found 1 JSON metadata file(s)" in captured.out
+
+    def test_verifies_with_all_flag(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main verifies checksums with --all flag."""
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Test data")
+
+        sha1, md5 = calculate_checksums(str(test_file))
+
+        json_file = tmp_path / "photos.json"
+        data = [
+            {
+                "path": str(test_file),
+                "size": 9,
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2024-01-01T12:00:00+0000",
+            }
+        ]
+        json_file.write_text(json.dumps(data))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", "--all", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "WARNING: Full checksum verification enabled" in captured.out
+
+    def test_detects_missing_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main detects missing files."""
+        json_file = tmp_path / "photos.json"
+        data = [
+            {
+                "path": str(tmp_path / "missing.jpg"),
+                "size": 100,
+                "sha1": "abc",
+                "md5": "def",
+                "date": "2024-01-01T12:00:00+0000",
+            }
+        ]
+        json_file.write_text(json.dumps(data))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == 1  # Should return error code
+        captured = capsys.readouterr()
+        assert "Error:" in captured.err
+
+    def test_detects_checksum_mismatch(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main detects checksum mismatches with --all."""
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Actual content")
+
+        json_file = tmp_path / "photos.json"
+        data = [
+            {
+                "path": str(test_file),
+                "size": 14,
+                "sha1": "wrong_sha1_hash_1234567890123456789012",
+                "md5": "wrong_md5_hash_12345678901234",
+                "date": "2024-01-01T12:00:00+0000",
+            }
+        ]
+        json_file.write_text(json.dumps(data))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", "--all", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "SHA-1 mismatch" in captured.err or "MD5 mismatch" in captured.err
+
+    def test_verifies_timestamps(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main verifies timestamps with --check-timestamps."""
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Content")
+
+        # Calculate actual checksums
+        sha1, md5 = calculate_checksums(str(test_file))
+
+        # Set specific timestamp
+        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+0000").timestamp())
+        os.utime(str(test_file), (target_timestamp, target_timestamp))
+        # Also set directory timestamp
+        os.utime(str(test_file.parent), (target_timestamp, target_timestamp))
+
+        json_file = tmp_path / "photos.json"
+        data = [
+            {
+                "path": str(test_file),
+                "size": 7,
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2024-01-01T12:00:00+0000",
+            }
+        ]
+        json_file.write_text(json.dumps(data))
+        # Set JSON file timestamp too
+        os.utime(str(json_file), (target_timestamp, target_timestamp))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", "--check-timestamps", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Timestamp verification enabled" in captured.out
+
+    def test_respects_tolerance_flag(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that main respects --tolerance flag."""
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Content")
+
+        # Calculate actual checksums
+        sha1, md5 = calculate_checksums(str(test_file))
+
+        # Set timestamp that's off by 5 seconds from metadata
+        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+0000").timestamp())
+        actual_timestamp = target_timestamp + 5
+        os.utime(str(test_file), (actual_timestamp, actual_timestamp))
+        # Directory and JSON should match the actual file timestamp (newest file)
+        os.utime(str(test_file.parent), (actual_timestamp, actual_timestamp))
+
+        json_file = tmp_path / "photos.json"
+        data = [
+            {
+                "path": str(test_file),
+                "size": 7,
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2024-01-01T12:00:00+0000",
+            }
+        ]
+        json_file.write_text(json.dumps(data))
+        # JSON file should match actual file timestamp too
+        os.utime(str(json_file), (actual_timestamp, actual_timestamp))
+
+        # With tolerance of 10, should pass (file is 5 seconds off but within tolerance)
+        monkeypatch.setattr(
+            "sys.argv", ["verify.py", "--check-timestamps", "--tolerance", "10", str(tmp_path)]
+        )
+
+        exit_code = main()
+
+        assert exit_code == 0
+
+    def test_verifies_version_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main verifies .version.json file."""
+        # Create real test file
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Test content")
+
+        # Calculate actual checksums
+        sha1, md5 = calculate_checksums(str(test_file))
+
+        # Create JSON metadata file with real file data
+        json_file = tmp_path / "archive.json"
+        data = [
+            {
+                "path": str(test_file),
+                "size": 12,
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2024-01-01T12:00:00+0000",
+            }
+        ]
+        json_file.write_text(json.dumps(data))
+
+        # Calculate actual hash of JSON file
+        actual_hash = calculate_file_hash(str(json_file))
+
+        # Create version file
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 12,
+            "file_count": 1,
+            "files": {"archive.json": actual_hash},
+        }
+        version_file.write_text(json.dumps(version_data))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Found version file" in captured.out
+        assert "Version file verified successfully" in captured.out
+
+    def test_exits_with_error_for_nonexistent_directory(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that main exits with error for nonexistent directory."""
+        monkeypatch.setattr("sys.argv", ["verify.py", "/nonexistent/directory"])
+
+        with pytest.raises(SystemExit, match="does not exist or is not readable"):
+            main()
+
+    def test_exits_with_error_for_empty_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main exits with error when no JSON files found."""
+        monkeypatch.setattr("sys.argv", ["verify.py", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "Error:" in captured.err
+
+    def test_processes_multiple_json_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main processes multiple JSON files."""
+        # Create first file
+        file1 = tmp_path / "photos1" / "test1.jpg"
+        file1.parent.mkdir()
+        file1.write_bytes(b"Content1")
+
+        # Create second file
+        file2 = tmp_path / "photos2" / "test2.jpg"
+        file2.parent.mkdir()
+        file2.write_bytes(b"Content2")
+
+        # Create JSON files
+        sha1_1, md5_1 = calculate_checksums(str(file1))
+        json1 = tmp_path / "archive1.json"
+        json1.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": str(file1),
+                        "size": 8,
+                        "sha1": sha1_1,
+                        "md5": md5_1,
+                        "date": "2024-01-01T12:00:00+0000",
+                    }
+                ]
+            )
+        )
+
+        sha1_2, md5_2 = calculate_checksums(str(file2))
+        json2 = tmp_path / "archive2.json"
+        json2.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": str(file2),
+                        "size": 8,
+                        "sha1": sha1_2,
+                        "md5": md5_2,
+                        "date": "2024-01-02T12:00:00+0000",
+                    }
+                ]
+            )
+        )
+
+        monkeypatch.setattr("sys.argv", ["verify.py", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Found 2 JSON metadata file(s)" in captured.out
+        assert "archive1.json" in captured.out
+        assert "archive2.json" in captured.out

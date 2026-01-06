@@ -1,11 +1,14 @@
 """Tests for mkversion module."""
 
 import json
+import os
 from pathlib import Path
+from typing import Any
 
 import pytest
+from _pytest.capture import CaptureFixture
 
-from photos_manager.mkversion import find_json_files, validate_and_process_json
+from photos_manager.mkversion import find_json_files, main, validate_and_process_json
 
 
 class TestFindJsonFiles:
@@ -151,3 +154,147 @@ class TestValidateAndProcessJson:
         assert total_bytes == 0
         assert file_count == 0
         assert "empty.json" in hashes
+
+
+class TestMain:
+    """Tests for main function."""
+
+    def test_writes_to_stdout_by_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main writes to stdout when no output file specified."""
+        # Create test JSON file
+        data = [
+            {"md5": "abc", "path": "/test.jpg", "sha1": "def", "size": 1000, "date": "2025-01-01"}
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        monkeypatch.setattr("sys.argv", ["mkversion.py", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        assert "version" in output
+        assert output["total_bytes"] == 1000
+        assert output["file_count"] == 1
+        assert "archive.json" in output["files"]
+
+    def test_writes_to_output_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that main writes to file when --output specified."""
+        # Create test JSON file
+        data = [
+            {"md5": "abc", "path": "/test.jpg", "sha1": "def", "size": 2000, "date": "2025-01-01"}
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        output_file = tmp_path / ".version.json"
+        monkeypatch.setattr("sys.argv", ["mkversion.py", str(tmp_path), "-o", str(output_file)])
+
+        exit_code = main()
+
+        assert exit_code == os.EX_OK
+        assert output_file.exists()
+
+        version_data = json.loads(output_file.read_text())
+        assert "version" in version_data
+        assert version_data["total_bytes"] == 2000
+        assert version_data["file_count"] == 1
+
+    def test_calculates_version_string_correctly(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that version string is calculated correctly."""
+        # Create test with specific total size
+        # 1234 files with 1000000000 bytes each = 1234000000000 bytes = 1.234 TB
+        # 1234 files -> last 3 digits = 234
+        data = []
+        for i in range(1234):
+            data.append(
+                {
+                    "md5": "abc",
+                    "path": f"/test{i}.jpg",
+                    "sha1": "def",
+                    "size": 1000000000,  # 1GB each
+                    "date": "2025-01-01",
+                }
+            )
+
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        monkeypatch.setattr("sys.argv", ["mkversion.py", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        # Version format: photos-{TB:.3f}-{count%1000}
+        assert output["total_bytes"] == 1234000000000
+        assert output["file_count"] == 1234
+        # Check that version string is correctly formatted
+        assert output["version"].endswith("-234")  # Last 3 digits of count
+        assert "photos-" in output["version"]
+
+    def test_exits_with_error_for_nonexistent_directory(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that main exits with error for nonexistent directory."""
+        monkeypatch.setattr("sys.argv", ["mkversion.py", "/nonexistent/directory"])
+
+        with pytest.raises(SystemExit, match="does not exist or is not readable"):
+            main()
+
+    def test_exits_with_error_for_empty_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that main exits with error when no JSON files found."""
+        monkeypatch.setattr("sys.argv", ["mkversion.py", str(tmp_path)])
+
+        with pytest.raises(SystemExit, match="No JSON files found"):
+            main()
+
+    def test_exits_with_error_for_invalid_output_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that main exits with error when output file cannot be written."""
+        # Create test JSON file
+        data = [
+            {"md5": "abc", "path": "/test.jpg", "sha1": "def", "size": 100, "date": "2025-01-01"}
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        # Try to write to a directory that doesn't exist
+        invalid_output = tmp_path / "nonexistent" / "output.json"
+        monkeypatch.setattr(
+            "sys.argv", ["mkversion.py", str(tmp_path), "--output", str(invalid_output)]
+        )
+
+        with pytest.raises(SystemExit, match="Could not write to output file"):
+            main()
+
+    def test_processes_multiple_json_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main processes multiple JSON files correctly."""
+        data1 = [{"md5": "a", "path": "/1.jpg", "sha1": "b", "size": 500, "date": "2025-01-01"}]
+        data2 = [{"md5": "c", "path": "/2.jpg", "sha1": "d", "size": 1500, "date": "2025-01-02"}]
+
+        (tmp_path / "archive1.json").write_text(json.dumps(data1))
+        (tmp_path / "archive2.json").write_text(json.dumps(data2))
+
+        monkeypatch.setattr("sys.argv", ["mkversion.py", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        output = json.loads(captured.out)
+        assert output["total_bytes"] == 2000
+        assert output["file_count"] == 2
+        assert len(output["files"]) == 2
