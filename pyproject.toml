@@ -31,6 +31,7 @@ dev = [
 photos = "photos_manager.cli:main"
 mkjson = "photos_manager.mkjson:main"
 mkversion = "photos_manager.mkversion:main"
+setmtime = "photos_manager.setmtime:main"
 
 [tool.poetry]
 name = "photos-manager-cli"
