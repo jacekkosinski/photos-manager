@@ -156,6 +156,8 @@ pre-commit run --all-files
 
 ## Development
 
+For AI-assisted development with Claude Code, see [CLAUDE.md](CLAUDE.md) for architecture details and development patterns.
+
 ### Project Structure
 
 ```
@@ -174,7 +176,8 @@ photos-manager-cli/
 ├── Makefile                # Development commands
 ├── LICENSE                 # MIT License
 ├── README.md               # This file
-└── QUICKSTART.md           # Quick start guide
+├── QUICKSTART.md           # Quick start guide
+└── CLAUDE.md               # AI assistant development guide
 ```
 
 ### Running the Tools
