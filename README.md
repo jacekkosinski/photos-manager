@@ -112,6 +112,34 @@ mkversion /path/to/archive -o .version.json
 - TB: Total size in terabytes (3 decimal places)
 - count%1000: Last three digits of total file count
 
+### setmtime - Update File Timestamps
+
+Update file and directory modification timestamps based on JSON metadata (created by mkjson).
+
+```bash
+# Preview changes without applying them
+setmtime photos.json --dry-run
+
+# Update directory timestamps only (default)
+setmtime photos.json
+
+# Update all file timestamps plus directories
+setmtime photos.json --all
+
+# Process multiple JSON files
+setmtime archive1.json archive2.json --all
+```
+
+**What it updates:**
+- **Individual files** (with `--all`): Sets each file's modification time to match the 'date' field in JSON
+- **Directories**: Sets each directory's modification time to match its newest file
+- **JSON file**: Sets the JSON metadata file's modification time to match the newest entry
+
+**Use cases:**
+- Restore original timestamps after copying files from archives
+- Ensure directory timestamps reflect their actual content
+- Keep filesystem timestamps synchronized with photo metadata
+
 ### Common Workflows
 
 #### 1. Create archive metadata from scratch
@@ -144,6 +172,22 @@ mkjson /photos/backup --output current.json
 diff original.json current.json
 ```
 
+#### 4. Restore timestamps after copying from archive
+
+```bash
+# After copying files from backup/archive, their timestamps may be wrong
+# Use setmtime to restore original timestamps from metadata
+
+# Preview what will be changed
+setmtime /photos/restored/2024.json --dry-run
+
+# Update directory timestamps only
+setmtime /photos/restored/2024.json
+
+# Update all file and directory timestamps
+setmtime /photos/restored/2024.json --all
+```
+
 ## Setup Pre-commit Hooks
 
 ```bash
@@ -165,7 +209,8 @@ photos-manager-cli/
 ├── photos_manager/
 │   ├── __init__.py          # Package initialization
 │   ├── mkjson.py           # Generate file metadata JSON
-│   └── mkversion.py        # Generate archive version info
+│   ├── mkversion.py        # Generate archive version info
+│   └── setmtime.py         # Update file timestamps from metadata
 ├── tests/
 │   ├── __init__.py
 │   ├── test_mkjson.py      # Tests for mkjson
@@ -186,11 +231,13 @@ photos-manager-cli/
 # Using Poetry
 poetry run mkjson /path/to/photos
 poetry run mkversion /path/to/archive
+poetry run setmtime /path/to/photos.json
 
 # Or after activating the virtual environment
 poetry shell
 mkjson /path/to/photos
 mkversion /path/to/archive
+setmtime /path/to/photos.json
 ```
 
 ### Code Quality Tools

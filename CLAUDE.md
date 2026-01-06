@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Photos Manager CLI is a Python 3.12+ toolkit for managing photo archives. It provides two main utilities:
+Photos Manager CLI is a Python 3.12+ toolkit for managing photo archives. It provides three main utilities:
 
 1. **mkjson** - Scans directories and generates JSON metadata files containing checksums (SHA-1, MD5), file sizes, and timestamps for all files
 2. **mkversion** - Aggregates multiple JSON metadata files to generate version information with total size, file count, and integrity hashes
+3. **setmtime** - Updates file and directory modification timestamps based on JSON metadata, useful for restoring original timestamps after copying from archives
 
 ## Development Commands
 
@@ -68,18 +69,20 @@ make check-all
 # Using Poetry
 poetry run mkjson /path/to/photos
 poetry run mkversion /path/to/archive
+poetry run setmtime /path/to/photos.json
 
 # Or after activating virtual environment
 poetry shell
 mkjson /path/to/photos
 mkversion /path/to/archive
+setmtime /path/to/photos.json --dry-run
 ```
 
 ## Architecture
 
 ### Core Utilities
 
-Both `mkjson.py` and `mkversion.py` are standalone scripts that follow a unified implementation style:
+All three utilities (`mkjson.py`, `mkversion.py`, and `setmtime.py`) are standalone scripts that follow a unified implementation style:
 
 - Fully type-annotated with strict mypy compliance
 - Comprehensive Google-style docstrings
@@ -128,13 +131,41 @@ Both `mkjson.py` and `mkversion.py` are standalone scripts that follow a unified
 - Tracks last modification time across all JSON files
 - Can output to file or stdout
 
+### setmtime.py
+
+**Purpose**: Update file and directory timestamps based on JSON metadata
+
+**Key functions**:
+- `load_json(file_path)` - Loads and parses JSON metadata file
+- `get_newest_files(json_file)` - Groups files by directory and finds newest in each
+- `set_files_timestamps(json_file, dry_run)` - Updates individual file timestamps
+- `set_dirs_timestamps(newest_files, dry_run)` - Updates directory timestamps
+- `set_json_timestamps(json_file, dir_name, newest_entry, dry_run)` - Updates JSON and directory timestamps
+- `main()` - CLI entry point with dry-run support
+
+**Expected input**: JSON files created by mkjson with 'path' and 'date' fields
+
+**Key features**:
+- Three-level timestamp management: files, directories, and JSON metadata
+- Dry-run mode to preview changes without applying them
+- Graceful handling of missing or inaccessible files
+- Expects JSON filename to match directory name (e.g., `photos.json` → `photos/`)
+- Only updates timestamps when they differ from metadata
+- Optional `--all` flag to update all individual files (default: directories only)
+
+**Use cases**:
+- Restoring original timestamps after copying from archives
+- Synchronizing filesystem timestamps with photo metadata
+- Ensuring directory timestamps reflect newest content
+
 ### Project Structure
 
 ```
 photos_manager/
 ├── __init__.py
 ├── mkjson.py           # Directory scanner and metadata generator
-└── mkversion.py        # Version aggregator for JSON files
+├── mkversion.py        # Version aggregator for JSON files
+└── setmtime.py         # Timestamp updater based on metadata
 
 tests/
 ├── __init__.py
@@ -194,4 +225,4 @@ The JSON format produced by mkjson contains:
 - `date`: ISO 8601 timestamp with timezone (string)
 - `size`: File size in bytes (integer)
 
-This structure is validated by mkversion, which expects all five fields.
+This structure is validated by mkversion (expects all five fields) and used by setmtime (requires `path` and `date` fields).
