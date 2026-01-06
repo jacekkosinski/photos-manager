@@ -30,19 +30,32 @@ pre-commit install
 
 ### Testing
 
+The project has comprehensive test coverage with 120 tests (85.46% coverage).
+
 ```bash
 # Run all tests with coverage
 poetry run pytest
 
 # Run specific test file
 poetry run pytest tests/test_mkjson.py
+poetry run pytest tests/test_verify.py
 
 # Run with verbose output
 poetry run pytest -v
 
 # Coverage report (HTML output in htmlcov/)
 poetry run pytest --cov --cov-report=html
+
+# Run only main() integration tests
+poetry run pytest -k "TestMain"
 ```
+
+**Current Test Statistics:**
+- Total: 120 tests
+- mkjson: 32 tests (95.38% coverage)
+- mkversion: 19 tests (96.97% coverage)
+- setmtime: 26 tests (84.08% coverage)
+- verify: 43 tests (80.15% coverage)
 
 ### Code Quality
 
@@ -208,10 +221,12 @@ photos_manager/
 ├── setmtime.py         # Timestamp updater based on metadata
 └── verify.py           # Archive integrity verifier
 
-tests/
+tests/                  # 120 tests total, 85.46% coverage
 ├── __init__.py
-├── test_mkjson.py      # Comprehensive tests for mkjson
-└── test_mkversion.py   # Tests for mkversion
+├── test_mkjson.py      # Tests for mkjson (32 tests, 95.38% coverage)
+├── test_mkversion.py   # Tests for mkversion (19 tests, 96.97% coverage)
+├── test_setmtime.py    # Tests for setmtime (26 tests, 84.08% coverage)
+└── test_verify.py      # Tests for verify (43 tests, 80.15% coverage)
 ```
 
 ## Code Style Requirements
@@ -237,10 +252,21 @@ To run manually: `pre-commit run --all-files`
 
 ## Testing Conventions
 
-- Tests use pytest with markers: `unit`, `integration`, `slow`
+- Tests use pytest with comprehensive coverage (120 tests total, 85.46% coverage)
+- Each module has dedicated test file: `test_mkjson.py`, `test_mkversion.py`, `test_setmtime.py`, `test_verify.py`
+- Test structure includes:
+  - Unit tests for individual functions
+  - Integration tests for `main()` CLI entry points
+  - Edge case and error handling tests
 - Coverage is tracked with pytest-cov (reports in htmlcov/)
-- Tests for utilities are in `tests/test_*.py` matching the module name
 - Type checking is relaxed in tests (see mypy overrides in pyproject.toml)
+- Test markers available: `unit`, `integration`, `slow`
+
+**Test Coverage by Module:**
+- mkjson.py: 95.38% (32 tests)
+- mkversion.py: 96.97% (19 tests including 7 main() integration tests)
+- setmtime.py: 84.08% (26 tests including 8 main() integration tests)
+- verify.py: 80.15% (43 tests including 11 main() integration tests)
 
 ## Common Patterns
 

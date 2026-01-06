@@ -8,7 +8,7 @@ This toolkit provides utilities for generating and managing metadata about photo
 
 - 🚀 Modern Python 3.12
 - 📝 Type-safe with mypy strict mode
-- ✅ Comprehensive testing with pytest
+- ✅ Comprehensive testing with pytest (120 tests, 85.46% coverage)
 - 📚 Google-style docstrings with interrogate validation
 - 🔧 Pre-commit hooks for code quality
 - 🎯 Linting and formatting with Ruff
@@ -251,8 +251,10 @@ photos-manager-cli/
 │   └── verify.py           # Verify archive integrity
 ├── tests/
 │   ├── __init__.py
-│   ├── test_mkjson.py      # Tests for mkjson
-│   └── test_mkversion.py   # Tests for mkversion
+│   ├── test_mkjson.py      # Tests for mkjson (32 tests)
+│   ├── test_mkversion.py   # Tests for mkversion (19 tests)
+│   ├── test_setmtime.py    # Tests for setmtime (26 tests)
+│   └── test_verify.py      # Tests for verify (43 tests)
 ├── pyproject.toml          # Project configuration
 ├── .pre-commit-config.yaml # Pre-commit hooks config
 ├── .editorconfig           # Editor settings
@@ -313,6 +315,8 @@ poetry run interrogate -v --generate-badge . photos_manager/
 
 ### Testing
 
+The project has comprehensive test coverage with 120 tests covering all modules.
+
 ```bash
 # Run all tests
 poetry run pytest
@@ -320,15 +324,25 @@ poetry run pytest
 # Run with coverage report
 poetry run pytest --cov
 
-# Run only unit tests
-poetry run pytest -m unit
-
 # Run specific test file
-poetry run pytest tests/test_cli.py
+poetry run pytest tests/test_mkjson.py
 
 # Run with verbose output
 poetry run pytest -v
 ```
+
+**Test Coverage:**
+- Overall: 85.46%
+- mkjson.py: 95.38%
+- mkversion.py: 96.97%
+- setmtime.py: 84.08%
+- verify.py: 80.15%
+
+**Test Suite:**
+- 32 tests for mkjson module
+- 19 tests for mkversion module (including 7 main() integration tests)
+- 26 tests for setmtime module (including 8 main() integration tests)
+- 43 tests for verify module (including 11 main() integration tests)
 
 ### Documentation
 

@@ -28,11 +28,15 @@ poetry run pre-commit install
 # Using Poetry
 poetry run mkjson --help
 poetry run mkversion --help
+poetry run setmtime --help
+poetry run verify --help
 
 # Or activate shell first
 poetry shell
 mkjson --help
 mkversion --help
+setmtime --help
+verify --help
 ```
 
 ## 4. Run Your First Commands
@@ -90,10 +94,14 @@ photos-manager-cli/
 ├── photos_manager/       # Main source code
 │   ├── __init__.py      # Package initialization
 │   ├── mkjson.py        # Generate file metadata JSON
-│   └── mkversion.py     # Generate archive version info
-├── tests/               # Test files
-│   ├── test_mkjson.py   # Tests for mkjson
-│   └── test_mkversion.py # Tests for mkversion
+│   ├── mkversion.py     # Generate archive version info
+│   ├── setmtime.py      # Update file timestamps from metadata
+│   └── verify.py        # Verify archive integrity
+├── tests/               # Test files (120 tests, 85.46% coverage)
+│   ├── test_mkjson.py   # Tests for mkjson (32 tests)
+│   ├── test_mkversion.py # Tests for mkversion (19 tests)
+│   ├── test_setmtime.py  # Tests for setmtime (26 tests)
+│   └── test_verify.py    # Tests for verify (43 tests)
 ├── Makefile             # Development commands
 └── pyproject.toml       # Project configuration
 ```
@@ -109,9 +117,27 @@ mkjson /photos/2024 --time-zone Europe/Warsaw
 # 2. Generate version info
 mkversion /photos --output /photos/.version.json
 
-# 3. Verify integrity later by regenerating and comparing
-mkjson /photos/2024 --output current.json
-diff 2024.json current.json
+# 3. Verify integrity
+verify /photos
+
+# 4. Full verification with checksums (time-consuming)
+verify /photos --all --check-timestamps
+```
+
+### Restore timestamps after copying from archive
+
+```bash
+# After copying files from backup, timestamps may be wrong
+# Use setmtime to restore original timestamps
+
+# Preview changes first
+setmtime /photos/2024.json --dry-run
+
+# Update directory timestamps only (fast)
+setmtime /photos/2024.json
+
+# Update all file and directory timestamps
+setmtime /photos/2024.json --all
 ```
 
 ### Merge multiple photo directories
