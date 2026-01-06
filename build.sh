@@ -9,6 +9,11 @@
 #   - Nuitka (pip install nuitka)
 #   - GCC compiler (sudo apt-get install gcc g++ ccache patchelf)
 #
+# NOTE: If you're on Mac M2/ARM64, use Docker for AMD64 builds:
+#   ./docker-build.sh          # Automated Docker build
+#   docker-compose up          # Or use docker-compose
+#   See BUILD.md for details
+#
 # Usage:
 #   ./build.sh
 

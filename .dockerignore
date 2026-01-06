@@ -1,0 +1,87 @@
+# Docker ignore file for photos-manager
+# Excludes unnecessary files from Docker build context
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+*.cover
+*.log
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.virtualenv/
+
+# Build artifacts
+dist/
+dist-docker/
+build/
+*.egg-info/
+.eggs/
+*.egg
+
+# Documentation (keep only essential)
+*.md
+!README.md
+!LICENSE.md
+docs/
+site/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Development tools
+.pre-commit-config.yaml
+.editorconfig
+Makefile
+
+# Docker files (don't copy into build context)
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-build.sh
+
+# Other
+*.bak
+*.tmp
+*.temp
+nuitka-report.xml

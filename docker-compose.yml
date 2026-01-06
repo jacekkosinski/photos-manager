@@ -1,0 +1,87 @@
+# Docker Compose configuration for building photos-manager AMD64 binary
+#
+# Usage:
+#   docker-compose up        # Build and extract binary to dist/
+#   docker-compose build     # Build Docker image only
+#   docker-compose run --rm photos-builder  # Run interactive build
+
+version: '3.8'
+
+services:
+  # Builder service - compiles the binary
+  photos-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+      platforms:
+        - linux/amd64
+    platform: linux/amd64
+    image: photos-manager-builder:latest
+    container_name: photos-builder
+    volumes:
+      # Mount dist/ directory to extract the built binary
+      - ./dist:/build/dist:rw
+    command: >
+      sh -c "
+        echo '========================================' &&
+        echo 'photos-manager Build Complete!' &&
+        echo '========================================' &&
+        echo '' &&
+        echo 'Binary location: /build/dist/photos' &&
+        echo 'Binary size:' &&
+        ls -lh /build/dist/photos &&
+        echo '' &&
+        echo 'Architecture:' &&
+        file /build/dist/photos &&
+        echo '' &&
+        echo 'Dependencies:' &&
+        ldd /build/dist/photos &&
+        echo '' &&
+        echo '========================================' &&
+        echo 'Binary has been copied to ./dist/photos' &&
+        echo 'Test it with: ./dist/photos --help' &&
+        echo '========================================'
+      "
+    profiles:
+      - default
+
+  # Runtime service - for testing the binary in container
+  photos-runtime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      platforms:
+        - linux/amd64
+    platform: linux/amd64
+    image: photos-manager:latest
+    container_name: photos-runtime
+    # Mount current directory for processing files
+    volumes:
+      - .:/workspace:ro
+    working_dir: /workspace
+    # Override with your command, e.g.:
+    # docker-compose run --rm photos-runtime mkjson /workspace/test_photos
+    command: ["--help"]
+    profiles:
+      - runtime
+
+# ==============================================================================
+# Usage Examples:
+#
+# Build and extract binary (recommended):
+#   docker-compose up
+#
+# Build only (no extraction):
+#   docker-compose build photos-builder
+#
+# Run binary in container for testing:
+#   docker-compose run --rm photos-runtime mkjson --help
+#   docker-compose run --rm photos-runtime verify /workspace/archive
+#
+# Clean up:
+#   docker-compose down
+#   docker-compose down --volumes
+#   docker-compose down --rmi all
+# ==============================================================================
