@@ -11,12 +11,12 @@ default_stages:
   - pre-commit
 
 repos:
+  # Meta hooks - validate pre-commit configuration itself
   - repo: meta
     hooks:
       - id: check-hooks-apply
       - id: check-useless-excludes
 
-repos:
   # Ruff - ultra-fast Python linter and formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.10
@@ -61,11 +61,9 @@ repos:
       - id: check-ast
       # Check for valid Python docstrings
       - id: check-docstring-first
-      # Check JSON files for parseable syntax
-      - id: check-json
       # Check YAML files for parseable syntax
       - id: check-yaml
-        args: [--unsafe]  # Allow custom tags
+        args: [--unsafe] # Allow custom tags
       # Check TOML files for parseable syntax
       - id: check-toml
       # Ensure files end with a newline
@@ -73,8 +71,15 @@ repos:
       # Remove trailing whitespace
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-      # Sort requirements.txt files
-      - id: requirements-txt-fixer
+      # Prevent accidentally committing private keys
+      - id: detect-private-key
+      # Ensure executable scripts have shebangs
+      - id: check-executables-have-shebangs
+      # Ensure scripts with shebangs are executable
+      - id: check-shebang-scripts-are-executable
+      # Prevent mixed line endings (CRLF/LF)
+      - id: mixed-line-ending
+        args: [--fix=lf]
       # Prevent committing to main/master (disabled for initial setup)
       # - id: no-commit-to-branch
       #   args: [--branch=main, --branch=master]
@@ -87,7 +92,7 @@ repos:
       - id: poetry-lock
         args: [--regenerate]
 
-  # Security checks
+  # Security checks - bandit
   - repo: https://github.com/PyCQA/bandit
     rev: 1.9.2
     hooks:
@@ -95,29 +100,33 @@ repos:
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
 
+  # pyproject.toml formatter - ensures consistent formatting
   - repo: https://github.com/tox-dev/pyproject-fmt
     rev: v2.11.1
     hooks:
       - id: pyproject-fmt
 
+  # Dead code detection - finds unused functions, classes, and variables
   - repo: https://github.com/jendrikseipp/vulture
     rev: v2.14
     hooks:
       - id: vulture
         args: [".", "--min-confidence", "80"]
 
+  # Spell checker - catches typos in code and documentation
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
       - id: codespell
         name: codespell
-        # config section is within pyproject.toml
+        # Config section is within pyproject.toml
         language: python
-        types: [ text ]
-        args: [ "--write-changes" ]
+        types: [text]
+        args: ["--write-changes"]
         additional_dependencies:
           - tomli
 
+  # Format code blocks in documentation (markdown, rst)
   - repo: https://github.com/adamchainz/blacken-docs
     rev: 1.20.0
     hooks:
@@ -125,22 +134,43 @@ repos:
         additional_dependencies:
           - black==22.12.0
 
+  # Conventional commits - enforces commit message format
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.11.1 # automatically updated by Commitizen
     hooks:
+      # Validates commit message format (commit-msg hook)
       - id: commitizen
+      # Validates branch name after commit (post-commit hook)
       - id: commitizen-branch
         stages:
           - post-commit
 
+  # Code complexity checker - prevents overly complex code
   - repo: https://github.com/yunojuno/pre-commit-xenon
     rev: v0.1
     hooks:
       - id: xenon
         args:
-          - --max-absolute=D
-          - --max-modules=B
-          - --max-average=B
+          - --max-absolute=D # Maximum complexity for any function
+          - --max-modules=B # Maximum average for modules
+          - --max-average=B # Maximum average for project
+
+  # Markdown formatter - ensures consistent documentation formatting (Python-based)
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.21
+    hooks:
+      - id: mdformat
+        additional_dependencies:
+          - mdformat-gfm # GitHub Flavored Markdown support
+          - mdformat-tables # Better table formatting
+        args: [--wrap, "80"]
+
+  # Prettier - opinionated formatter for YAML files
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        types_or: [yaml]
 
 # Configuration
 ci:
@@ -149,8 +179,8 @@ ci:
 
     for more information, see https://pre-commit.ci
   autofix_prs: true
-  autoupdate_branch: ''
-  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_branch: ""
+  autoupdate_commit_msg: "[pre-commit.ci] pre-commit autoupdate"
   autoupdate_schedule: weekly
-  skip: [poetry-lock]  # Skip poetry-lock in CI as it can be slow
+  skip: [poetry-lock] # Skip poetry-lock in CI as it can be slow
   submodules: false
