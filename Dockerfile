@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     file \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Python 3.12 as default
+# Set Python 3.13 as default
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 1
 
 # Set working directory

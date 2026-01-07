@@ -268,7 +268,7 @@ The build uses multi-stage Dockerfile:
 
 **Stage 1 (builder):**
 - Base: `debian:trixie` for AMD64
-- Installs: Python 3.12, gcc, g++, ccache, patchelf, upx
+- Installs: Python 3.13, gcc, g++, ccache, patchelf, upx
 - Compiles: Nuitka builds binary
 - Compresses: UPX reduces size by ~50%
 
