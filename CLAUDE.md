@@ -1,15 +1,22 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with
+code in this repository.
 
 ## Project Overview
 
-Photos Manager CLI is a Python 3.12+ toolkit for managing photo archives. It provides four main utilities:
+Photos Manager CLI is a Python 3.12+ toolkit for managing photo archives. It
+provides four main utilities:
 
-1. **mkjson** - Scans directories and generates JSON metadata files containing checksums (SHA-1, MD5), file sizes, and timestamps for all files
-2. **mkversion** - Aggregates multiple JSON metadata files to generate version information with total size, file count, and integrity hashes
-3. **setmtime** - Updates file and directory modification timestamps based on JSON metadata, useful for restoring original timestamps after copying from archives
-4. **verify** - Verifies archive integrity by checking files against JSON metadata, including existence, sizes, checksums, and timestamps
+1. **mkjson** - Scans directories and generates JSON metadata files containing
+   checksums (SHA-1, MD5), file sizes, and timestamps for all files
+1. **mkversion** - Aggregates multiple JSON metadata files to generate version
+   information with total size, file count, and integrity hashes
+1. **setmtime** - Updates file and directory modification timestamps based on
+   JSON metadata, useful for restoring original timestamps after copying from
+   archives
+1. **verify** - Verifies archive integrity by checking files against JSON
+   metadata, including existence, sizes, checksums, and timestamps
 
 ## Development Commands
 
@@ -51,6 +58,7 @@ poetry run pytest -k "TestMain"
 ```
 
 **Current Test Statistics:**
+
 - Total: 120 tests
 - mkjson: 32 tests (95.38% coverage)
 - mkversion: 19 tests (96.97% coverage)
@@ -98,7 +106,8 @@ verify /path/to/archive --all
 
 ### Core Utilities
 
-All four utilities (`mkjson.py`, `mkversion.py`, `setmtime.py`, and `verify.py`) are standalone scripts that follow a unified implementation style:
+All four utilities (`mkjson.py`, `mkversion.py`, `setmtime.py`, and `verify.py`)
+are standalone scripts that follow a unified implementation style:
 
 - Fully type-annotated with strict mypy compliance
 - Comprehensive Google-style docstrings
@@ -111,16 +120,22 @@ All four utilities (`mkjson.py`, `mkversion.py`, `setmtime.py`, and `verify.py`)
 **Purpose**: Generate metadata JSON files by scanning directory trees
 
 **Key functions**:
-- `calculate_checksums(file_path)` - Computes SHA-1 and MD5 checksums using 64KB chunks
-- `get_file_info(directory, time_zone)` - Recursively scans directory and collects file metadata
+
+- `calculate_checksums(file_path)` - Computes SHA-1 and MD5 checksums using 64KB
+  chunks
+- `get_file_info(directory, time_zone)` - Recursively scans directory and
+  collects file metadata
 - `extract_numbers(path)` - Extracts numeric patterns for custom sorting
 - `main()` - CLI entry point with argument parsing and duplicate detection
 
-**Output format**: JSON array of objects with fields: `path`, `sha1`, `md5`, `date`, `size`
+**Output format**: JSON array of objects with fields: `path`, `sha1`, `md5`,
+`date`, `size`
 
 **Key features**:
+
 - Timezone-aware timestamps using `zoneinfo`
-- Three sorting modes: by date (default), numeric patterns, or directory structure
+- Three sorting modes: by date (default), numeric patterns, or directory
+  structure
 - Merge capability to combine with existing JSON files
 - Duplicate detection for paths, SHA-1, and MD5 hashes
 - Custom field ordering in output (path, sha1, md5, date, size)
@@ -130,17 +145,23 @@ All four utilities (`mkjson.py`, `mkversion.py`, `setmtime.py`, and `verify.py`)
 **Purpose**: Aggregate metadata from multiple JSON files into a version summary
 
 **Key functions**:
-- `find_json_files(directory)` - Recursively finds JSON files, excluding `*version.json` files
-- `validate_and_process_json(file_paths)` - Validates structure, calculates file hashes, aggregates totals
+
+- `find_json_files(directory)` - Recursively finds JSON files, excluding
+  `*version.json` files
+- `validate_and_process_json(file_paths)` - Validates structure, calculates file
+  hashes, aggregates totals
 - `main()` - CLI entry point that generates version string and output
 
-**Output format**: JSON object with version string, totals, timestamps, and file hashes
+**Output format**: JSON object with version string, totals, timestamps, and file
+hashes
 
 **Version string format**: `photos-{TB:.3f}-{count%1000}`
+
 - TB: Total size in terabytes (3 decimal places)
 - count%1000: Last three digits of total file count
 
 **Key features**:
+
 - Automatically excludes files ending with `version.json` from processing
 - Validates that all JSON files contain arrays of objects with required fields
 - Calculates SHA-1 hash of each JSON file for integrity verification
@@ -152,24 +173,32 @@ All four utilities (`mkjson.py`, `mkversion.py`, `setmtime.py`, and `verify.py`)
 **Purpose**: Update file and directory timestamps based on JSON metadata
 
 **Key functions**:
+
 - `load_json(file_path)` - Loads and parses JSON metadata file
-- `get_newest_files(json_file)` - Groups files by directory and finds newest in each
-- `set_files_timestamps(json_file, dry_run)` - Updates individual file timestamps
+- `get_newest_files(json_file)` - Groups files by directory and finds newest in
+  each
+- `set_files_timestamps(json_file, dry_run)` - Updates individual file
+  timestamps
 - `set_dirs_timestamps(newest_files, dry_run)` - Updates directory timestamps
-- `set_json_timestamps(json_file, dir_name, newest_entry, dry_run)` - Updates JSON and directory timestamps
+- `set_json_timestamps(json_file, dir_name, newest_entry, dry_run)` - Updates
+  JSON and directory timestamps
 - `main()` - CLI entry point with dry-run support
 
 **Expected input**: JSON files created by mkjson with 'path' and 'date' fields
 
 **Key features**:
+
 - Three-level timestamp management: files, directories, and JSON metadata
 - Dry-run mode to preview changes without applying them
 - Graceful handling of missing or inaccessible files
-- Expects JSON filename to match directory name (e.g., `photos.json` → `photos/`)
+- Expects JSON filename to match directory name (e.g., `photos.json` →
+  `photos/`)
 - Only updates timestamps when they differ from metadata
-- Optional `--all` flag to update all individual files (default: directories only)
+- Optional `--all` flag to update all individual files (default: directories
+  only)
 
 **Use cases**:
+
 - Restoring original timestamps after copying from archives
 - Synchronizing filesystem timestamps with photo metadata
 - Ensuring directory timestamps reflect newest content
@@ -179,25 +208,36 @@ All four utilities (`mkjson.py`, `mkversion.py`, `setmtime.py`, and `verify.py`)
 **Purpose**: Verify archive integrity by checking files against JSON metadata
 
 **Key functions**:
-- `find_json_files(directory)` - Finds all JSON metadata files in directory (excluding *version.json)
+
+- `find_json_files(directory)` - Finds all JSON metadata files in directory
+  (excluding \*version.json)
 - `find_version_file(directory)` - Locates .version.json file if present
-- `verify_file_entry(entry, verify_checksums)` - Verifies single file: existence, size, optionally checksums
-- `verify_timestamps(entry, tolerance_seconds)` - Verifies file mtime matches metadata
-- `verify_directory_timestamps(data)` - Verifies directory mtimes match newest file
-- `verify_json_file_timestamp(json_file, data)` - Verifies JSON file mtime matches newest entry
-- `verify_version_file(version_file, json_files, all_data)` - Verifies version file integrity
+- `verify_file_entry(entry, verify_checksums)` - Verifies single file:
+  existence, size, optionally checksums
+- `verify_timestamps(entry, tolerance_seconds)` - Verifies file mtime matches
+  metadata
+- `verify_directory_timestamps(data)` - Verifies directory mtimes match newest
+  file
+- `verify_json_file_timestamp(json_file, data)` - Verifies JSON file mtime
+  matches newest entry
+- `verify_version_file(version_file, json_files, all_data)` - Verifies version
+  file integrity
 - `calculate_checksums(file_path)` - Computes SHA-1 and MD5 for verification
 - `main()` - CLI entry point that orchestrates all verification checks
 
-**Expected input**: Directory containing JSON metadata files and optionally .version.json
+**Expected input**: Directory containing JSON metadata files and optionally
+.version.json
 
 **Verification levels**:
+
 - **Basic** (default): File existence and size verification
-- **With --check-timestamps**: Adds mtime verification for files, directories, and JSON files
+- **With --check-timestamps**: Adds mtime verification for files, directories,
+  and JSON files
 - **With --all**: Adds SHA-1 and MD5 checksum verification (time-consuming)
 - **With --tolerance N**: Allows N seconds tolerance for timestamp comparisons
 
 **Key features**:
+
 - Comprehensive integrity checking at multiple levels
 - Automatic discovery of JSON files and version file in directory
 - Progress indicators for large archives during checksum verification
@@ -206,6 +246,7 @@ All four utilities (`mkjson.py`, `mkversion.py`, `setmtime.py`, and `verify.py`)
 - Validates version file totals (file_count, total_bytes) and JSON file hashes
 
 **Use cases**:
+
 - Detecting data corruption in long-term archives
 - Verifying backup integrity after restore operations
 - Checking for missing or modified files
@@ -233,7 +274,8 @@ tests/                  # 120 tests total, 85.46% coverage
 
 - **Python version**: 3.12+
 - **Type hints**: Required on all functions (strict mypy mode)
-- **Docstrings**: Google-style docstrings required (>= 80% coverage enforced by interrogate)
+- **Docstrings**: Google-style docstrings required (>= 80% coverage enforced by
+  interrogate)
 - **Line length**: 100 characters (Ruff)
 - **Import sorting**: Enforced by Ruff (isort rules)
 - **Path handling**: Use `pathlib.Path` instead of `os.path` (PTH rules)
@@ -241,6 +283,7 @@ tests/                  # 120 tests total, 85.46% coverage
 ## Pre-commit Hooks
 
 Pre-commit hooks run automatically on every commit and check:
+
 - Ruff linting and formatting
 - mypy strict type checking
 - interrogate docstring coverage (>= 80%)
@@ -252,8 +295,10 @@ To run manually: `pre-commit run --all-files`
 
 ## Testing Conventions
 
-- Tests use pytest with comprehensive coverage (120 tests total, 85.46% coverage)
-- Each module has dedicated test file: `test_mkjson.py`, `test_mkversion.py`, `test_setmtime.py`, `test_verify.py`
+- Tests use pytest with comprehensive coverage (120 tests total, 85.46%
+  coverage)
+- Each module has dedicated test file: `test_mkjson.py`, `test_mkversion.py`,
+  `test_setmtime.py`, `test_verify.py`
 - Test structure includes:
   - Unit tests for individual functions
   - Integration tests for `main()` CLI entry points
@@ -263,6 +308,7 @@ To run manually: `pre-commit run --all-files`
 - Test markers available: `unit`, `integration`, `slow`
 
 **Test Coverage by Module:**
+
 - mkjson.py: 95.38% (32 tests)
 - mkversion.py: 96.97% (19 tests including 7 main() integration tests)
 - setmtime.py: 84.08% (26 tests including 8 main() integration tests)
@@ -273,23 +319,25 @@ To run manually: `pre-commit run --all-files`
 ### Adding a new CLI utility
 
 1. Create `photos_manager/new_tool.py` with `main()` function
-2. Add CLI entry point in `pyproject.toml` under `[project.scripts]`
-3. Follow existing patterns from mkjson.py or mkversion.py:
+1. Add CLI entry point in `pyproject.toml` under `[project.scripts]`
+1. Follow existing patterns from mkjson.py or mkversion.py:
    - Use argparse for argument parsing
    - Return `os.EX_OK` on success
    - Raise `SystemExit` with error messages on failure
    - Include comprehensive docstrings
    - Use strict type hints
-4. Create `tests/test_new_tool.py` with unit tests
-5. Run `make check-all` before committing
+1. Create `tests/test_new_tool.py` with unit tests
+1. Run `make check-all` before committing
 
 ### Working with file metadata
 
 The JSON format produced by mkjson contains:
+
 - `path`: Absolute file path (string)
 - `sha1`: SHA-1 checksum (hex string)
 - `md5`: MD5 checksum (hex string)
 - `date`: ISO 8601 timestamp with timezone (string)
 - `size`: File size in bytes (integer)
 
-This structure is validated by mkversion (expects all five fields) and used by setmtime (requires `path` and `date` fields).
+This structure is validated by mkversion (expects all five fields) and used by
+setmtime (requires `path` and `date` fields).

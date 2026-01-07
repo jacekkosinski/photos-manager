@@ -1,10 +1,13 @@
 # Building Standalone Binary
 
-This document explains how to build a standalone binary for the photos-manager CLI using Nuitka.
+This document explains how to build a standalone binary for the photos-manager
+CLI using Nuitka.
 
 ## Overview
 
-The photos-manager CLI can be compiled into a single standalone binary using Nuitka, which provides:
+The photos-manager CLI can be compiled into a single standalone binary using
+Nuitka, which provides:
+
 - **Single executable**: No Python installation needed on target systems
 - **Fast startup**: C-compiled code with optimizations
 - **Self-contained**: All dependencies bundled
@@ -17,22 +20,26 @@ The photos-manager CLI can be compiled into a single standalone binary using Nui
 You need the following installed on the system where you build the binary:
 
 1. **Python 3.12+**
+
    ```bash
    python3 --version  # Should be 3.12 or higher
    ```
 
-2. **Nuitka**
+1. **Nuitka**
+
    ```bash
    pip install nuitka
    ```
 
-3. **C Compiler and Build Tools** (for Debian/Ubuntu):
+1. **C Compiler and Build Tools** (for Debian/Ubuntu):
+
    ```bash
    sudo apt-get update
    sudo apt-get install gcc g++ ccache patchelf
    ```
 
-4. **Project Dependencies**
+1. **Project Dependencies**
+
    ```bash
    pip install -e ".[dev]"
    ```
@@ -40,6 +47,7 @@ You need the following installed on the system where you build the binary:
 ### On Target System
 
 The target system (Debian 13.2) only needs:
+
 - **glibc** (usually pre-installed)
 - **No Python installation required**
 - **No pip or virtualenv required**
@@ -55,27 +63,34 @@ Simply run the build script:
 ```
 
 This will:
+
 1. Check for Nuitka installation
-2. Create `dist/` directory
-3. Compile `photos_manager/cli.py` into a single binary
-4. Output binary to `dist/photos`
-5. Generate build report in `nuitka-report.xml`
+1. Create `dist/` directory
+1. Compile `photos_manager/cli.py` into a single binary
+1. Output binary to `dist/photos`
+1. Generate build report in `nuitka-report.xml`
 
 ## Building with Docker (Mac M2/ARM64)
 
-If you're on Mac M2 (ARM64) and need to build for AMD64/x86_64 architecture, use Docker for cross-compilation.
+If you're on Mac M2 (ARM64) and need to build for AMD64/x86_64 architecture, use
+Docker for cross-compilation.
 
-**Why Docker?** Nuitka does NOT support cross-compilation. The binary's architecture must match the build system's architecture. Docker with `--platform=linux/amd64` runs an AMD64 Linux container, ensuring the output binary is AMD64.
+**Why Docker?** Nuitka does NOT support cross-compilation. The binary's
+architecture must match the build system's architecture. Docker with
+`--platform=linux/amd64` runs an AMD64 Linux container, ensuring the output
+binary is AMD64.
 
 ### Prerequisites
 
 1. **Docker Desktop for Mac** (version 20.10+ with buildx support)
+
    ```bash
    docker --version          # Should be 20.10+
    docker buildx version     # Check buildx availability
    ```
 
-2. **Enable Multi-platform builds** in Docker Desktop:
+1. **Enable Multi-platform builds** in Docker Desktop:
+
    - Open Docker Desktop
    - Go to Settings → Features in development
    - Enable "Use containerd for pulling and storing images"
@@ -98,6 +113,7 @@ file dist/photos
 ```
 
 **What it does:**
+
 - Builds multi-stage Docker image for AMD64
 - Compiles code with Nuitka inside container
 - Compresses binary with UPX (~50% size reduction)
@@ -117,6 +133,7 @@ chmod +x docker-build.sh
 ```
 
 **Features:**
+
 - Checks Docker and buildx availability
 - Creates/configures multi-platform builder automatically
 - Shows detailed build progress
@@ -171,6 +188,7 @@ docker-compose run --rm photos-runtime mkjson --help
 ### Build Performance
 
 **First build:**
+
 - Downloads Debian trixie base image (~150 MB)
 - Downloads build tools and dependencies (~350 MB)
 - Compiles with Nuitka (~3-5 minutes)
@@ -178,6 +196,7 @@ docker-compose run --rm photos-runtime mkjson --help
 - **Total: ~5-10 minutes**
 
 **Subsequent builds:**
+
 - Docker uses cached layers
 - Only changed files trigger rebuild
 - **Total: ~1-2 minutes**
@@ -187,6 +206,7 @@ docker-compose run --rm photos-runtime mkjson --help
 #### "docker buildx not found"
 
 **Solution:**
+
 ```bash
 # Update Docker Desktop to latest version
 # Minimum required: 20.10+
@@ -200,6 +220,7 @@ docker buildx version
 **Problem:** Binary is ARM64 instead of AMD64.
 
 **Solution:**
+
 ```bash
 # Ensure --platform=linux/amd64 is set
 # Check Dockerfile line 15: FROM --platform=linux/amd64 debian:trixie
@@ -214,6 +235,7 @@ file dist/photos | grep x86-64
 #### Build takes too long / hangs
 
 **Solutions:**
+
 ```bash
 # 1. Increase Docker resources
 # Docker Desktop → Settings → Resources
@@ -229,6 +251,7 @@ docker-compose up  # Shows detailed output
 #### "Cannot connect to Docker daemon"
 
 **Solution:**
+
 ```bash
 # Start Docker Desktop
 open -a Docker
@@ -243,6 +266,7 @@ docker info
 **Problem:** UPX compression might have failed.
 
 **Check:**
+
 ```bash
 # Build logs should show:
 # "Compressing binary with UPX..."
@@ -253,26 +277,28 @@ docker info
 docker-compose up
 ```
 
-**Without UPX:** ~15-25 MB
-**With UPX:** ~8-12 MB (~50% reduction)
+**Without UPX:** ~15-25 MB **With UPX:** ~8-12 MB (~50% reduction)
 
 #### "platform does not match" warning
 
 **Explanation:** This is expected on Mac M2 (ARM64) when building AMD64.
 
-Docker emulates AMD64 architecture using QEMU, which is why build is slower. This is normal and the binary will be correct.
+Docker emulates AMD64 architecture using QEMU, which is why build is slower.
+This is normal and the binary will be correct.
 
 ### Docker Build Architecture
 
 The build uses multi-stage Dockerfile:
 
 **Stage 1 (builder):**
+
 - Base: `debian:trixie` for AMD64
 - Installs: Python 3.13, gcc, g++, ccache, patchelf, upx
 - Compiles: Nuitka builds binary
 - Compresses: UPX reduces size by ~50%
 
 **Stage 2 (runtime):**
+
 - Base: `debian:trixie-slim` (minimal)
 - Only contains: compiled binary + minimal glibc
 - Used for: testing binary in container
@@ -377,6 +403,7 @@ photos verify /path/to/archive
 ## Build Size
 
 Expected binary size:
+
 - **~15-25 MB** (includes Python runtime + dependencies)
 - **Compressed with UPX**: ~8-12 MB (optional, see below)
 
@@ -394,7 +421,8 @@ upx --best --lzma dist/photos
 # This will reduce size by ~50-60%
 ```
 
-**Note**: UPX compression may slightly increase startup time (~50-100ms) but significantly reduces file size.
+**Note**: UPX compression may slightly increase startup time (~50-100ms) but
+significantly reduces file size.
 
 ## Troubleshooting
 
@@ -441,8 +469,8 @@ ldd --version
 ### Large binary size
 
 1. Use UPX compression (see above)
-2. Use `--python-flag=-OO` for more aggressive optimization
-3. Use `--remove-output` to clean up intermediate files
+1. Use `--python-flag=-OO` for more aggressive optimization
+1. Use `--remove-output` to clean up intermediate files
 
 ## CI/CD Integration
 
@@ -507,15 +535,17 @@ python3 -m nuitka \
 
 ### Cross-Compilation
 
-Nuitka doesn't directly support cross-compilation. To build for Debian 13.2 from another system:
+Nuitka doesn't directly support cross-compilation. To build for Debian 13.2 from
+another system:
 
 1. Use Docker with Debian 13.2 image
-2. Or use a Debian 13.2 VM for building
-3. Or build on the target system directly
+1. Or use a Debian 13.2 VM for building
+1. Or build on the target system directly
 
 ## Performance
 
 Nuitka-compiled binaries are typically:
+
 - **30-50% faster** than interpreted Python
 - **Instant startup** (no Python interpreter initialization)
 - **Lower memory usage** (no CPython overhead)
@@ -538,7 +568,8 @@ pyinstaller \
 # Binary will be in dist/photos
 ```
 
-**Note**: PyInstaller binaries are typically larger (~40-60 MB) and slower to start than Nuitka binaries.
+**Note**: PyInstaller binaries are typically larger (~40-60 MB) and slower to
+start than Nuitka binaries.
 
 ## References
 

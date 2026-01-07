@@ -178,25 +178,31 @@ git commit -m "feat: add new awesome feature"
 ## 9. Common Issues
 
 ### Poetry not found
+
 ```bash
 curl -sSL https://install.python-poetry.org | python3 -
 ```
 
 ### Python version mismatch
+
 Make sure you have Python 3.12+ installed:
+
 ```bash
 python --version
 ```
 
 ### Pre-commit hooks fail
+
 Run manually to see errors:
+
 ```bash
 make pre-commit
 ```
 
 ## 10. Building Standalone Binary
 
-For production deployment, build a standalone binary that doesn't require Python:
+For production deployment, build a standalone binary that doesn't require
+Python:
 
 ```bash
 # Install Nuitka
@@ -216,7 +222,8 @@ sudo apt-get install gcc g++ ccache patchelf
 scp dist/photos user@server:/usr/local/bin/
 ```
 
-See [BUILD.md](BUILD.md) for detailed build instructions, deployment guide, and troubleshooting.
+See [BUILD.md](BUILD.md) for detailed build instructions, deployment guide, and
+troubleshooting.
 
 ## 11. Next Steps
 
@@ -228,16 +235,16 @@ See [BUILD.md](BUILD.md) for detailed build instructions, deployment guide, and 
 
 ## Useful Commands Reference
 
-| Command | Description |
-|---------|-------------|
-| `make install` | Install dependencies |
-| `make test` | Run tests |
-| `make coverage` | Test coverage report |
-| `make lint` | Check code quality |
-| `make format` | Format code |
-| `make type-check` | Run type checker |
-| `make check-all` | Run all checks |
-| `make clean` | Clean generated files |
+| Command           | Description           |
+| ----------------- | --------------------- |
+| `make install`    | Install dependencies  |
+| `make test`       | Run tests             |
+| `make coverage`   | Test coverage report  |
+| `make lint`       | Check code quality    |
+| `make format`     | Format code           |
+| `make type-check` | Run type checker      |
+| `make check-all`  | Run all checks        |
+| `make clean`      | Clean generated files |
 | `make docs-serve` | Preview documentation |
 
 Happy coding! 🚀

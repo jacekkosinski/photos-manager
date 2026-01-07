@@ -2,7 +2,9 @@
 
 Modern command-line tool for managing photo archives built with Python 3.12.
 
-This toolkit provides utilities for generating and managing metadata about photo collections, including checksum calculation, file tracking, and version management.
+This toolkit provides utilities for generating and managing metadata about photo
+collections, including checksum calculation, file tracking, and version
+management.
 
 ## Features
 
@@ -49,13 +51,15 @@ pip install -e ".[dev]"
 
 ## Available Commands
 
-The photos-manager CLI provides a unified `photos` command with subcommands for each tool:
+The photos-manager CLI provides a unified `photos` command with subcommands for
+each tool:
 
 ```bash
 photos <command> [options]
 ```
 
 **Available commands:**
+
 - `mkjson` - Generate JSON file with file metadata
 - `mkversion` - Generate archive version information
 - `setmtime` - Update file timestamps based on metadata
@@ -76,7 +80,8 @@ photos verify --help
 
 ### mkjson - Generate File Metadata
 
-Generate a JSON file containing metadata (checksums, sizes, timestamps) for all files in a directory.
+Generate a JSON file containing metadata (checksums, sizes, timestamps) for all
+files in a directory.
 
 ```bash
 # Basic usage - scan directory and create JSON
@@ -93,6 +98,7 @@ photos mkjson /path/to/photos --time-zone Europe/Warsaw
 ```
 
 **Output format:**
+
 ```json
 [
     {
@@ -119,6 +125,7 @@ photos mkversion /path/to/archive -o .version.json
 ```
 
 **Output format:**
+
 ```json
 {
     "version": "photos-2.456-234",
@@ -134,12 +141,14 @@ photos mkversion /path/to/archive -o .version.json
 ```
 
 **Version string format:** `photos-{TB:.3f}-{count%1000}`
+
 - TB: Total size in terabytes (3 decimal places)
 - count%1000: Last three digits of total file count
 
 ### setmtime - Update File Timestamps
 
-Update file and directory modification timestamps based on JSON metadata (created by mkjson).
+Update file and directory modification timestamps based on JSON metadata
+(created by mkjson).
 
 ```bash
 # Preview changes without applying them
@@ -156,11 +165,16 @@ photos setmtime archive1.json archive2.json --all
 ```
 
 **What it updates:**
-- **Individual files** (with `--all`): Sets each file's modification time to match the 'date' field in JSON
-- **Directories**: Sets each directory's modification time to match its newest file
-- **JSON file**: Sets the JSON metadata file's modification time to match the newest entry
+
+- **Individual files** (with `--all`): Sets each file's modification time to
+  match the 'date' field in JSON
+- **Directories**: Sets each directory's modification time to match its newest
+  file
+- **JSON file**: Sets the JSON metadata file's modification time to match the
+  newest entry
 
 **Use cases:**
+
 - Restore original timestamps after copying files from archives
 - Ensure directory timestamps reflect their actual content
 - Keep filesystem timestamps synchronized with photo metadata
@@ -184,15 +198,20 @@ photos verify /path/to/archive --all --check-timestamps --tolerance 2
 ```
 
 **What it verifies:**
+
 - **File existence**: All files listed in JSON metadata exist
 - **File sizes**: Actual file sizes match metadata
-- **Checksums** (with `--all`): SHA-1 and MD5 hashes match metadata (time-consuming)
+- **Checksums** (with `--all`): SHA-1 and MD5 hashes match metadata
+  (time-consuming)
 - **Timestamps** (with `--check-timestamps`): File mtimes match metadata
-- **Directory timestamps** (with `--check-timestamps`): Directory mtimes match newest file
-- **JSON timestamps** (with `--check-timestamps`): JSON file mtimes match newest entry
+- **Directory timestamps** (with `--check-timestamps`): Directory mtimes match
+  newest file
+- **JSON timestamps** (with `--check-timestamps`): JSON file mtimes match newest
+  entry
 - **Version file**: If .version.json exists, verifies totals and file hashes
 
 **Use cases:**
+
 - Detect data corruption in archives
 - Verify backup integrity after restore
 - Check for missing or modified files
@@ -262,7 +281,8 @@ pre-commit run --all-files
 
 ## Development
 
-For AI-assisted development with Claude Code, see [CLAUDE.md](CLAUDE.md) for architecture details and development patterns.
+For AI-assisted development with Claude Code, see [CLAUDE.md](CLAUDE.md) for
+architecture details and development patterns.
 
 ### Project Structure
 
@@ -294,7 +314,8 @@ photos-manager-cli/
 
 #### Using the Unified CLI
 
-The recommended way to use photos-manager is through the unified `photos` command:
+The recommended way to use photos-manager is through the unified `photos`
+command:
 
 ```bash
 # Using Poetry
@@ -324,7 +345,8 @@ verify /path/to/archive --all
 
 #### Standalone Binary
 
-For production deployment, you can build a standalone binary that doesn't require Python:
+For production deployment, you can build a standalone binary that doesn't
+require Python:
 
 ```bash
 # Build the binary using Nuitka
@@ -387,6 +409,7 @@ poetry run pytest -v
 ```
 
 **Test Coverage:**
+
 - Overall: 85.46%
 - mkjson.py: 95.38%
 - mkversion.py: 96.97%
@@ -394,6 +417,7 @@ poetry run pytest -v
 - verify.py: 80.15%
 
 **Test Suite:**
+
 - 32 tests for mkjson module
 - 19 tests for mkversion module (including 7 main() integration tests)
 - 26 tests for setmtime module (including 8 main() integration tests)
@@ -424,6 +448,7 @@ LOG_LEVEL=INFO
 ### Ruff Configuration
 
 Configured in `pyproject.toml` under `[tool.ruff]`. Current settings:
+
 - Line length: 100
 - Target: Python 3.12
 - Google-style docstrings required
@@ -435,12 +460,14 @@ Configured in `pyproject.toml` under `[tool.mypy]`. Using strict mode.
 ### pytest Configuration
 
 Configured in `pyproject.toml` under `[tool.pytest.ini_options]`:
+
 - Minimum coverage: configured via pytest-cov
 - Test markers: unit, integration, slow
 
 ## CI/CD
 
 Pre-commit hooks will run automatically before each commit. They check:
+
 - ✅ Ruff linting and formatting
 - ✅ mypy type checking
 - ✅ interrogate docstring coverage (>= 80%)
@@ -460,10 +487,10 @@ Pre-commit hooks will run automatically before each commit. They check:
 ## Contributing
 
 1. Create a new branch for your feature
-2. Make your changes
-3. Ensure all tests pass: `poetry run pytest`
-4. Ensure code quality: `pre-commit run --all-files`
-5. Submit a pull request
+1. Make your changes
+1. Ensure all tests pass: `poetry run pytest`
+1. Ensure code quality: `pre-commit run --all-files`
+1. Submit a pull request
 
 ## License
 
