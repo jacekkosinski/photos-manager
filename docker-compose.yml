@@ -5,8 +5,6 @@
 #   docker-compose build     # Build Docker image only
 #   docker-compose run --rm photos-builder  # Run interactive build
 
-version: '3.8'
-
 services:
   # Builder service - compiles the binary
   photos-builder:
