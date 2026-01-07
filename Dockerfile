@@ -15,8 +15,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3.12 \
-    python3.12-dev \
+    python3.13 \
+    python3.13-dev \
     python3-pip \
     gcc \
     g++ \
@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Set Python 3.12 as default
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 1
 
 # Set working directory
 WORKDIR /build
@@ -40,10 +40,7 @@ COPY photos_manager/ ./photos_manager/
 # Install Python dependencies
 # Note: We don't use Poetry in Docker to keep the build simpler
 RUN pip3 install --no-cache-dir --break-system-packages \
-    nuitka \
-    pydantic>=2.5.0,<3.0.0 \
-    pydantic-settings>=2.1.0,<3.0.0 \
-    loguru>=0.7.2,<1.0.0
+    nuitka
 
 # Build with Nuitka
 RUN echo "Building binary with Nuitka..." && \
