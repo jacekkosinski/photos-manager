@@ -217,7 +217,6 @@ skips = [
 name = "cz_conventional_commits"
 version = "0.1.0"
 version_scheme = "semver"
-version_provider = "pep621"
 update_changelog_on_bump = true
 tag_format = "v$version"
 changelog_file = "CHANGELOG.md"
@@ -225,5 +224,5 @@ changelog_incremental = true
 changelog_start_rev = "master"
 version_files = [
   "photos_manager/__init__.py:__version__",
-  "pyproject.toml:^version",
+  "pyproject.toml:[tool.poetry]",
 ]
