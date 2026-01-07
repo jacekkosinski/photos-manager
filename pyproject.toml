@@ -1,11 +1,9 @@
 [build-system]
-build-backend = "poetry.core.masonry.api"
-# Ruff configuration
-requires = [ "poetry-core" ]
+build-backend = "setuptools.build_meta"
+requires = [ "setuptools>=68", "wheel" ]
 
 [project]
 name = "photos-manager-cli"
-version = "0.1.0"
 description = "Modern CLI tool for managing photo archives with comprehensive testing (120 tests, 85% coverage)"
 readme = "README.md"
 license = "MIT"
@@ -19,6 +17,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
+dynamic = [ "version" ]
 dependencies = [
   "loguru>=0.7.2,<1",
   "pydantic>=2.5,<3",
@@ -44,7 +43,7 @@ scripts.verify = "photos_manager.verify:main"
 
 [tool.poetry]
 name = "photos-manager-cli"
-version = "0.1.0"
+version = "0.1.0"                                             # NOTE: Keep in sync with photos_manager/__version__
 description = "Modern CLI tool for managing photos"
 authors = [ "Jacek Kosiński <jacek.kosinski@softflow.tech>" ]
 packages = [ { include = "photos_manager" } ]
@@ -53,6 +52,9 @@ packages = [ { include = "photos_manager" } ]
 python = "^3.12"
 
 [tool.poetry.group.dev.dependencies]
+
+[tool.setuptools.dynamic]
+version = { attr = "photos_manager.__version__" }
 
 [tool.ruff]
 target-version = "py312"

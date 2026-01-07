@@ -19,7 +19,7 @@ import argparse
 import sys
 from typing import cast
 
-from photos_manager import mkjson, mkversion, setmtime, verify
+from photos_manager import __version__, mkjson, mkversion, setmtime, verify
 
 
 def main() -> int:
@@ -51,7 +51,7 @@ def main() -> int:
     parser.add_argument(
         "--version",
         action="version",
-        version="photos-manager-cli 0.1.0",
+        version=f"photos-manager-cli {__version__}",
     )
 
     # Create subparsers for each command
