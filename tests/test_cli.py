@@ -1,0 +1,239 @@
+"""Tests for CLI module."""
+
+import argparse
+import sys
+from unittest.mock import patch
+
+import pytest
+
+from photos_manager import __version__
+from photos_manager.cli import main
+
+
+class TestMainFunction:
+    """Tests for main() function."""
+
+    def test_main_with_no_arguments_exits_with_error(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that calling main without arguments exits with error."""
+        monkeypatch.setattr(sys, "argv", ["photos"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 2  # argparse exits with 2 for invalid args
+        captured = capsys.readouterr()
+        assert "required" in captured.err.lower() or "following arguments" in captured.err.lower()
+
+    def test_main_with_version_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that --version flag displays version and exits."""
+        monkeypatch.setattr(sys, "argv", ["photos", "--version"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert __version__ in captured.out
+        assert "photos-manager-cli" in captured.out
+
+    def test_main_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that --help flag displays help message and exits."""
+        monkeypatch.setattr(sys, "argv", ["photos", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "photos" in captured.out
+        assert "mkjson" in captured.out
+        assert "mkversion" in captured.out
+        assert "setmtime" in captured.out
+        assert "verify" in captured.out
+
+
+class TestMkjsonSubcommand:
+    """Tests for mkjson subcommand."""
+
+    def test_mkjson_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that mkjson subcommand delegates to mkjson.run()."""
+        with patch("photos_manager.mkjson.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "mkjson", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert args.directory == "/test/path"
+
+    def test_mkjson_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that mkjson --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "mkjson", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "mkjson" in captured.out
+        assert "JSON" in captured.out or "metadata" in captured.out
+
+    def test_mkjson_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that mkjson returns error code when run() fails."""
+        with patch("photos_manager.mkjson.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "mkjson", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+class TestMkversionSubcommand:
+    """Tests for mkversion subcommand."""
+
+    def test_mkversion_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that mkversion subcommand delegates to mkversion.run()."""
+        with patch("photos_manager.mkversion.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "mkversion", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert args.directory == "/test/path"
+
+    def test_mkversion_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that mkversion --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "mkversion", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "mkversion" in captured.out
+        assert "version" in captured.out.lower()
+
+    def test_mkversion_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that mkversion returns error code when run() fails."""
+        with patch("photos_manager.mkversion.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "mkversion", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+class TestSetmtimeSubcommand:
+    """Tests for setmtime subcommand."""
+
+    def test_setmtime_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that setmtime subcommand delegates to setmtime.run()."""
+        with patch("photos_manager.setmtime.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "setmtime", "archive.json"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert args.json_files == ["archive.json"]
+
+    def test_setmtime_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that setmtime --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "setmtime", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "setmtime" in captured.out
+        assert "timestamp" in captured.out.lower() or "mtime" in captured.out.lower()
+
+    def test_setmtime_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that setmtime returns error code when run() fails."""
+        with patch("photos_manager.setmtime.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "setmtime", "archive.json"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+class TestVerifySubcommand:
+    """Tests for verify subcommand."""
+
+    def test_verify_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that verify subcommand delegates to verify.run()."""
+        with patch("photos_manager.verify.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "verify", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert hasattr(args, "directory") or hasattr(args, "json_file")
+
+    def test_verify_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that verify --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "verify", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "verify" in captured.out
+        assert "integrity" in captured.out.lower() or "verify" in captured.out.lower()
+
+    def test_verify_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that verify returns error code when run() fails."""
+        with patch("photos_manager.verify.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "verify", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+class TestInvalidSubcommand:
+    """Tests for invalid subcommand handling."""
+
+    def test_invalid_subcommand_exits_with_error(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that invalid subcommand exits with error."""
+        monkeypatch.setattr(sys, "argv", ["photos", "invalid_command"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "invalid choice" in captured.err.lower()
