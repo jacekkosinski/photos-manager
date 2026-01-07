@@ -101,7 +101,7 @@ def main() -> int:
 
     # Parse arguments and execute
     args = parser.parse_args()
-    return cast(int, args.func(args))
+    return cast("int", args.func(args))
 
 
 if __name__ == "__main__":

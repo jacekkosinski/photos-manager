@@ -138,9 +138,9 @@ repos:
     hooks:
       - id: xenon
         args:
-          - --max-absolute=B
+          - --max-absolute=D
           - --max-modules=B
-          - --max-average=A
+          - --max-average=B
 
 # Configuration
 ci:

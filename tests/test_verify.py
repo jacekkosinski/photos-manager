@@ -32,7 +32,7 @@ class TestLoadJson:
         """Test that valid JSON is loaded correctly."""
         json_file = tmp_path / "test.json"
         data = cast(
-            list[dict[str, str | int]],
+            "list[dict[str, str | int]]",
             [{"path": "/test.jpg", "sha1": "abc", "md5": "def", "size": 100}],
         )
         json_file.write_text(json.dumps(data))
@@ -195,7 +195,7 @@ class TestVerifyFileEntry:
         test_file.write_bytes(test_content)
 
         entry = cast(
-            dict[str, str | int],
+            "dict[str, str | int]",
             {
                 "path": str(test_file),
                 "size": len(test_content),
@@ -212,7 +212,7 @@ class TestVerifyFileEntry:
     def test_detects_missing_file(self, tmp_path: Path) -> None:
         """Test that missing file is detected."""
         entry = cast(
-            dict[str, str | int],
+            "dict[str, str | int]",
             {
                 "path": str(tmp_path / "missing.txt"),
                 "size": 100,
@@ -233,7 +233,7 @@ class TestVerifyFileEntry:
         test_file.write_text("content")
 
         entry = cast(
-            dict[str, str | int],
+            "dict[str, str | int]",
             {
                 "path": str(test_file),
                 "size": 999,  # Wrong size
@@ -253,7 +253,7 @@ class TestVerifyFileEntry:
         test_file.write_text("content")
 
         entry = cast(
-            dict[str, str | int],
+            "dict[str, str | int]",
             {
                 "path": str(test_file),
                 "size": 7,
@@ -274,7 +274,7 @@ class TestVerifyFileEntry:
         test_file.write_text("content")
 
         entry = cast(
-            dict[str, str | int],
+            "dict[str, str | int]",
             {
                 "path": str(test_file),
                 "size": 7,
@@ -291,7 +291,7 @@ class TestVerifyFileEntry:
 
     def test_handles_missing_path_field(self) -> None:
         """Test handling of missing path field."""
-        entry = cast(dict[str, str | int], {"size": 100, "sha1": "abc", "md5": "def"})
+        entry = cast("dict[str, str | int]", {"size": 100, "sha1": "abc", "md5": "def"})
 
         success, errors = verify_file_entry(entry, verify_checksums=False)
 
@@ -311,7 +311,7 @@ class TestVerifyTimestamps:
         mtime = int(test_file.stat().st_mtime)
         date_str = datetime.fromtimestamp(mtime).astimezone().isoformat()
 
-        entry = cast(dict[str, str | int], {"path": str(test_file), "date": date_str})
+        entry = cast("dict[str, str | int]", {"path": str(test_file), "date": date_str})
 
         success, errors = verify_timestamps(entry, tolerance_seconds=1)
 
@@ -325,7 +325,7 @@ class TestVerifyTimestamps:
 
         # Use very old timestamp
         entry = cast(
-            dict[str, str | int],
+            "dict[str, str | int]",
             {"path": str(test_file), "date": "2020-01-01T00:00:00+0000"},
         )
 
@@ -343,7 +343,7 @@ class TestVerifyTimestamps:
         mtime = int(test_file.stat().st_mtime) + 5
         date_str = datetime.fromtimestamp(mtime).astimezone().isoformat()
 
-        entry = cast(dict[str, str | int], {"path": str(test_file), "date": date_str})
+        entry = cast("dict[str, str | int]", {"path": str(test_file), "date": date_str})
 
         # Should fail with 1 second tolerance
         success1, _ = verify_timestamps(entry, tolerance_seconds=1)
@@ -359,7 +359,7 @@ class TestVerifyTimestamps:
         test_file = tmp_path / "test.txt"
         test_file.write_text("content")
 
-        entry = cast(dict[str, str | int], {"path": str(test_file), "date": "invalid-date"})
+        entry = cast("dict[str, str | int]", {"path": str(test_file), "date": "invalid-date"})
 
         success, errors = verify_timestamps(entry, tolerance_seconds=1)
 
@@ -384,7 +384,7 @@ class TestVerifyDirectoryTimestamps:
         os.utime(str(test_file), (target_timestamp, target_timestamp))
         os.utime(str(subdir), (target_timestamp, target_timestamp))
 
-        data = cast(list[dict[str, str | int]], [{"path": str(test_file), "date": target_date}])
+        data = cast("list[dict[str, str | int]]", [{"path": str(test_file), "date": target_date}])
 
         dir_count, errors = verify_directory_timestamps(data)
 
@@ -406,7 +406,7 @@ class TestVerifyDirectoryTimestamps:
         os.utime(str(subdir), (dir_timestamp, dir_timestamp))
 
         data = cast(
-            list[dict[str, str | int]],
+            "list[dict[str, str | int]]",
             [{"path": str(test_file), "date": "2024-01-01T12:00:00+0000"}],
         )
 
@@ -433,7 +433,7 @@ class TestVerifyJsonFileTimestamp:
         os.utime(str(json_file), (target_timestamp, target_timestamp))
 
         date_str = datetime.fromtimestamp(target_timestamp).astimezone().isoformat()
-        data = cast(list[dict[str, str | int]], [{"path": str(test_file), "date": date_str}])
+        data = cast("list[dict[str, str | int]]", [{"path": str(test_file), "date": date_str}])
 
         success, errors = verify_json_file_timestamp(str(json_file), data)
 
@@ -454,7 +454,7 @@ class TestVerifyJsonFileTimestamp:
 
         mtime = int(test_file.stat().st_mtime)
         date_str = datetime.fromtimestamp(mtime).astimezone().isoformat()
-        data = cast(list[dict[str, str | int]], [{"path": str(test_file), "date": date_str}])
+        data = cast("list[dict[str, str | int]]", [{"path": str(test_file), "date": date_str}])
 
         success, errors = verify_json_file_timestamp(str(json_file), data)
 
@@ -470,7 +470,7 @@ class TestVerifyVersionFile:
         # Create JSON metadata file
         json_file = tmp_path / "archive.json"
         data = cast(
-            list[dict[str, str | int]],
+            "list[dict[str, str | int]]",
             [
                 {
                     "path": "/test1.jpg",
@@ -531,7 +531,7 @@ class TestVerifyVersionFile:
         """Test that total bytes mismatch is detected."""
         json_file = tmp_path / "archive.json"
         data = cast(
-            list[dict[str, str | int]],
+            "list[dict[str, str | int]]",
             [{"path": "/test.jpg", "size": 100, "sha1": "abc", "md5": "def"}],
         )
         json_file.write_text(json.dumps(data))
@@ -556,7 +556,7 @@ class TestVerifyVersionFile:
         """Test that file count mismatch is detected."""
         json_file = tmp_path / "archive.json"
         data = cast(
-            list[dict[str, str | int]],
+            "list[dict[str, str | int]]",
             [{"path": "/test.jpg", "size": 100, "sha1": "abc", "md5": "def"}],
         )
         json_file.write_text(json.dumps(data))

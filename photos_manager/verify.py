@@ -57,7 +57,7 @@ def load_json(file_path: str) -> list[dict[str, str | int]]:
         path = Path(file_path)
         with path.open(encoding="utf-8") as json_file:
             data: Any = json.load(json_file)
-            return cast(list[dict[str, str | int]], data)
+            return cast("list[dict[str, str | int]]", data)
     except FileNotFoundError as exception:
         raise SystemExit(f"Error: JSON file '{file_path}' does not exist.") from exception
     except json.JSONDecodeError as exception:
@@ -89,7 +89,7 @@ def load_version_json(file_path: str) -> dict[str, Any]:
     try:
         path = Path(file_path)
         with path.open(encoding="utf-8") as json_file:
-            return cast(dict[str, Any], json.load(json_file))
+            return cast("dict[str, Any]", json.load(json_file))
     except FileNotFoundError as exception:
         raise SystemExit(f"Error: Version file '{file_path}' does not exist.") from exception
     except json.JSONDecodeError as exception:
@@ -258,7 +258,7 @@ def verify_file_entry(
         actual_size = path.stat().st_size
         if actual_size != expected_size:
             errors.append(
-                f"Size mismatch for {file_path}: " f"expected {expected_size}, got {actual_size}"
+                f"Size mismatch for {file_path}: expected {expected_size}, got {actual_size}"
             )
     except OSError as e:
         errors.append(f"Cannot stat file {file_path}: {e}")
@@ -273,13 +273,12 @@ def verify_file_entry(
 
             if actual_sha1 != expected_sha1:
                 errors.append(
-                    f"SHA-1 mismatch for {file_path}: "
-                    f"expected {expected_sha1}, got {actual_sha1}"
+                    f"SHA-1 mismatch for {file_path}: expected {expected_sha1}, got {actual_sha1}"
                 )
 
             if actual_md5 != expected_md5:
                 errors.append(
-                    f"MD5 mismatch for {file_path}: " f"expected {expected_md5}, got {actual_md5}"
+                    f"MD5 mismatch for {file_path}: expected {expected_md5}, got {actual_md5}"
                 )
         except OSError as e:
             errors.append(f"Cannot read file for checksum verification {file_path}: {e}")
@@ -719,7 +718,7 @@ def run(args: argparse.Namespace) -> int:
             print("  Version file verified successfully")
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Verification complete:")
     print(f"  Total files checked: {total_files}")
     print(f"  Total errors found: {total_errors}")

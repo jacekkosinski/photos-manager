@@ -221,7 +221,7 @@ class TestExtractNumbers:
     def test_handles_filename_only(self) -> None:
         """Test extraction from filename without directory."""
         # Parent directory would be empty or ".", no numbers
-        dir_num, file_num, filename = extract_numbers("photo_123.jpg")
+        _dir_num, file_num, filename = extract_numbers("photo_123.jpg")
         assert file_num == 123
         assert filename == "photo_123.jpg"
 

@@ -207,7 +207,7 @@ def load_json(file_path: str) -> list[dict[str, str | int]] | None:
         path = Path(file_path)
         with path.open(encoding="utf-8") as json_file:
             data: Any = json.load(json_file)
-            return cast(list[dict[str, str | int]], data)
+            return cast("list[dict[str, str | int]]", data)
     except FileNotFoundError:
         print(f"Error: JSON file '{file_path}' does not exist.", file=sys.stderr)
         return None

@@ -223,7 +223,7 @@ class TestSetDirsTimestamps:
 
         # Create newest_files dict
         newest_files = cast(
-            dict[str, dict[str, str | int]], {str(subdir): {"path": str(test_file)}}
+            "dict[str, dict[str, str | int]]", {str(subdir): {"path": str(test_file)}}
         )
 
         # Update directory timestamp
@@ -242,7 +242,7 @@ class TestSetDirsTimestamps:
         original_dir_mtime = int(subdir.stat().st_mtime)
 
         newest_files = cast(
-            dict[str, dict[str, str | int]], {str(subdir): {"path": str(test_file)}}
+            "dict[str, dict[str, str | int]]", {str(subdir): {"path": str(test_file)}}
         )
         set_dirs_timestamps(newest_files, dry_run=True)
 
@@ -256,7 +256,7 @@ class TestSetDirsTimestamps:
     def test_skips_nonexistent_directory(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
         """Test that nonexistent directories are skipped."""
         newest_files = cast(
-            dict[str, dict[str, str | int]],
+            "dict[str, dict[str, str | int]]",
             {str(tmp_path / "missing"): {"path": str(tmp_path / "missing" / "file.jpg")}},
         )
 
@@ -287,7 +287,7 @@ class TestSetJsonTimestamps:
         os.utime(str(test_file), (target_timestamp, target_timestamp))
 
         # Create newest entry
-        newest_entry = cast(dict[str, str | int], {"path": str(test_file)})
+        newest_entry = cast("dict[str, str | int]", {"path": str(test_file)})
 
         # Update timestamps
         set_json_timestamps(str(json_file), str(subdir), newest_entry, dry_run=False)
@@ -309,7 +309,7 @@ class TestSetJsonTimestamps:
         original_json_mtime = int(json_file.stat().st_mtime)
         original_dir_mtime = int(subdir.stat().st_mtime)
 
-        newest_entry = cast(dict[str, str | int], {"path": str(test_file)})
+        newest_entry = cast("dict[str, str | int]", {"path": str(test_file)})
         set_json_timestamps(str(json_file), str(subdir), newest_entry, dry_run=True)
 
         # Timestamps should not change
@@ -341,7 +341,7 @@ class TestSetJsonTimestamps:
         json_file = tmp_path / "test.json"
         json_file.write_text("{}")
 
-        newest_entry = cast(dict[str, str | int], {"path": str(tmp_path / "missing.jpg")})
+        newest_entry = cast("dict[str, str | int]", {"path": str(tmp_path / "missing.jpg")})
 
         set_json_timestamps(str(json_file), str(tmp_path), newest_entry, dry_run=False)
 
