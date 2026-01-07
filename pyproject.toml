@@ -44,7 +44,7 @@ scripts.verify = "photos_manager.verify:main"
 
 [tool.poetry]
 name = "photos-manager-cli"
-version = "0.1.0"                                             # NOTE: Keep in sync with photos_manager/__version__
+version = "0.2.0"                                             # NOTE: Keep in sync with photos_manager/__version__
 description = "Modern CLI tool for managing photos"
 authors = [ "Jacek Kosiński <jacek.kosinski@softflow.tech>" ]
 packages = [ { include = "photos_manager" } ]
@@ -215,13 +215,12 @@ skips = [
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.1.0"
+version = "0.2.0"
 version_scheme = "semver"
 update_changelog_on_bump = true
 tag_format = "v$version"
 changelog_file = "CHANGELOG.md"
 changelog_incremental = true
-changelog_start_rev = "master"
 version_files = [
   "photos_manager/__init__.py:__version__",
   "pyproject.toml:[tool.poetry]",
