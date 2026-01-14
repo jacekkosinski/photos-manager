@@ -60,6 +60,7 @@ urls.Repository = "https://github.com/softflow-tech/photos-manager"
 scripts.mkjson = "photos_manager.mkjson:main"
 scripts.mkversion = "photos_manager.mkversion:main"
 scripts.photos = "photos_manager.cli:main"
+scripts.prepare = "photos_manager.prepare:main"
 scripts.setmtime = "photos_manager.setmtime:main"
 # Poetry configuration (used for dependency management)
 # Note: Build system uses setuptools (see [build-system] above)
