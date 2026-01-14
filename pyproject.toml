@@ -51,6 +51,7 @@ optional-dependencies.dev = [
   "pytest-cov>=4.1,<5",
   "pytest-mock>=3.12,<4",
   "ruff>=0.7,<1",
+  "xenon>=0.9,<1",
 ]
 urls.Changelog = "https://github.com/softflow-tech/photos-manager/blob/master/CHANGELOG.md"
 urls.Homepage = "https://github.com/softflow-tech/photos-manager"

@@ -1,4 +1,4 @@
-.PHONY: help install test lint format format-check type-check docs clean pre-commit coverage check-all
+.PHONY: help install test lint format format-check type-check docs clean pre-commit coverage check-all complexity
 
 # Default target
 .DEFAULT_GOAL := help
@@ -45,6 +45,9 @@ docstring-check: ## Check docstring coverage with interrogate
 docstring-badge: ## Generate docstring coverage badge
 	poetry run interrogate -v --generate-badge . photos_manager/
 
+complexity: ## Check code complexity with xenon
+	poetry run python -m xenon --max-absolute=D --max-modules=B --max-average=B photos_manager/
+
 pre-commit: ## Run all pre-commit hooks
 	poetry run pre-commit run --all-files
 
@@ -71,7 +74,7 @@ clean: ## Clean up generated files
 	find . -type f -name "*.pyo" -delete
 	find . -type f -name ".coverage" -delete
 
-check-all: lint format-check type-check docstring-check test pre-commit ## Run all quality checks
+check-all: lint format-check type-check docstring-check complexity test pre-commit ## Run all quality checks
 
 build: ## Build the package
 	poetry build
