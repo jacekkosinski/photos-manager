@@ -5,7 +5,7 @@ This script checks and fixes:
 - File permissions (should be 644)
 - Directory permissions (should be 755)
 - File/directory ownership (should be storage:storage by default)
-- Filenames (should contain only lowercase letters)
+- Filenames (should be lowercase with no spaces - spaces are converted to underscores)
 
 Hidden files (starting with .) are skipped. Symbolic links are checked but not followed.
 
@@ -187,24 +187,63 @@ def has_uppercase(name: str) -> bool:
     return any(c.isupper() for c in name)
 
 
-def get_unique_lowercase_path(path: Path) -> Path:
-    """Get a unique lowercase path, adding suffix if needed.
+def has_spaces(name: str) -> bool:
+    """Check if a string contains spaces.
 
-    If the lowercase version of the path already exists (and is not
+    Args:
+        name: String to check.
+
+    Returns:
+        True if the string contains at least one space.
+
+    Examples:
+        >>> has_spaces("my file.jpg")
+        True
+        >>> has_spaces("my_file.jpg")
+        False
+    """
+    return " " in name
+
+
+def needs_normalization(name: str) -> bool:
+    """Check if filename needs normalization (uppercase or spaces).
+
+    Args:
+        name: Filename to check.
+
+    Returns:
+        True if the name contains uppercase letters or spaces.
+
+    Examples:
+        >>> needs_normalization("My File.JPG")
+        True
+        >>> needs_normalization("my_file.jpg")
+        False
+    """
+    return has_uppercase(name) or has_spaces(name)
+
+
+def get_unique_normalized_path(path: Path) -> Path:
+    """Get a unique normalized path (lowercase, no spaces), adding suffix if needed.
+
+    Converts uppercase letters to lowercase and spaces to underscores.
+    If the normalized version of the path already exists (and is not
     the same file on case-insensitive filesystems), a numeric suffix
     is added to make it unique.
 
     Args:
-        path: Original path with potentially uppercase letters.
+        path: Original path with potentially uppercase letters or spaces.
 
     Returns:
-        A unique path with all lowercase letters in the filename.
+        A unique path with lowercase letters and underscores instead of spaces.
 
     Examples:
-        >>> get_unique_lowercase_path(Path("/tmp/IMG_001.JPG"))
+        >>> get_unique_normalized_path(Path("/tmp/IMG_001.JPG"))
         PosixPath('/tmp/img_001.jpg')
+        >>> get_unique_normalized_path(Path("/tmp/My File.txt"))
+        PosixPath('/tmp/my_file.txt')
     """
-    base_name = path.stem.lower()
+    base_name = path.stem.lower().replace(" ", "_")
     suffix = path.suffix.lower()
     new_path = path.parent / f"{base_name}{suffix}"
 
@@ -310,9 +349,10 @@ def fix_ownership(path: Path, user: str, group: str, dry_run: bool) -> bool:
         return False
 
 
-def rename_to_lowercase(path: Path, dry_run: bool) -> tuple[bool, Path]:
-    """Rename file/directory to lowercase.
+def rename_to_normalized(path: Path, dry_run: bool) -> tuple[bool, Path]:
+    """Rename file/directory to normalized form (lowercase, no spaces).
 
+    Converts uppercase letters to lowercase and spaces to underscores.
     If a conflict exists, a numeric suffix is added to the name.
 
     Args:
@@ -321,31 +361,35 @@ def rename_to_lowercase(path: Path, dry_run: bool) -> tuple[bool, Path]:
 
     Returns:
         Tuple of (success, new_path). On dry-run, returns the target path.
+
+    Examples:
+        >>> rename_to_normalized(Path("/tmp/My File.TXT"), dry_run=False)
+        (True, PosixPath('/tmp/my_file.txt'))
     """
-    if not has_uppercase(path.name):
+    if not needs_normalization(path.name):
         return True, path
 
-    new_path = get_unique_lowercase_path(path)
+    new_path = get_unique_normalized_path(path)
 
-    # Check if already lowercase (same path)
+    # Check if already normalized (same path)
     if new_path.name == path.name:
         return True, path
 
     # Check if suffix was added (conflict case)
-    expected_lower = path.name.lower()
-    has_conflict = new_path.name != expected_lower
+    expected_normalized = path.name.lower().replace(" ", "_")
+    has_conflict = new_path.name != expected_normalized
 
     try:
         if dry_run:
             if has_conflict:
-                print(f"  [FIX] {path} -> {new_path.name} (conflict with {expected_lower})")
+                print(f"  [FIX] {path} -> {new_path.name} (conflict with {expected_normalized})")
             else:
                 print(f"  [FIX] {path} -> {new_path.name}")
             return True, new_path
         else:
             path.rename(new_path)
             if has_conflict:
-                print(f"  [FIXED] {path} -> {new_path.name} (conflict with {expected_lower})")
+                print(f"  [FIXED] {path} -> {new_path.name} (conflict with {expected_normalized})")
             else:
                 print(f"  [FIXED] {path} -> {new_path.name}")
             return True, new_path
@@ -390,7 +434,7 @@ def _update_paths_for_dry_run(all_items: list[Path], path_map: dict[Path, Path])
 
 
 def _process_filenames(all_items: list[Path], dry_run: bool) -> tuple[bool, dict[Path, Path]]:
-    """Process filename fixes (rename to lowercase).
+    """Process filename fixes (normalize: lowercase, no spaces).
 
     Args:
         all_items: List of paths to process.
@@ -399,7 +443,7 @@ def _process_filenames(all_items: list[Path], dry_run: bool) -> tuple[bool, dict
     Returns:
         Tuple of (has_errors, path_map).
     """
-    print("\nFilenames (lowercase):")
+    print("\nFilenames (lowercase, no spaces):")
     has_errors = False
     has_fixes = False
     path_map: dict[Path, Path] = {}
@@ -409,16 +453,16 @@ def _process_filenames(all_items: list[Path], dry_run: bool) -> tuple[bool, dict
         if not current_path.exists():
             continue
 
-        if has_uppercase(current_path.name):
+        if needs_normalization(current_path.name):
             has_fixes = True
-            success, new_path = rename_to_lowercase(current_path, dry_run)
+            success, new_path = rename_to_normalized(current_path, dry_run)
             if success and new_path != current_path:
                 path_map[current_path] = new_path
             elif not success:
                 has_errors = True
 
     if not has_fixes:
-        print("  [OK] All names are lowercase")
+        print("  [OK] All names are normalized")
 
     return has_errors, path_map
 

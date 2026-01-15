@@ -21,12 +21,14 @@ from photos_manager.prepare import (
     fix_file_permissions,
     fix_ownership,
     get_items_depth_first,
-    get_unique_lowercase_path,
+    get_unique_normalized_path,
+    has_spaces,
     has_uppercase,
     is_hidden,
     main,
+    needs_normalization,
     process_directory,
-    rename_to_lowercase,
+    rename_to_normalized,
     scan_directory,
 )
 
@@ -221,17 +223,71 @@ class TestHasUppercase:
         assert has_uppercase("12345.txt") is False
 
 
-class TestGetUniqueLowercasePath:
-    """Tests for get_unique_lowercase_path function."""
+class TestHasSpaces:
+    """Tests for has_spaces function."""
+
+    def test_with_spaces_returns_true(self) -> None:
+        """Test that string with spaces returns True."""
+        assert has_spaces("my file.jpg") is True
+
+    def test_without_spaces_returns_false(self) -> None:
+        """Test that string without spaces returns False."""
+        assert has_spaces("my_file.jpg") is False
+
+    def test_multiple_spaces_returns_true(self) -> None:
+        """Test that string with multiple spaces returns True."""
+        assert has_spaces("my  file  name.jpg") is True
+
+
+class TestNeedsNormalization:
+    """Tests for needs_normalization function."""
+
+    def test_uppercase_returns_true(self) -> None:
+        """Test that uppercase triggers normalization."""
+        assert needs_normalization("FILE.JPG") is True
+
+    def test_spaces_returns_true(self) -> None:
+        """Test that spaces trigger normalization."""
+        assert needs_normalization("my file.jpg") is True
+
+    def test_both_returns_true(self) -> None:
+        """Test that both uppercase and spaces trigger normalization."""
+        assert needs_normalization("My File.JPG") is True
+
+    def test_normalized_returns_false(self) -> None:
+        """Test that normalized name returns False."""
+        assert needs_normalization("my_file.jpg") is False
+
+
+class TestGetUniqueNormalizedPath:
+    """Tests for get_unique_normalized_path function."""
 
     def test_returns_lowercase_path(self, tmp_path: Path) -> None:
         """Test that uppercase name is converted to lowercase."""
         test_file = tmp_path / "TEST.TXT"
         test_file.touch()
 
-        result = get_unique_lowercase_path(test_file)
+        result = get_unique_normalized_path(test_file)
 
         assert result.name == "test.txt"
+
+    def test_converts_spaces_to_underscores(self, tmp_path: Path) -> None:
+        """Test that spaces are converted to underscores."""
+        test_file = tmp_path / "my file.txt"
+        test_file.touch()
+
+        result = get_unique_normalized_path(test_file)
+
+        assert result.name == "my_file.txt"
+
+    def test_handles_both_uppercase_and_spaces(self, tmp_path: Path) -> None:
+        """Test that both uppercase and spaces are normalized."""
+        test_file = tmp_path / "My File.TXT"
+        test_file.touch()
+
+        result = get_unique_normalized_path(test_file)
+
+        assert result.name == "my_file.txt"
 
     def test_adds_suffix_on_conflict(self, tmp_path: Path) -> None:
         """Test that numeric suffix is added when conflict exists."""
@@ -243,7 +299,7 @@ class TestGetUniqueLowercasePath:
         uppercase = tmp_path / "TEST.TXT"
         uppercase.touch()
 
-        result = get_unique_lowercase_path(uppercase)
+        result = get_unique_normalized_path(uppercase)
 
         assert result.name == "test_1.txt"
 
@@ -257,7 +313,7 @@ class TestGetUniqueLowercasePath:
         uppercase = tmp_path / "TEST.TXT"
         uppercase.touch()
 
-        result = get_unique_lowercase_path(uppercase)
+        result = get_unique_normalized_path(uppercase)
 
         assert result.name == "test_2.txt"
 
@@ -318,27 +374,51 @@ class TestFixDirPermissions:
         assert "[FIX]" in captured.out
 
 
-class TestRenameToLowercase:
-    """Tests for rename_to_lowercase function."""
+class TestRenameToNormalized:
+    """Tests for rename_to_normalized function."""
 
     def test_renames_uppercase_file(self, tmp_path: Path) -> None:
         """Test that uppercase file is renamed to lowercase."""
         test_file = tmp_path / "TEST.TXT"
         test_file.touch()
 
-        success, new_path = rename_to_lowercase(test_file, dry_run=False)
+        success, new_path = rename_to_normalized(test_file, dry_run=False)
 
         assert success is True
         assert new_path.name == "test.txt"
         assert new_path.exists()
         assert not test_file.exists()
 
-    def test_already_lowercase_unchanged(self, tmp_path: Path) -> None:
-        """Test that lowercase file is not changed."""
+    def test_converts_spaces_to_underscores(self, tmp_path: Path) -> None:
+        """Test that spaces are converted to underscores."""
+        test_file = tmp_path / "my file.txt"
+        test_file.touch()
+
+        success, new_path = rename_to_normalized(test_file, dry_run=False)
+
+        assert success is True
+        assert new_path.name == "my_file.txt"
+        assert new_path.exists()
+        assert not test_file.exists()
+
+    def test_handles_both_spaces_and_uppercase(self, tmp_path: Path) -> None:
+        """Test that both uppercase and spaces are normalized."""
+        test_file = tmp_path / "My File.TXT"
+        test_file.touch()
+
+        success, new_path = rename_to_normalized(test_file, dry_run=False)
+
+        assert success is True
+        assert new_path.name == "my_file.txt"
+        assert new_path.exists()
+        assert not test_file.exists()
+
+    def test_already_normalized_unchanged(self, tmp_path: Path) -> None:
+        """Test that normalized file is not changed."""
         test_file = tmp_path / "test.txt"
         test_file.touch()
 
-        success, new_path = rename_to_lowercase(test_file, dry_run=False)
+        success, new_path = rename_to_normalized(test_file, dry_run=False)
 
         assert success is True
         assert new_path == test_file
@@ -348,7 +428,7 @@ class TestRenameToLowercase:
         test_file = tmp_path / "TEST.TXT"
         test_file.touch()
 
-        success, _new_path = rename_to_lowercase(test_file, dry_run=True)
+        success, _new_path = rename_to_normalized(test_file, dry_run=True)
 
         assert success is True
         assert test_file.exists()  # Original still exists
@@ -356,14 +436,14 @@ class TestRenameToLowercase:
         assert "[FIX]" in captured.out
 
     def test_adds_suffix_on_conflict(self, tmp_path: Path) -> None:
-        """Test that suffix is added when lowercase name exists."""
+        """Test that suffix is added when normalized name exists."""
         existing = tmp_path / "test.txt"
         existing.touch()
 
         uppercase = tmp_path / "TEST.TXT"
         uppercase.touch()
 
-        success, new_path = rename_to_lowercase(uppercase, dry_run=False)
+        success, new_path = rename_to_normalized(uppercase, dry_run=False)
 
         assert success is True
         assert new_path.name == "test_1.txt"
@@ -424,6 +504,19 @@ class TestProcessDirectory:
         process_directory(tmp_path, current_user, current_group, dry_run=False)
 
         assert (tmp_path / "test.txt").exists()
+        assert not test_file.exists()
+
+    def test_converts_spaces_to_underscores(self, tmp_path: Path) -> None:
+        """Test that spaces in filenames are converted to underscores."""
+        test_file = tmp_path / "my file.txt"
+        test_file.touch()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        process_directory(tmp_path, current_user, current_group, dry_run=False)
+
+        assert (tmp_path / "my_file.txt").exists()
         assert not test_file.exists()
 
 
@@ -638,6 +731,35 @@ class TestMain:
         assert (tmp_path / "uppercase" / "file.txt").exists()
         assert not upper_dir.exists()
 
+    def test_converts_spaces_in_directories(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that spaces in directory names are converted to underscores."""
+        space_dir = tmp_path / "my directory"
+        space_dir.mkdir()
+        (space_dir / "file.txt").touch()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "prepare.py",
+                str(tmp_path),
+                "--user",
+                current_user,
+                "--group",
+                current_group,
+            ],
+        )
+
+        main()
+
+        assert (tmp_path / "my_directory").exists()
+        assert (tmp_path / "my_directory" / "file.txt").exists()
+        assert not space_dir.exists()
+
 
 class TestErrorHandling:
     """Tests for error handling in prepare module."""
@@ -780,21 +902,23 @@ class TestErrorHandling:
         captured = capsys.readouterr()
         assert "[FIX]" in captured.out
 
-    def test_rename_to_lowercase_oserror(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
-        """Test rename_to_lowercase handles OSError."""
+    def test_rename_to_normalized_oserror(
+        self, tmp_path: Path, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test rename_to_normalized handles OSError."""
         test_file = tmp_path / "TEST.TXT"
         test_file.touch()
 
         with patch.object(Path, "rename", side_effect=OSError("Cannot rename")):
-            success, new_path = rename_to_lowercase(test_file, dry_run=False)
+            success, new_path = rename_to_normalized(test_file, dry_run=False)
 
         assert success is False
         assert new_path == test_file
         captured = capsys.readouterr()
         assert "Error:" in captured.err
 
-    def test_get_unique_lowercase_path_resolve_oserror(self, tmp_path: Path) -> None:
-        """Test get_unique_lowercase_path handles resolve OSError."""
+    def test_get_unique_normalized_path_resolve_oserror(self, tmp_path: Path) -> None:
+        """Test get_unique_normalized_path handles resolve OSError."""
         test_file = tmp_path / "TEST.TXT"
         test_file.touch()
 
@@ -803,7 +927,7 @@ class TestErrorHandling:
         lowercase.touch()
 
         with patch.object(Path, "resolve", side_effect=OSError("Cannot resolve")):
-            result = get_unique_lowercase_path(test_file)
+            result = get_unique_normalized_path(test_file)
 
         # Should fall through and add suffix
         assert result.name == "test_1.txt"
