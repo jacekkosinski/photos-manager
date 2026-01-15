@@ -54,11 +54,9 @@ def load_json(file_path: str) -> list[dict[str, str | int]]:
             data: Any = json.load(json_file)
             return cast("list[dict[str, str | int]]", data)
     except FileNotFoundError as exception:
-        raise SystemExit(f"Error: JSON file '{file_path}' does not exist.") from exception
+        raise SystemExit(f"Error: JSON file '{file_path}' does not exist") from exception
     except json.JSONDecodeError as exception:
-        raise SystemExit(
-            f"Error: JSON file '{file_path}' contains an invalid format."
-        ) from exception
+        raise SystemExit(f"Error: JSON file '{file_path}' contains invalid format") from exception
 
 
 def get_newest_files(
@@ -92,7 +90,7 @@ def get_newest_files(
     # Load JSON data from the file
     data = load_json(json_file)
     if not data:
-        raise SystemExit(f"Error: JSON file '{json_file}' is empty.")
+        raise SystemExit(f"Error: JSON file '{json_file}' is empty")
 
     # Group entries by directory path
     grouped_files: dict[str, list[dict[str, str | int]]] = {}
@@ -158,7 +156,7 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
     # Load JSON data from the file
     json_data = load_json(json_file)
     if not json_data:
-        raise SystemExit(f"Error: JSON file '{json_file}' is empty.")
+        raise SystemExit(f"Error: JSON file '{json_file}' is empty")
 
     for entry in json_data:
         file_path = entry.get("path")
@@ -241,13 +239,13 @@ def set_dirs_timestamps(
             current_time = dir_path.stat().st_mtime
         except FileNotFoundError:
             print(
-                f"Error: File or directory '{directory}' does not exist.",
+                f"Error: File or directory '{directory}' does not exist",
                 file=sys.stderr,
             )
             continue
         except PermissionError:
             print(
-                f"Error: Permission denied accessing '{directory}'.",
+                f"Error: Permission denied accessing '{directory}'",
                 file=sys.stderr,
             )
             continue
@@ -261,10 +259,10 @@ def set_dirs_timestamps(
                 try:
                     os.utime(str(dir_path), (new_time, new_time))
                 except FileNotFoundError:
-                    print(f"Error: Directory '{directory}' does not exist.", file=sys.stderr)
+                    print(f"Error: Directory '{directory}' does not exist", file=sys.stderr)
                 except PermissionError:
                     print(
-                        f"Error: Permission denied setting timestamp for '{directory}'.",
+                        f"Error: Permission denied setting timestamp for '{directory}'",
                         file=sys.stderr,
                     )
                 except OSError as e:
@@ -305,12 +303,12 @@ def set_json_timestamps(
     # Get the path from newest_entry
     reference_path_str = newest_entry.get("path")
     if not reference_path_str:
-        print("Error: Missing 'path' in newest entry.", file=sys.stderr)
+        print("Error: Missing 'path' in newest entry", file=sys.stderr)
         return
 
     reference_path = Path(str(reference_path_str))
     if not reference_path.exists():
-        print(f"Error: Reference file '{reference_path}' does not exist.", file=sys.stderr)
+        print(f"Error: Reference file '{reference_path}' does not exist", file=sys.stderr)
         return
 
     try:

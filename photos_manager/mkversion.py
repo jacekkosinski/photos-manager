@@ -123,7 +123,7 @@ def find_json_files(directory: str) -> list[tuple[float, str]]:
                     print(f"Warning: Could not access {path}: {exception}")
 
     if not json_files:
-        raise SystemExit("Error: No JSON files found in the directory.")
+        raise SystemExit("Error: No JSON files found in the directory")
 
     return sorted(json_files, reverse=True)
 
@@ -296,7 +296,7 @@ def run(args: argparse.Namespace) -> int:
     directory_path = Path(args.directory)
     if not directory_path.is_dir() or not os.access(args.directory, os.R_OK):
         raise SystemExit(
-            f"Error: The directory '{args.directory}' does not exist or is not readable."
+            f"Error: The directory '{args.directory}' does not exist or is not readable"
         )
 
     # Find JSON files

@@ -177,7 +177,7 @@ def extract_numbers(path: str) -> tuple[int, int, str]:
     return dir_number, filename_number, filename
 
 
-def load_json(file_path: str) -> list[dict[str, str | int]] | None:
+def load_json(file_path: str) -> list[dict[str, str | int]]:
     """Load JSON data from a file.
 
     Reads a JSON file and parses it into a list of dictionaries containing
@@ -189,18 +189,14 @@ def load_json(file_path: str) -> list[dict[str, str | int]] | None:
 
     Returns:
         List of dictionaries containing file information with keys matching
-        the output format (path, sha1, md5, date, size), or None if the file
-        cannot be read or parsed.
+        the output format (path, sha1, md5, date, size).
 
-    Note:
-        This function prints error messages to stderr and returns None on
-        failure, rather than raising exceptions. It's designed for use cases
-        where the calling code should continue execution even if loading fails.
+    Raises:
+        SystemExit: If the file does not exist or contains invalid JSON.
 
     Examples:
         >>> data = load_json("archive.json")
-        >>> if data:
-        ...     print(f"Loaded {len(data)} file entries")
+        >>> print(f"Loaded {len(data)} file entries")
         Loaded 42 file entries
     """
     try:
@@ -208,15 +204,10 @@ def load_json(file_path: str) -> list[dict[str, str | int]] | None:
         with path.open(encoding="utf-8") as json_file:
             data: Any = json.load(json_file)
             return cast("list[dict[str, str | int]]", data)
-    except FileNotFoundError:
-        print(f"Error: JSON file '{file_path}' does not exist.", file=sys.stderr)
-        return None
-    except json.JSONDecodeError:
-        print(
-            f"Error: JSON file '{file_path}' contains an invalid format.",
-            file=sys.stderr,
-        )
-        return None
+    except FileNotFoundError as exception:
+        raise SystemExit(f"Error: JSON file '{file_path}' does not exist") from exception
+    except json.JSONDecodeError as exception:
+        raise SystemExit(f"Error: JSON file '{file_path}' contains invalid format") from exception
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -287,7 +278,7 @@ def run(args: argparse.Namespace) -> int:
     """
     # Ensure the directory exists
     if not Path(args.directory).is_dir():
-        raise SystemExit(f"Error: The specified path '{args.directory}' is not a valid directory.")
+        raise SystemExit(f"Error: The specified path '{args.directory}' is not a valid directory")
 
     # Get file information
     file_info_list = get_file_info(args.directory, args.time_zone)
@@ -301,11 +292,11 @@ def run(args: argparse.Namespace) -> int:
                 file_info_list.extend(merge_data)
         except FileNotFoundError as exception:
             raise SystemExit(
-                f"Error: The specified merge file '{args.merge}' does not exist."
+                f"Error: The specified merge file '{args.merge}' does not exist"
             ) from exception
         except json.JSONDecodeError as exception:
             raise SystemExit(
-                f"Error: JSON file '{args.merge}' contains an invalid format."
+                f"Error: JSON file '{args.merge}' contains invalid format"
             ) from exception
 
     # Checks for duplicate 'path', 'sha1', and 'md5' in the list

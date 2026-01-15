@@ -40,6 +40,12 @@ def is_hidden(path: Path) -> bool:
 
     Returns:
         True if the path is hidden, False otherwise.
+
+    Examples:
+        >>> is_hidden(Path(".git"))
+        True
+        >>> is_hidden(Path("photos"))
+        False
     """
     return path.name.startswith(".")
 
@@ -59,6 +65,10 @@ def scan_directory(directory: Path) -> Iterator[Path]:
 
     Raises:
         SystemExit: If the directory does not exist or is not accessible.
+
+    Examples:
+        >>> list(scan_directory(Path("/tmp/photos")))
+        [PosixPath('/tmp/photos/img.jpg'), PosixPath('/tmp/photos/subdir')]
     """
     try:
         for item in sorted(directory.iterdir()):
@@ -86,6 +96,10 @@ def get_items_depth_first(directory: Path) -> list[Path]:
 
     Returns:
         List of paths sorted from deepest to shallowest.
+
+    Examples:
+        >>> get_items_depth_first(Path("/tmp/a"))
+        [PosixPath('/tmp/a/b/c.txt'), PosixPath('/tmp/a/b'), PosixPath('/tmp/a/d.txt')]
     """
     items = list(scan_directory(directory))
     # Sort by depth (number of parts), deepest first
@@ -100,6 +114,10 @@ def check_file_permissions(path: Path) -> tuple[bool, int]:
 
     Returns:
         Tuple of (is_correct, current_permissions).
+
+    Examples:
+        >>> check_file_permissions(Path("/tmp/file.txt"))
+        (True, 420)  # 420 = 0o644
     """
     current = stat.S_IMODE(path.stat().st_mode)
     return current == FILE_PERMISSIONS, current
@@ -113,6 +131,10 @@ def check_dir_permissions(path: Path) -> tuple[bool, int]:
 
     Returns:
         Tuple of (is_correct, current_permissions).
+
+    Examples:
+        >>> check_dir_permissions(Path("/tmp/photos"))
+        (True, 493)  # 493 = 0o755
     """
     current = stat.S_IMODE(path.stat().st_mode)
     return current == DIR_PERMISSIONS, current
@@ -128,6 +150,10 @@ def check_ownership(path: Path, user: str, group: str) -> tuple[bool, str, str]:
 
     Returns:
         Tuple of (is_correct, current_user, current_group).
+
+    Examples:
+        >>> check_ownership(Path("/tmp/file.txt"), "storage", "storage")
+        (False, 'root', 'wheel')
     """
     st = path.stat()
     try:
@@ -151,6 +177,12 @@ def has_uppercase(name: str) -> bool:
 
     Returns:
         True if the string contains at least one uppercase letter.
+
+    Examples:
+        >>> has_uppercase("IMG_001.JPG")
+        True
+        >>> has_uppercase("photo.jpg")
+        False
     """
     return any(c.isupper() for c in name)
 
@@ -167,6 +199,10 @@ def get_unique_lowercase_path(path: Path) -> Path:
 
     Returns:
         A unique path with all lowercase letters in the filename.
+
+    Examples:
+        >>> get_unique_lowercase_path(Path("/tmp/IMG_001.JPG"))
+        PosixPath('/tmp/img_001.jpg')
     """
     base_name = path.stem.lower()
     suffix = path.suffix.lower()
@@ -207,7 +243,7 @@ def fix_file_permissions(path: Path, dry_run: bool) -> bool:
             print(f"  [FIXED] {path}: permissions set to 0o644")
         return True
     except OSError as e:
-        print(f"  [ERROR] {path}: cannot change permissions: {e}", file=sys.stderr)
+        print(f"  Error: {path}: cannot change permissions: {e}", file=sys.stderr)
         return False
 
 
@@ -229,7 +265,7 @@ def fix_dir_permissions(path: Path, dry_run: bool) -> bool:
             print(f"  [FIXED] {path}: permissions set to 0o755")
         return True
     except OSError as e:
-        print(f"  [ERROR] {path}: cannot change permissions: {e}", file=sys.stderr)
+        print(f"  Error: {path}: cannot change permissions: {e}", file=sys.stderr)
         return False
 
 
@@ -249,7 +285,7 @@ def fix_ownership(path: Path, user: str, group: str, dry_run: bool) -> bool:
         uid = pwd.getpwnam(user).pw_uid
         gid = grp.getgrnam(group).gr_gid
     except KeyError as e:
-        print(f"  [ERROR] {path}: user or group not found: {e}", file=sys.stderr)
+        print(f"  Error: {path}: user or group not found: {e}", file=sys.stderr)
         return False
 
     st = path.stat()
@@ -270,7 +306,7 @@ def fix_ownership(path: Path, user: str, group: str, dry_run: bool) -> bool:
             print(f"  [FIXED] {path}: ownership set to {user}:{group}")
         return True
     except OSError as e:
-        print(f"  [ERROR] {path}: cannot change ownership: {e}", file=sys.stderr)
+        print(f"  Error: {path}: cannot change ownership: {e}", file=sys.stderr)
         return False
 
 
@@ -314,7 +350,7 @@ def rename_to_lowercase(path: Path, dry_run: bool) -> tuple[bool, Path]:
                 print(f"  [FIXED] {path} -> {new_path.name}")
             return True, new_path
     except OSError as e:
-        print(f"  [ERROR] {path}: cannot rename: {e}", file=sys.stderr)
+        print(f"  Error: {path}: cannot rename: {e}", file=sys.stderr)
         return False, path
 
 
@@ -570,9 +606,9 @@ def run(args: argparse.Namespace) -> int:
     for directory in args.directories:
         path = Path(directory)
         if not path.exists():
-            raise SystemExit(f"Error: Directory '{directory}' does not exist.")
+            raise SystemExit(f"Error: Directory '{directory}' does not exist")
         if not path.is_dir():
-            raise SystemExit(f"Error: '{directory}' is not a directory.")
+            raise SystemExit(f"Error: '{directory}' is not a directory")
 
     # Process each directory
     all_success = True

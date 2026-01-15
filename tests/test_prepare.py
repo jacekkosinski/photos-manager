@@ -688,7 +688,7 @@ class TestErrorHandling:
 
         assert result is False
         captured = capsys.readouterr()
-        assert "[ERROR]" in captured.err
+        assert "Error:" in captured.err
 
     def test_fix_dir_permissions_oserror(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
         """Test fix_dir_permissions handles OSError."""
@@ -700,7 +700,7 @@ class TestErrorHandling:
 
         assert result is False
         captured = capsys.readouterr()
-        assert "[ERROR]" in captured.err
+        assert "Error:" in captured.err
 
     def test_fix_ownership_nonexistent_user(
         self, tmp_path: Path, capsys: CaptureFixture[Any]
@@ -713,7 +713,7 @@ class TestErrorHandling:
 
         assert result is False
         captured = capsys.readouterr()
-        assert "[ERROR]" in captured.err
+        assert "Error:" in captured.err
         assert "not found" in captured.err
 
     def test_fix_ownership_nonexistent_group(
@@ -729,7 +729,7 @@ class TestErrorHandling:
 
         assert result is False
         captured = capsys.readouterr()
-        assert "[ERROR]" in captured.err
+        assert "Error:" in captured.err
         assert "not found" in captured.err
 
     def test_fix_ownership_chown_oserror(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
@@ -747,7 +747,7 @@ class TestErrorHandling:
 
         assert result is False
         captured = capsys.readouterr()
-        assert "[ERROR]" in captured.err
+        assert "Error:" in captured.err
 
     def test_fix_ownership_unknown_current_uid(
         self, tmp_path: Path, capsys: CaptureFixture[Any]
@@ -791,7 +791,7 @@ class TestErrorHandling:
         assert success is False
         assert new_path == test_file
         captured = capsys.readouterr()
-        assert "[ERROR]" in captured.err
+        assert "Error:" in captured.err
 
     def test_get_unique_lowercase_path_resolve_oserror(self, tmp_path: Path) -> None:
         """Test get_unique_lowercase_path handles resolve OSError."""

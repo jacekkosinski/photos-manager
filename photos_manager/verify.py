@@ -59,11 +59,9 @@ def load_json(file_path: str) -> list[dict[str, str | int]]:
             data: Any = json.load(json_file)
             return cast("list[dict[str, str | int]]", data)
     except FileNotFoundError as exception:
-        raise SystemExit(f"Error: JSON file '{file_path}' does not exist.") from exception
+        raise SystemExit(f"Error: JSON file '{file_path}' does not exist") from exception
     except json.JSONDecodeError as exception:
-        raise SystemExit(
-            f"Error: JSON file '{file_path}' contains an invalid format."
-        ) from exception
+        raise SystemExit(f"Error: JSON file '{file_path}' contains invalid format") from exception
 
 
 def load_version_json(file_path: str) -> dict[str, Any]:
@@ -91,10 +89,10 @@ def load_version_json(file_path: str) -> dict[str, Any]:
         with path.open(encoding="utf-8") as json_file:
             return cast("dict[str, Any]", json.load(json_file))
     except FileNotFoundError as exception:
-        raise SystemExit(f"Error: Version file '{file_path}' does not exist.") from exception
+        raise SystemExit(f"Error: Version file '{file_path}' does not exist") from exception
     except json.JSONDecodeError as exception:
         raise SystemExit(
-            f"Error: Version file '{file_path}' contains an invalid format."
+            f"Error: Version file '{file_path}' contains invalid format"
         ) from exception
 
 
@@ -128,7 +126,7 @@ def find_json_files(directory: str) -> list[str]:
                 json_files.append(str(path))
 
     if not json_files:
-        raise SystemExit("Error: No JSON metadata files found in the directory.")
+        raise SystemExit("Error: No JSON metadata files found in the directory")
 
     return sorted(json_files)
 
@@ -608,7 +606,7 @@ def run(args: argparse.Namespace) -> int:
     directory_path = Path(args.directory)
     if not directory_path.is_dir() or not os.access(args.directory, os.R_OK):
         raise SystemExit(
-            f"Error: The directory '{args.directory}' does not exist or is not readable."
+            f"Error: The directory '{args.directory}' does not exist or is not readable"
         )
 
     # Find JSON files

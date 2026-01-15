@@ -252,22 +252,24 @@ class TestLoadJson:
 
         assert result == []
 
-    def test_returns_none_for_nonexistent_file(self, tmp_path: Path) -> None:
-        """Test that None is returned for nonexistent file."""
+    def test_raises_on_nonexistent_file(self, tmp_path: Path) -> None:
+        """Test that SystemExit is raised for nonexistent file."""
         nonexistent = tmp_path / "does_not_exist.json"
 
-        result = load_json(str(nonexistent))
+        with pytest.raises(SystemExit) as exc_info:
+            load_json(str(nonexistent))
 
-        assert result is None
+        assert "does not exist" in str(exc_info.value)
 
-    def test_returns_none_for_invalid_json(self, tmp_path: Path) -> None:
-        """Test that None is returned for invalid JSON syntax."""
+    def test_raises_on_invalid_json(self, tmp_path: Path) -> None:
+        """Test that SystemExit is raised for invalid JSON syntax."""
         json_file = tmp_path / "invalid.json"
         json_file.write_text('{"invalid": json}')
 
-        result = load_json(str(json_file))
+        with pytest.raises(SystemExit) as exc_info:
+            load_json(str(json_file))
 
-        assert result is None
+        assert "invalid format" in str(exc_info.value)
 
     def test_loads_json_with_unicode(self, tmp_path: Path) -> None:
         """Test loading JSON with Unicode characters."""
