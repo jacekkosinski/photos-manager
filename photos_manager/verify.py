@@ -464,6 +464,67 @@ def verify_json_file_timestamp(
     return True, errors
 
 
+def verify_version_file_timestamp(
+    version_file: str, json_files: list[str]
+) -> tuple[bool, list[str]]:
+    """Verify version file timestamp matches newest JSON file.
+
+    Checks if the modification timestamp of .version.json matches the
+    modification timestamp of the newest JSON metadata file in the archive.
+
+    Args:
+        version_file: Path to the version JSON file.
+        json_files: List of JSON metadata files to check.
+
+    Returns:
+        Tuple containing:
+            - bool: True if timestamp matches, False otherwise
+            - list[str]: List of error messages (empty if no errors)
+
+    Examples:
+        >>> success, errors = verify_version_file_timestamp(".version.json", ["a.json"])
+        >>> success
+        True
+    """
+    errors = []
+
+    if not json_files:
+        errors.append("No JSON files to compare version file timestamp")
+        return False, errors
+
+    version_path = Path(version_file)
+    if not version_path.exists():
+        errors.append(f"Version file not found: {version_file}")
+        return False, errors
+
+    try:
+        # Find newest JSON file by modification time
+        newest_json_file = max(json_files, key=lambda f: Path(f).stat().st_mtime)
+        newest_json_path = Path(newest_json_file)
+
+        if not newest_json_path.exists():
+            errors.append(f"Newest JSON file not found: {newest_json_file}")
+            return False, errors
+
+        # Get timestamps
+        version_mtime = int(version_path.stat().st_mtime)
+        json_mtime = int(newest_json_path.stat().st_mtime)
+
+        if version_mtime != json_mtime:
+            errors.append(
+                f"Version file timestamp mismatch: "
+                f"expected {json_mtime} (from {newest_json_path.name}), "
+                f"got {version_mtime}, diff: {abs(version_mtime - json_mtime)}s"
+            )
+            return False, errors
+
+    except OSError as e:
+        errors.append(f"Error verifying version file timestamp: {e}")
+        return False, errors
+
+    return True, errors
+
+
 def verify_version_file(
     version_file: str, json_files: list[str], all_data: list[dict[str, str | int]]
 ) -> tuple[bool, list[str]]:
@@ -536,6 +597,56 @@ def verify_version_file(
         )
 
     return len(errors) == 0, errors
+
+
+def _verify_timestamps_for_json_file(
+    json_file: str, data: list[dict[str, str | int]], args: argparse.Namespace
+) -> tuple[int, int]:
+    """Verify timestamps for a single JSON file and its contents.
+
+    Helper function that verifies file timestamps, directory timestamps,
+    and JSON file timestamp for a single JSON file.
+
+    Args:
+        json_file: Path to the JSON file.
+        data: File metadata entries from the JSON file.
+        args: Command-line arguments with tolerance setting.
+
+    Returns:
+        Tuple containing (number of directories checked, number of errors found).
+    """
+    errors_count = 0
+
+    # Verify file timestamps
+    print("  Verifying file timestamps...")
+    for entry in data:
+        success, errors = verify_timestamps(entry, args.tolerance)
+        if not success:
+            errors_count += len(errors)
+            for error in errors:
+                print(f"  Error: {error}", file=sys.stderr)
+
+    # Verify directory timestamps
+    print("  Verifying directory timestamps...")
+    dir_count, errors = verify_directory_timestamps(data)
+    if errors:
+        errors_count += len(errors)
+        for error in errors:
+            print(f"  Error: {error}", file=sys.stderr)
+    else:
+        print(f"  Verified {dir_count} directories")
+
+    # Verify JSON file timestamp
+    print("  Verifying JSON file timestamp...")
+    success, errors = verify_json_file_timestamp(json_file, data)
+    if not success:
+        errors_count += len(errors)
+        for error in errors:
+            print(f"  Error: {error}", file=sys.stderr)
+    else:
+        print("  JSON file timestamp OK")
+
+    return dir_count, errors_count
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -661,36 +772,9 @@ def run(args: argparse.Namespace) -> int:
 
             # Verify timestamps if requested
             if args.check_timestamps:
-                print("  Verifying file timestamps...")
-                for entry in data:
-                    success, errors = verify_timestamps(entry, args.tolerance)
-                    if not success:
-                        errors_in_file += len(errors)
-                        total_errors += len(errors)
-                        for error in errors:
-                            print(f"  Error: {error}", file=sys.stderr)
-
-                # Verify directory timestamps
-                print("  Verifying directory timestamps...")
-                dir_count, errors = verify_directory_timestamps(data)
-                if errors:
-                    errors_in_file += len(errors)
-                    total_errors += len(errors)
-                    for error in errors:
-                        print(f"  Error: {error}", file=sys.stderr)
-                else:
-                    print(f"  Verified {dir_count} directories")
-
-                # Verify JSON file timestamp
-                print("  Verifying JSON file timestamp...")
-                success, errors = verify_json_file_timestamp(json_file, data)
-                if not success:
-                    errors_in_file += len(errors)
-                    total_errors += len(errors)
-                    for error in errors:
-                        print(f"  Error: {error}", file=sys.stderr)
-                else:
-                    print("  JSON file timestamp OK")
+                _, timestamp_errors = _verify_timestamps_for_json_file(json_file, data, args)
+                errors_in_file += timestamp_errors
+                total_errors += timestamp_errors
 
             if errors_in_file == 0:
                 print(f"  PASS: All {file_count} files verified successfully")
@@ -703,6 +787,22 @@ def run(args: argparse.Namespace) -> int:
         except SystemExit as e:
             print(f"  Error: {e}", file=sys.stderr)
             total_errors += 1
+
+    # Verify version file timestamp if check_timestamps enabled
+    if args.check_timestamps:
+        if not version_file:
+            print("\nError: Version file (.version.json) not found", file=sys.stderr)
+            print("  Timestamp verification requires .version.json file", file=sys.stderr)
+            total_errors += 1
+        else:
+            print("\nVerifying version file timestamp...")
+            success, errors = verify_version_file_timestamp(version_file, json_files)
+            if not success:
+                total_errors += len(errors)
+                for error in errors:
+                    print(f"  Error: {error}", file=sys.stderr)
+            else:
+                print("  Version file timestamp OK")
 
     # Verify version file if found
     if version_file:

@@ -22,6 +22,7 @@ from photos_manager.verify import (
     verify_json_file_timestamp,
     verify_timestamps,
     verify_version_file,
+    verify_version_file_timestamp,
 )
 
 
@@ -462,6 +463,77 @@ class TestVerifyJsonFileTimestamp:
         assert any("timestamp mismatch" in err for err in errors)
 
 
+class TestVerifyVersionFileTimestamp:
+    """Tests for verify_version_file_timestamp function."""
+
+    def test_verifies_version_file_timestamp(self, tmp_path: Path) -> None:
+        """Test that version file timestamp is verified correctly."""
+        json_file1 = tmp_path / "archive1.json"
+        json_file1.write_text("[]")
+
+        json_file2 = tmp_path / "archive2.json"
+        json_file2.write_text("[]")
+
+        version_file = tmp_path / ".version.json"
+        version_file.write_text("{}")
+
+        # Set version file timestamp to match newest JSON file
+        target_timestamp = int(json_file2.stat().st_mtime)
+        os.utime(str(version_file), (target_timestamp, target_timestamp))
+
+        json_files = [str(json_file1), str(json_file2)]
+
+        success, errors = verify_version_file_timestamp(str(version_file), json_files)
+
+        assert success is True
+        assert len(errors) == 0
+
+    def test_detects_version_file_timestamp_mismatch(self, tmp_path: Path) -> None:
+        """Test that version file timestamp mismatch is detected."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        version_file = tmp_path / ".version.json"
+        version_file.write_text("{}")
+
+        # Set very different timestamp on version file
+        old_timestamp = int(datetime.fromisoformat("2020-01-01T00:00:00+0000").timestamp())
+        os.utime(str(version_file), (old_timestamp, old_timestamp))
+
+        json_files = [str(json_file)]
+
+        success, errors = verify_version_file_timestamp(str(version_file), json_files)
+
+        assert success is False
+        assert any("timestamp mismatch" in err for err in errors)
+
+    def test_handles_nonexistent_version_file(self, tmp_path: Path) -> None:
+        """Test that error is returned for nonexistent version file."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        version_file = tmp_path / ".version.json"
+
+        json_files = [str(json_file)]
+
+        success, errors = verify_version_file_timestamp(str(version_file), json_files)
+
+        assert success is False
+        assert any("not found" in err for err in errors)
+
+    def test_handles_empty_json_files_list(self, tmp_path: Path) -> None:
+        """Test that error is returned for empty JSON files list."""
+        version_file = tmp_path / ".version.json"
+        version_file.write_text("{}")
+
+        json_files: list[str] = []
+
+        success, errors = verify_version_file_timestamp(str(version_file), json_files)
+
+        assert success is False
+        assert any("No JSON files" in err for err in errors)
+
+
 class TestVerifyVersionFile:
     """Tests for verify_version_file function."""
 
@@ -740,6 +812,18 @@ class TestMain:
         # Set JSON file timestamp too
         os.utime(str(json_file), (target_timestamp, target_timestamp))
 
+        # Create version file with matching timestamp
+        actual_hash = calculate_file_hash(str(json_file))
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 7,
+            "file_count": 1,
+            "files": {"photos.json": actual_hash},
+        }
+        version_file.write_text(json.dumps(version_data))
+        os.utime(str(version_file), (target_timestamp, target_timestamp))
+
         monkeypatch.setattr("sys.argv", ["verify.py", "--check-timestamps", str(tmp_path)])
 
         exit_code = main()
@@ -777,6 +861,18 @@ class TestMain:
         json_file.write_text(json.dumps(data))
         # JSON file should match actual file timestamp too
         os.utime(str(json_file), (actual_timestamp, actual_timestamp))
+
+        # Create version file with matching timestamp
+        actual_hash = calculate_file_hash(str(json_file))
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 7,
+            "file_count": 1,
+            "files": {"photos.json": actual_hash},
+        }
+        version_file.write_text(json.dumps(version_data))
+        os.utime(str(version_file), (actual_timestamp, actual_timestamp))
 
         # With tolerance of 10, should pass (file is 5 seconds off but within tolerance)
         monkeypatch.setattr(
@@ -833,6 +929,101 @@ class TestMain:
         captured = capsys.readouterr()
         assert "Found version file" in captured.out
         assert "Version file verified successfully" in captured.out
+
+    def test_requires_version_file_with_check_timestamps(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main reports error when .version.json missing with --check-timestamps."""
+        # Create test file
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Test content")
+
+        # Calculate actual checksums
+        sha1, md5 = calculate_checksums(str(test_file))
+
+        # Set specific timestamp
+        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+0000").timestamp())
+        os.utime(str(test_file), (target_timestamp, target_timestamp))
+        os.utime(str(test_file.parent), (target_timestamp, target_timestamp))
+
+        # Create JSON file (but no .version.json)
+        json_file = tmp_path / "photos.json"
+        data = [
+            {
+                "path": str(test_file),
+                "size": 12,
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2024-01-01T12:00:00+0000",
+            }
+        ]
+        json_file.write_text(json.dumps(data))
+        os.utime(str(json_file), (target_timestamp, target_timestamp))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", "--check-timestamps", str(tmp_path)])
+
+        exit_code = main()
+
+        # Should fail because .version.json is missing
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "Version file (.version.json) not found" in captured.err
+
+    def test_verifies_version_file_timestamp(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that main verifies .version.json timestamp with --check-timestamps."""
+        # Create test file
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Test content")
+
+        # Calculate actual checksums
+        sha1, md5 = calculate_checksums(str(test_file))
+
+        # Set specific timestamp
+        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+0000").timestamp())
+        os.utime(str(test_file), (target_timestamp, target_timestamp))
+        os.utime(str(test_file.parent), (target_timestamp, target_timestamp))
+
+        # Create JSON file
+        json_file = tmp_path / "photos.json"
+        data = [
+            {
+                "path": str(test_file),
+                "size": 12,
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2024-01-01T12:00:00+0000",
+            }
+        ]
+        json_file.write_text(json.dumps(data))
+        os.utime(str(json_file), (target_timestamp, target_timestamp))
+
+        # Calculate actual hash of JSON file
+        actual_hash = calculate_file_hash(str(json_file))
+
+        # Create version file with matching timestamp
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 12,
+            "file_count": 1,
+            "files": {"photos.json": actual_hash},
+        }
+        version_file.write_text(json.dumps(version_data))
+        # Set version file timestamp to match JSON file
+        os.utime(str(version_file), (target_timestamp, target_timestamp))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", "--check-timestamps", str(tmp_path)])
+
+        exit_code = main()
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Verifying version file timestamp" in captured.out
+        assert "Version file timestamp OK" in captured.out
 
     def test_exits_with_error_for_nonexistent_directory(
         self, monkeypatch: pytest.MonkeyPatch
