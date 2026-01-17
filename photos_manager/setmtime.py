@@ -178,10 +178,17 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
 
         path = Path(str(file_path))
 
-        # Check if file exists and is writable
-        if not path.exists() or not os.access(str(path), os.W_OK):
-            print(f"Error: File not found or not writable: {file_path}", file=sys.stderr)
-            continue
+        # Check if file exists and has appropriate permissions
+        if dry_run:
+            # In dry-run mode, only check if file exists and is readable
+            if not path.exists() or not os.access(str(path), os.R_OK):
+                print(f"Error: File not found or not readable: {file_path}", file=sys.stderr)
+                continue
+        else:
+            # In normal mode, check if file exists and is writable
+            if not path.exists() or not os.access(str(path), os.W_OK):
+                print(f"Error: File not found or not writable: {file_path}", file=sys.stderr)
+                continue
 
         # Get current timestamp
         try:
