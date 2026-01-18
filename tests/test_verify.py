@@ -12,6 +12,9 @@ from _pytest.capture import CaptureFixture
 from photos_manager.verify import (
     calculate_checksums,
     calculate_file_hash,
+    collect_expected_files,
+    collect_filesystem_files,
+    find_extra_files,
     find_json_files,
     find_version_file,
     load_json,
@@ -661,6 +664,231 @@ class TestVerifyVersionFile:
         assert any("missing required field" in err for err in errors)
 
 
+class TestCollectFilesystemFiles:
+    """Tests for collect_filesystem_files function."""
+
+    def test_collects_regular_and_json_files(self, tmp_path: Path) -> None:
+        """Test that function separates regular and JSON files."""
+        # Create regular files
+        file1 = tmp_path / "photo1.jpg"
+        file1.write_text("content")
+        file2 = tmp_path / "subdir" / "photo2.jpg"
+        file2.parent.mkdir()
+        file2.write_text("content")
+
+        # Create JSON files
+        json1 = tmp_path / "archive.json"
+        json1.write_text("{}")
+        json2 = tmp_path / "subdir" / "data.json"
+        json2.write_text("{}")
+
+        regular_files, json_files = collect_filesystem_files(str(tmp_path))
+
+        assert str(file1) in regular_files
+        assert str(file2) in regular_files
+        assert str(json1) in json_files
+        assert str(json2) in json_files
+        assert len(regular_files) == 2
+        assert len(json_files) == 2
+
+    def test_handles_empty_directory(self, tmp_path: Path) -> None:
+        """Test that function handles empty directory."""
+        regular_files, json_files = collect_filesystem_files(str(tmp_path))
+
+        assert len(regular_files) == 0
+        assert len(json_files) == 0
+
+    def test_excludes_directories(self, tmp_path: Path) -> None:
+        """Test that function only collects files, not directories."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        file1 = tmp_path / "file.txt"
+        file1.write_text("content")
+
+        regular_files, _ = collect_filesystem_files(str(tmp_path))
+
+        assert str(file1) in regular_files
+        assert str(subdir) not in regular_files
+        assert len(regular_files) == 1
+
+
+class TestCollectExpectedFiles:
+    """Tests for collect_expected_files function."""
+
+    def test_collects_paths_from_metadata(self) -> None:
+        """Test that function extracts file paths from metadata."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "size": 100},
+            {"path": "/archive/photo2.jpg", "size": 200},
+            {"path": "/archive/subdir/photo3.jpg", "size": 300},
+        ]
+
+        expected_files = collect_expected_files(data)
+
+        assert "/archive/photo1.jpg" in expected_files
+        assert "/archive/photo2.jpg" in expected_files
+        assert "/archive/subdir/photo3.jpg" in expected_files
+        assert len(expected_files) == 3
+
+    def test_handles_empty_metadata(self) -> None:
+        """Test that function handles empty metadata list."""
+        expected_files = collect_expected_files([])
+
+        assert len(expected_files) == 0
+
+    def test_skips_entries_without_path(self) -> None:
+        """Test that function skips entries without path field."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "size": 100},
+            {"size": 200},  # Missing path
+            {"path": "/archive/photo2.jpg", "size": 300},
+        ]
+
+        expected_files = collect_expected_files(data)
+
+        assert len(expected_files) == 2
+        assert "/archive/photo1.jpg" in expected_files
+        assert "/archive/photo2.jpg" in expected_files
+
+
+class TestFindExtraFiles:
+    """Tests for find_extra_files function."""
+
+    def test_finds_no_extra_files_in_clean_archive(self, tmp_path: Path) -> None:
+        """Test that function finds no extra files in clean archive."""
+        # Create files
+        file1 = tmp_path / "photo1.jpg"
+        file1.write_text("content1")
+        file2 = tmp_path / "photo2.jpg"
+        file2.write_text("content2")
+
+        # Create JSON metadata
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("{}")
+
+        # Create version file
+        version_file = tmp_path / ".version.json"
+        version_file.write_text("{}")
+
+        metadata: list[dict[str, str | int]] = [
+            {"path": str(file1), "size": 8},
+            {"path": str(file2), "size": 8},
+        ]
+
+        extra_json, extra_regular, missing = find_extra_files(
+            str(tmp_path), str(version_file), [str(json_file)], metadata
+        )
+
+        assert len(extra_json) == 0
+        assert len(extra_regular) == 0
+        assert len(missing) == 0
+
+    def test_finds_extra_json_files(self, tmp_path: Path) -> None:
+        """Test that function finds extra JSON files not in version file."""
+        # Create files
+        file1 = tmp_path / "photo.jpg"
+        file1.write_text("content")
+
+        # Create JSON files
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("{}")
+        extra_json_file = tmp_path / "extra.json"
+        extra_json_file.write_text("{}")
+
+        # Create version file
+        version_file = tmp_path / ".version.json"
+        version_file.write_text("{}")
+
+        metadata: list[dict[str, str | int]] = [{"path": str(file1), "size": 7}]
+
+        extra_json, extra_regular, missing = find_extra_files(
+            str(tmp_path), str(version_file), [str(json_file)], metadata
+        )
+
+        assert str(extra_json_file) in extra_json
+        assert len(extra_json) == 1
+        assert len(extra_regular) == 0
+        assert len(missing) == 0
+
+    def test_finds_extra_regular_files(self, tmp_path: Path) -> None:
+        """Test that function finds extra regular files not in metadata."""
+        # Create files
+        file1 = tmp_path / "photo.jpg"
+        file1.write_text("content")
+        extra_file = tmp_path / "extra.txt"
+        extra_file.write_text("extra")
+
+        # Create JSON metadata
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("{}")
+
+        # Create version file
+        version_file = tmp_path / ".version.json"
+        version_file.write_text("{}")
+
+        metadata: list[dict[str, str | int]] = [{"path": str(file1), "size": 7}]
+
+        extra_json, extra_regular, missing = find_extra_files(
+            str(tmp_path), str(version_file), [str(json_file)], metadata
+        )
+
+        assert str(extra_file) in extra_regular
+        assert len(extra_json) == 0
+        assert len(extra_regular) == 1
+        assert len(missing) == 0
+
+    def test_finds_missing_files(self, tmp_path: Path) -> None:
+        """Test that function finds files in metadata but missing from filesystem."""
+        # Create only one file
+        file1 = tmp_path / "photo1.jpg"
+        file1.write_text("content")
+
+        # Create JSON metadata
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("{}")
+
+        # Create version file
+        version_file = tmp_path / ".version.json"
+        version_file.write_text("{}")
+
+        # Metadata includes missing file
+        missing_file = tmp_path / "photo2.jpg"
+        metadata: list[dict[str, str | int]] = [
+            {"path": str(file1), "size": 7},
+            {"path": str(missing_file), "size": 100},
+        ]
+
+        extra_json, extra_regular, missing = find_extra_files(
+            str(tmp_path), str(version_file), [str(json_file)], metadata
+        )
+
+        assert str(missing_file) in missing
+        assert len(extra_json) == 0
+        assert len(extra_regular) == 0
+        assert len(missing) == 1
+
+    def test_handles_no_version_file(self, tmp_path: Path) -> None:
+        """Test that function works without version file."""
+        # Create files
+        file1 = tmp_path / "photo.jpg"
+        file1.write_text("content")
+
+        # Create JSON metadata
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("{}")
+
+        metadata: list[dict[str, str | int]] = [{"path": str(file1), "size": 7}]
+
+        extra_json, extra_regular, missing = find_extra_files(
+            str(tmp_path), None, [str(json_file)], metadata
+        )
+
+        # JSON file should not be in extra since it's in the list
+        assert len(extra_json) == 0
+        assert len(extra_regular) == 0
+        assert len(missing) == 0
+
+
 class TestMain:
     """Tests for main function."""
 
@@ -1102,3 +1330,239 @@ class TestMain:
         assert "Found 2 JSON metadata file(s)" in captured.out
         assert "archive1.json" in captured.out
         assert "archive2.json" in captured.out
+
+    def test_check_extra_files_requires_version_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that --check-extra-files requires .version.json file."""
+        # Create test file
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Test")
+
+        # Create JSON metadata
+        sha1, md5 = calculate_checksums(str(test_file))
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": str(test_file),
+                        "size": 4,
+                        "sha1": sha1,
+                        "md5": md5,
+                        "date": "2024-01-01T12:00:00+0000",
+                    }
+                ]
+            )
+        )
+
+        # No version file
+
+        monkeypatch.setattr("sys.argv", ["verify.py", str(tmp_path), "--check-extra-files"])
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "Version file (.version.json) not found" in captured.err
+        assert "Extra files check requires .version.json file" in captured.err
+
+    def test_check_extra_files_finds_clean_archive(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that --check-extra-files reports clean archive."""
+        # Create test file
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Test")
+
+        # Create JSON metadata
+        sha1, md5 = calculate_checksums(str(test_file))
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": str(test_file),
+                        "size": 4,
+                        "sha1": sha1,
+                        "md5": md5,
+                        "date": "2024-01-01T12:00:00+0000",
+                    }
+                ]
+            )
+        )
+
+        # Create version file
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 4,
+            "file_count": 1,
+            "last_modified": "2024-01-01T12:00:00+0000",
+            "files": {json_file.name: calculate_file_hash(str(json_file))},
+        }
+        version_file.write_text(json.dumps(version_data))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", str(tmp_path), "--check-extra-files"])
+
+        exit_code = main()
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "No extra or missing files found - archive is clean" in captured.out
+
+    def test_check_extra_files_finds_extra_json_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that --check-extra-files detects extra JSON files."""
+        # Create test file
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Test")
+
+        # Create JSON metadata
+        sha1, md5 = calculate_checksums(str(test_file))
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": str(test_file),
+                        "size": 4,
+                        "sha1": sha1,
+                        "md5": md5,
+                        "date": "2024-01-01T12:00:00+0000",
+                    }
+                ]
+            )
+        )
+
+        # Create extra JSON file
+        extra_json = tmp_path / "extra.json"
+        extra_json.write_text("{}")
+
+        # Create version file (without extra.json)
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 4,
+            "file_count": 1,
+            "last_modified": "2024-01-01T12:00:00+0000",
+            "files": {json_file.name: calculate_file_hash(str(json_file))},
+        }
+        version_file.write_text(json.dumps(version_data))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", str(tmp_path), "--check-extra-files"])
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "extra JSON file(s) not in .version.json" in captured.out
+        assert "extra.json" in captured.err
+
+    def test_check_extra_files_finds_extra_regular_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that --check-extra-files detects extra regular files."""
+        # Create test file
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Test")
+
+        # Create extra file
+        extra_file = tmp_path / "photos" / "extra.txt"
+        extra_file.write_text("extra")
+
+        # Create JSON metadata (without extra file)
+        sha1, md5 = calculate_checksums(str(test_file))
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": str(test_file),
+                        "size": 4,
+                        "sha1": sha1,
+                        "md5": md5,
+                        "date": "2024-01-01T12:00:00+0000",
+                    }
+                ]
+            )
+        )
+
+        # Create version file
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 4,
+            "file_count": 1,
+            "last_modified": "2024-01-01T12:00:00+0000",
+            "files": {json_file.name: calculate_file_hash(str(json_file))},
+        }
+        version_file.write_text(json.dumps(version_data))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", str(tmp_path), "--check-extra-files"])
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "extra file(s) not in metadata" in captured.out
+        assert "extra.txt" in captured.err
+
+    def test_check_extra_files_finds_missing_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that --check-extra-files detects missing files."""
+        # Create test file
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Test")
+
+        # Create JSON metadata with extra file that doesn't exist
+        sha1, md5 = calculate_checksums(str(test_file))
+        missing_file = tmp_path / "photos" / "missing.jpg"
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": str(test_file),
+                        "size": 4,
+                        "sha1": sha1,
+                        "md5": md5,
+                        "date": "2024-01-01T12:00:00+0000",
+                    },
+                    {
+                        "path": str(missing_file),
+                        "size": 100,
+                        "sha1": "a" * 40,
+                        "md5": "b" * 32,
+                        "date": "2024-01-02T12:00:00+0000",
+                    },
+                ]
+            )
+        )
+
+        # Create version file
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-2",
+            "total_bytes": 104,
+            "file_count": 2,
+            "last_modified": "2024-01-02T12:00:00+0000",
+            "files": {json_file.name: calculate_file_hash(str(json_file))},
+        }
+        version_file.write_text(json.dumps(version_data))
+
+        monkeypatch.setattr("sys.argv", ["verify.py", str(tmp_path), "--check-extra-files"])
+
+        exit_code = main()
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "missing file(s) from filesystem" in captured.out
+        assert "missing.jpg" in captured.err

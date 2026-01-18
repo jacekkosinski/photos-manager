@@ -9,6 +9,8 @@ This script verifies the integrity of photo archives by checking:
 - JSON file timestamps match newest entry
 - SHA-1 and MD5 checksums (with --all flag, time-consuming)
 - Version file integrity (.version.json)
+- Extra files in filesystem not present in metadata (with --check-extra-files)
+- Extra JSON files not listed in .version.json (with --check-extra-files)
 
 The script scans a directory for JSON metadata files (excluding *version.json)
 and optionally a .version.json file for comprehensive verification.
@@ -18,6 +20,7 @@ Usage:
     ./verify.py /path/to/archive --all
     ./verify.py /path/to/archive --check-timestamps
     ./verify.py /path/to/archive --all --check-timestamps
+    ./verify.py /path/to/archive --check-extra-files
     python -m photos_manager.verify /path/to/archive
 """
 
@@ -525,6 +528,117 @@ def verify_version_file_timestamp(
     return True, errors
 
 
+def collect_filesystem_files(directory: str) -> tuple[set[str], set[str]]:
+    """Collect all files from filesystem in given directory.
+
+    Recursively walks the directory tree and collects all file paths,
+    separating JSON files from regular files.
+
+    Args:
+        directory: Path to the directory to scan.
+
+    Returns:
+        Tuple containing:
+            - set[str]: Regular files (non-JSON) found in filesystem
+            - set[str]: JSON files found in filesystem
+
+    Examples:
+        >>> regular, json_files = collect_filesystem_files("/path/to/archive")
+        >>> len(regular) >= 0
+        True
+    """
+    regular_files = set()
+    json_files = set()
+
+    for root, _, files in os.walk(directory):
+        for file in files:
+            file_path = str(Path(root) / file)
+            if file.endswith(".json"):
+                json_files.add(file_path)
+            else:
+                regular_files.add(file_path)
+
+    return regular_files, json_files
+
+
+def collect_expected_files(all_data: list[dict[str, str | int]]) -> set[str]:
+    """Collect expected files from JSON metadata.
+
+    Extracts all file paths from JSON metadata entries.
+
+    Args:
+        all_data: Combined data from all JSON metadata files.
+
+    Returns:
+        Set of absolute file paths that should exist according to metadata.
+
+    Examples:
+        >>> data = [{'path': '/archive/photo.jpg', 'size': 1234}]
+        >>> files = collect_expected_files(data)
+        >>> '/archive/photo.jpg' in files
+        True
+    """
+    expected_files = set()
+    for entry in all_data:
+        file_path = entry.get("path")
+        if file_path:
+            expected_files.add(str(file_path))
+    return expected_files
+
+
+def find_extra_files(
+    directory: str,
+    version_file: str | None,
+    json_files: list[str],
+    all_data: list[dict[str, str | int]],
+) -> tuple[set[str], set[str], set[str]]:
+    """Find extra files in filesystem not present in metadata.
+
+    Compares files in the filesystem with files listed in .version.json
+    and JSON metadata to identify any extra files that shouldn't be in
+    the archive.
+
+    Args:
+        directory: Path to the archive directory.
+        version_file: Path to .version.json file (if exists).
+        json_files: List of JSON metadata files that should exist (from version file).
+        all_data: Combined data from all JSON metadata files.
+
+    Returns:
+        Tuple containing:
+            - set[str]: Extra JSON files not in .version.json
+            - set[str]: Extra regular files not in metadata
+            - set[str]: Files in metadata but missing from filesystem
+
+    Examples:
+        >>> result = find_extra_files("/archive", ".version.json", ["a.json"], data)
+        >>> len(result[0]) == 0
+        True
+    """
+    # Collect all files from filesystem
+    filesystem_regular, filesystem_json = collect_filesystem_files(directory)
+
+    # Collect expected regular files from metadata
+    expected_files = collect_expected_files(all_data)
+
+    # Collect expected JSON files from the provided list
+    # This list should come from version file, not from filesystem scan
+    expected_json = set(json_files)
+    if version_file:
+        expected_json.add(version_file)
+
+    # Find extra JSON files
+    extra_json_files = filesystem_json - expected_json
+
+    # Find extra regular files
+    extra_regular_files = filesystem_regular - expected_files
+
+    # Find missing files (in metadata but not in filesystem)
+    missing_files = expected_files - filesystem_regular
+
+    return extra_json_files, extra_regular_files, missing_files
+
+
 def verify_version_file(
     version_file: str, json_files: list[str], all_data: list[dict[str, str | int]]
 ) -> tuple[bool, list[str]]:
@@ -599,6 +713,43 @@ def verify_version_file(
     return len(errors) == 0, errors
 
 
+def _get_json_files_list(directory: str, version_file: str | None) -> tuple[list[str], int]:
+    """Get list of JSON files to process from version file or directory scan.
+
+    Args:
+        directory: Path to the archive directory.
+        version_file: Path to .version.json file if exists.
+
+    Returns:
+        Tuple containing:
+            - list[str]: List of JSON file paths to process
+            - int: Number of errors encountered (0 or 1)
+    """
+    json_files: list[str] = []
+    if version_file:
+        # Read JSON file list from version file
+        try:
+            version_data = load_version_json(version_file)
+            if "files" in version_data:
+                # Convert filenames to full paths
+                version_dir = Path(directory)
+                json_files = [str(version_dir / filename) for filename in version_data["files"]]
+            else:
+                print("Warning: Version file has no 'files' field", file=sys.stderr)
+        except SystemExit as e:
+            print(f"Error loading version file: {e}", file=sys.stderr)
+            return [], 1
+    else:
+        # No version file, scan for JSON files
+        try:
+            json_files = find_json_files(directory)
+        except SystemExit as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return [], 1
+
+    return json_files, 0
+
+
 def _verify_timestamps_for_json_file(
     json_file: str, data: list[dict[str, str | int]], args: argparse.Namespace
 ) -> tuple[int, int]:
@@ -649,6 +800,108 @@ def _verify_timestamps_for_json_file(
     return dir_count, errors_count
 
 
+def _verify_version_file_and_timestamps(
+    version_file: str | None,
+    json_files: list[str],
+    all_data: list[dict[str, str | int]],
+    check_timestamps: bool,
+) -> int:
+    """Verify version file timestamp and integrity.
+
+    Args:
+        version_file: Path to .version.json file if exists.
+        json_files: List of JSON metadata files.
+        all_data: Combined data from all JSON files.
+        check_timestamps: Whether to check timestamps.
+
+    Returns:
+        Number of errors found.
+    """
+    total_errors = 0
+
+    # Verify version file timestamp if check_timestamps enabled
+    if check_timestamps:
+        if not version_file:
+            print("\nError: Version file (.version.json) not found", file=sys.stderr)
+            print("  Timestamp verification requires .version.json file", file=sys.stderr)
+            total_errors += 1
+        else:
+            print("\nVerifying version file timestamp...")
+            success, errors = verify_version_file_timestamp(version_file, json_files)
+            if not success:
+                total_errors += len(errors)
+                for error in errors:
+                    print(f"  Error: {error}", file=sys.stderr)
+            else:
+                print("  Version file timestamp OK")
+
+    # Verify version file if found
+    if version_file:
+        print(f"\nVerifying version file {Path(version_file).name}...")
+        success, errors = verify_version_file(version_file, json_files, all_data)
+        if not success:
+            total_errors += len(errors)
+            for error in errors:
+                print(f"  Error: {error}", file=sys.stderr)
+        else:
+            print("  Version file verified successfully")
+
+    return total_errors
+
+
+def _verify_extra_files_check(
+    directory: str,
+    version_file: str | None,
+    json_files: list[str],
+    all_data: list[dict[str, str | int]],
+) -> int:
+    """Check for extra files in filesystem not present in metadata.
+
+    Args:
+        directory: Path to the archive directory.
+        version_file: Path to .version.json file if exists.
+        json_files: List of JSON metadata files.
+        all_data: Combined data from all JSON files.
+
+    Returns:
+        Number of errors found.
+    """
+    total_errors = 0
+
+    if not version_file:
+        print("\nError: Version file (.version.json) not found", file=sys.stderr)
+        print("  Extra files check requires .version.json file", file=sys.stderr)
+        return 1
+
+    print("\nChecking for extra files in archive...")
+    extra_json, extra_regular, missing = find_extra_files(
+        directory, version_file, json_files, all_data
+    )
+
+    if extra_json:
+        print(f"  Found {len(extra_json)} extra JSON file(s) not in .version.json:")
+        for file_path in sorted(extra_json):
+            print(f"    - {file_path}", file=sys.stderr)
+            total_errors += 1
+
+    if extra_regular:
+        print(f"  Found {len(extra_regular)} extra file(s) not in metadata:")
+        for file_path in sorted(extra_regular):
+            print(f"    - {file_path}", file=sys.stderr)
+            total_errors += 1
+
+    if missing:
+        print(f"  Found {len(missing)} missing file(s) from filesystem:")
+        for file_path in sorted(missing):
+            print(f"    - {file_path}", file=sys.stderr)
+            total_errors += 1
+
+    if not extra_json and not extra_regular and not missing:
+        print("  No extra or missing files found - archive is clean")
+
+    return total_errors
+
+
 def setup_parser(parser: argparse.ArgumentParser) -> None:
     """Configure argument parser for verify command.
 
@@ -676,6 +929,12 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         default=1,
         help="Timestamp tolerance in seconds (default: 1)",
     )
+    parser.add_argument(
+        "-e",
+        "--check-extra-files",
+        action="store_true",
+        help="Check for extra files in filesystem not present in metadata",
+    )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -693,6 +952,7 @@ def run(args: argparse.Namespace) -> int:
     5. Optionally verifies directory timestamps (with check_timestamps flag)
     6. Optionally verifies JSON file timestamps (with check_timestamps flag)
     7. If .version.json found, verifies version integrity
+    8. Optionally checks for extra files in filesystem (with check_extra_files flag)
 
     Args:
         args: Parsed command-line arguments with fields:
@@ -700,6 +960,7 @@ def run(args: argparse.Namespace) -> int:
             - all: Whether to verify SHA-1 and MD5 checksums (time-consuming)
             - check_timestamps: Whether to verify file and directory timestamps
             - tolerance: Timestamp tolerance in seconds
+            - check_extra_files: Whether to check for extra files not in metadata
 
     Returns:
         int: Exit code indicating success or failure
@@ -720,20 +981,17 @@ def run(args: argparse.Namespace) -> int:
             f"Error: The directory '{args.directory}' does not exist or is not readable"
         )
 
-    # Find JSON files
+    # Find version file and get list of JSON files to process
     print(f"Scanning directory: {args.directory}")
-    try:
-        json_files = find_json_files(args.directory)
-    except SystemExit as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-
-    print(f"Found {len(json_files)} JSON metadata file(s)")
-
-    # Find version file
     version_file = find_version_file(args.directory)
     if version_file:
         print(f"Found version file: {Path(version_file).name}")
+
+    json_files, error_count = _get_json_files_list(args.directory, version_file)
+    if error_count:
+        return 1
+
+    print(f"Found {len(json_files)} JSON metadata file(s)")
 
     if args.all:
         print("WARNING: Full checksum verification enabled (this may take a while)")
@@ -788,32 +1046,16 @@ def run(args: argparse.Namespace) -> int:
             print(f"  Error: {e}", file=sys.stderr)
             total_errors += 1
 
-    # Verify version file timestamp if check_timestamps enabled
-    if args.check_timestamps:
-        if not version_file:
-            print("\nError: Version file (.version.json) not found", file=sys.stderr)
-            print("  Timestamp verification requires .version.json file", file=sys.stderr)
-            total_errors += 1
-        else:
-            print("\nVerifying version file timestamp...")
-            success, errors = verify_version_file_timestamp(version_file, json_files)
-            if not success:
-                total_errors += len(errors)
-                for error in errors:
-                    print(f"  Error: {error}", file=sys.stderr)
-            else:
-                print("  Version file timestamp OK")
+    # Verify version file and timestamps
+    total_errors += _verify_version_file_and_timestamps(
+        version_file, json_files, all_data, args.check_timestamps
+    )
 
-    # Verify version file if found
-    if version_file:
-        print(f"\nVerifying version file {Path(version_file).name}...")
-        success, errors = verify_version_file(version_file, json_files, all_data)
-        if not success:
-            total_errors += len(errors)
-            for error in errors:
-                print(f"  Error: {error}", file=sys.stderr)
-        else:
-            print("  Version file verified successfully")
+    # Check for extra files if requested
+    if args.check_extra_files:
+        total_errors += _verify_extra_files_check(
+            args.directory, version_file, json_files, all_data
+        )
 
     # Summary
     print(f"\n{'=' * 60}")
