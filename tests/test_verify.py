@@ -16,12 +16,15 @@ from photos_manager.verify import (
     collect_filesystem_files,
     find_duplicate_checksums,
     find_extra_files,
+    find_invalid_dates,
     find_json_files,
     find_version_file,
     find_zero_byte_files,
     load_json,
     load_version_json,
     main,
+    validate_date_format,
+    validate_version_file_dates,
     verify_directory_timestamps,
     verify_file_entry,
     verify_json_file_timestamp,
@@ -332,7 +335,7 @@ class TestVerifyTimestamps:
         # Use very old timestamp
         entry = cast(
             "dict[str, str | int]",
-            {"path": str(test_file), "date": "2020-01-01T00:00:00+0000"},
+            {"path": str(test_file), "date": "2020-01-01T00:00:00+00:00"},
         )
 
         success, errors = verify_timestamps(entry, tolerance_seconds=1)
@@ -385,7 +388,7 @@ class TestVerifyDirectoryTimestamps:
         test_file.write_text("content")
 
         # Set matching timestamps
-        target_date = "2024-01-01T12:00:00+0000"
+        target_date = "2024-01-01T12:00:00+00:00"
         target_timestamp = int(datetime.fromisoformat(target_date).timestamp())
         os.utime(str(test_file), (target_timestamp, target_timestamp))
         os.utime(str(subdir), (target_timestamp, target_timestamp))
@@ -405,15 +408,15 @@ class TestVerifyDirectoryTimestamps:
         test_file.write_text("content")
 
         # Set different timestamps
-        file_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+0000").timestamp())
-        dir_timestamp = int(datetime.fromisoformat("2020-01-01T00:00:00+0000").timestamp())
+        file_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+00:00").timestamp())
+        dir_timestamp = int(datetime.fromisoformat("2020-01-01T00:00:00+00:00").timestamp())
 
         os.utime(str(test_file), (file_timestamp, file_timestamp))
         os.utime(str(subdir), (dir_timestamp, dir_timestamp))
 
         data = cast(
             "list[dict[str, str | int]]",
-            [{"path": str(test_file), "date": "2024-01-01T12:00:00+0000"}],
+            [{"path": str(test_file), "date": "2024-01-01T12:00:00+00:00"}],
         )
 
         dir_count, errors = verify_directory_timestamps(data)
@@ -455,7 +458,7 @@ class TestVerifyJsonFileTimestamp:
         json_file.write_text("[]")
 
         # Set very different timestamp on JSON file
-        old_timestamp = int(datetime.fromisoformat("2020-01-01T00:00:00+0000").timestamp())
+        old_timestamp = int(datetime.fromisoformat("2020-01-01T00:00:00+00:00").timestamp())
         os.utime(str(json_file), (old_timestamp, old_timestamp))
 
         mtime = int(test_file.stat().st_mtime)
@@ -502,7 +505,7 @@ class TestVerifyVersionFileTimestamp:
         version_file.write_text("{}")
 
         # Set very different timestamp on version file
-        old_timestamp = int(datetime.fromisoformat("2020-01-01T00:00:00+0000").timestamp())
+        old_timestamp = int(datetime.fromisoformat("2020-01-01T00:00:00+00:00").timestamp())
         os.utime(str(version_file), (old_timestamp, old_timestamp))
 
         json_files = [str(json_file)]
@@ -1029,6 +1032,159 @@ class TestFindDuplicateChecksums:
         assert len(md5_dups["md5_1"]) == 4
 
 
+class TestValidateDateFormat:
+    """Tests for validate_date_format function."""
+
+    def test_valid_date_with_colon_timezone(self) -> None:
+        """Test that function accepts valid ISO 8601 date with colon in timezone."""
+        is_valid, error = validate_date_format("2024-01-01T12:00:00+02:00")
+        assert is_valid is True
+        assert error is None
+
+    def test_valid_date_with_negative_timezone(self) -> None:
+        """Test that function accepts valid date with negative timezone."""
+        is_valid, error = validate_date_format("2024-01-01T12:00:00-05:00")
+        assert is_valid is True
+        assert error is None
+
+    def test_valid_date_with_utc_z(self) -> None:
+        """Test that function accepts valid date with Z (UTC) timezone."""
+        is_valid, error = validate_date_format("2024-01-01T12:00:00Z")
+        assert is_valid is True
+        assert error is None
+
+    def test_invalid_date_without_colon_in_timezone(self) -> None:
+        """Test that function rejects date without colon in timezone."""
+        is_valid, error = validate_date_format("2024-01-01T12:00:00+0200")
+        assert is_valid is False
+        assert error is not None
+        assert "colon" in error
+
+    def test_invalid_date_without_timezone(self) -> None:
+        """Test that function rejects date without timezone."""
+        is_valid, error = validate_date_format("2024-01-01T12:00:00")
+        assert is_valid is False
+        assert error is not None
+
+    def test_invalid_date_format(self) -> None:
+        """Test that function rejects invalid date format."""
+        is_valid, error = validate_date_format("not-a-date")
+        assert is_valid is False
+        assert error is not None
+        assert "ISO 8601" in error
+
+
+class TestFindInvalidDates:
+    """Tests for find_invalid_dates function."""
+
+    def test_finds_invalid_dates(self) -> None:
+        """Test that function finds files with invalid date formats."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "date": "2024-01-01T12:00:00+02:00"},
+            {"path": "/archive/photo2.jpg", "date": "2024-01-01T12:00:00+0200"},
+            {"path": "/archive/photo3.jpg", "date": "2024-01-01T12:00:00-05:00"},
+        ]
+
+        invalid = find_invalid_dates(data)
+
+        assert len(invalid) == 1
+        assert "/archive/photo2.jpg" in invalid
+        assert len(invalid["/archive/photo2.jpg"]) == 1
+        assert "colon" in invalid["/archive/photo2.jpg"][0][1]
+
+    def test_handles_all_valid_dates(self) -> None:
+        """Test that function returns empty dict when all dates are valid."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "date": "2024-01-01T12:00:00+02:00"},
+            {"path": "/archive/photo2.jpg", "date": "2024-01-01T12:00:00Z"},
+            {"path": "/archive/photo3.jpg", "date": "2024-01-01T12:00:00-05:00"},
+        ]
+
+        invalid = find_invalid_dates(data)
+
+        assert len(invalid) == 0
+
+    def test_handles_empty_metadata(self) -> None:
+        """Test that function handles empty metadata list."""
+        invalid = find_invalid_dates([])
+        assert len(invalid) == 0
+
+    def test_skips_entries_without_date(self) -> None:
+        """Test that function skips entries without date field."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "date": "2024-01-01T12:00:00+02:00"},
+            {"path": "/archive/photo2.jpg"},  # Missing date
+        ]
+
+        invalid = find_invalid_dates(data)
+
+        assert len(invalid) == 0
+
+
+class TestValidateVersionFileDates:
+    """Tests for validate_version_file_dates function."""
+
+    def test_validates_valid_version_file(self, tmp_path: Path) -> None:
+        """Test that function accepts valid dates in version file."""
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 1024,
+            "file_count": 1,
+            "last_modified": "2024-01-01T12:00:00+02:00",
+            "last_verified": "2024-01-02T12:00:00+02:00",
+            "files": {},
+        }
+        version_file.write_text(json.dumps(version_data))
+
+        errors = validate_version_file_dates(str(version_file))
+
+        assert len(errors) == 0
+
+    def test_finds_invalid_last_modified(self, tmp_path: Path) -> None:
+        """Test that function finds invalid last_modified date."""
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 1024,
+            "file_count": 1,
+            "last_modified": "2024-01-01T12:00:00+0200",
+            "files": {},
+        }
+        version_file.write_text(json.dumps(version_data))
+
+        errors = validate_version_file_dates(str(version_file))
+
+        assert len(errors) == 1
+        assert errors[0][0] == "last_modified"
+        assert "colon" in errors[0][2]
+
+    def test_finds_invalid_last_verified(self, tmp_path: Path) -> None:
+        """Test that function finds invalid last_verified date."""
+        version_file = tmp_path / ".version.json"
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 1024,
+            "file_count": 1,
+            "last_verified": "2024-01-02T12:00:00+0200",
+            "files": {},
+        }
+        version_file.write_text(json.dumps(version_data))
+
+        errors = validate_version_file_dates(str(version_file))
+
+        assert len(errors) == 1
+        assert errors[0][0] == "last_verified"
+
+    def test_handles_nonexistent_file(self, tmp_path: Path) -> None:
+        """Test that function handles nonexistent version file."""
+        version_file = tmp_path / ".version.json"
+
+        errors = validate_version_file_dates(str(version_file))
+
+        assert len(errors) == 0
+
+
 class TestMain:
     """Tests for main function."""
 
@@ -1053,7 +1209,7 @@ class TestMain:
                 "size": len(test_content),
                 "sha1": sha1,
                 "md5": md5,
-                "date": "2024-01-01T12:00:00+0000",
+                "date": "2024-01-01T12:00:00+00:00",
             }
         ]
         json_file.write_text(json.dumps(data))
@@ -1084,7 +1240,7 @@ class TestMain:
                 "size": 9,
                 "sha1": sha1,
                 "md5": md5,
-                "date": "2024-01-01T12:00:00+0000",
+                "date": "2024-01-01T12:00:00+00:00",
             }
         ]
         json_file.write_text(json.dumps(data))
@@ -1108,7 +1264,7 @@ class TestMain:
                 "size": 100,
                 "sha1": "abc",
                 "md5": "def",
-                "date": "2024-01-01T12:00:00+0000",
+                "date": "2024-01-01T12:00:00+00:00",
             }
         ]
         json_file.write_text(json.dumps(data))
@@ -1136,7 +1292,7 @@ class TestMain:
                 "size": 14,
                 "sha1": "wrong_sha1_hash_1234567890123456789012",
                 "md5": "wrong_md5_hash_12345678901234",
-                "date": "2024-01-01T12:00:00+0000",
+                "date": "2024-01-01T12:00:00+00:00",
             }
         ]
         json_file.write_text(json.dumps(data))
@@ -1161,7 +1317,7 @@ class TestMain:
         sha1, md5 = calculate_checksums(str(test_file))
 
         # Set specific timestamp
-        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+0000").timestamp())
+        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+00:00").timestamp())
         os.utime(str(test_file), (target_timestamp, target_timestamp))
         # Also set directory timestamp
         os.utime(str(test_file.parent), (target_timestamp, target_timestamp))
@@ -1173,7 +1329,7 @@ class TestMain:
                 "size": 7,
                 "sha1": sha1,
                 "md5": md5,
-                "date": "2024-01-01T12:00:00+0000",
+                "date": "2024-01-01T12:00:00+00:00",
             }
         ]
         json_file.write_text(json.dumps(data))
@@ -1210,7 +1366,7 @@ class TestMain:
         sha1, md5 = calculate_checksums(str(test_file))
 
         # Set timestamp that's off by 5 seconds from metadata
-        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+0000").timestamp())
+        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+00:00").timestamp())
         actual_timestamp = target_timestamp + 5
         os.utime(str(test_file), (actual_timestamp, actual_timestamp))
         # Directory and JSON should match the actual file timestamp (newest file)
@@ -1223,7 +1379,7 @@ class TestMain:
                 "size": 7,
                 "sha1": sha1,
                 "md5": md5,
-                "date": "2024-01-01T12:00:00+0000",
+                "date": "2024-01-01T12:00:00+00:00",
             }
         ]
         json_file.write_text(json.dumps(data))
@@ -1271,7 +1427,7 @@ class TestMain:
                 "size": 12,
                 "sha1": sha1,
                 "md5": md5,
-                "date": "2024-01-01T12:00:00+0000",
+                "date": "2024-01-01T12:00:00+00:00",
             }
         ]
         json_file.write_text(json.dumps(data))
@@ -1311,7 +1467,7 @@ class TestMain:
         sha1, md5 = calculate_checksums(str(test_file))
 
         # Set specific timestamp
-        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+0000").timestamp())
+        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+00:00").timestamp())
         os.utime(str(test_file), (target_timestamp, target_timestamp))
         os.utime(str(test_file.parent), (target_timestamp, target_timestamp))
 
@@ -1323,7 +1479,7 @@ class TestMain:
                 "size": 12,
                 "sha1": sha1,
                 "md5": md5,
-                "date": "2024-01-01T12:00:00+0000",
+                "date": "2024-01-01T12:00:00+00:00",
             }
         ]
         json_file.write_text(json.dumps(data))
@@ -1351,7 +1507,7 @@ class TestMain:
         sha1, md5 = calculate_checksums(str(test_file))
 
         # Set specific timestamp
-        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+0000").timestamp())
+        target_timestamp = int(datetime.fromisoformat("2024-01-01T12:00:00+00:00").timestamp())
         os.utime(str(test_file), (target_timestamp, target_timestamp))
         os.utime(str(test_file.parent), (target_timestamp, target_timestamp))
 
@@ -1363,7 +1519,7 @@ class TestMain:
                 "size": 12,
                 "sha1": sha1,
                 "md5": md5,
-                "date": "2024-01-01T12:00:00+0000",
+                "date": "2024-01-01T12:00:00+00:00",
             }
         ]
         json_file.write_text(json.dumps(data))
@@ -1439,7 +1595,7 @@ class TestMain:
                         "size": 8,
                         "sha1": sha1_1,
                         "md5": md5_1,
-                        "date": "2024-01-01T12:00:00+0000",
+                        "date": "2024-01-01T12:00:00+00:00",
                     }
                 ]
             )
@@ -1455,7 +1611,7 @@ class TestMain:
                         "size": 8,
                         "sha1": sha1_2,
                         "md5": md5_2,
-                        "date": "2024-01-02T12:00:00+0000",
+                        "date": "2024-01-02T12:00:00+00:00",
                     }
                 ]
             )
@@ -1491,7 +1647,7 @@ class TestMain:
                         "size": 4,
                         "sha1": sha1,
                         "md5": md5,
-                        "date": "2024-01-01T12:00:00+0000",
+                        "date": "2024-01-01T12:00:00+00:00",
                     }
                 ]
             )
@@ -1528,7 +1684,7 @@ class TestMain:
                         "size": 4,
                         "sha1": sha1,
                         "md5": md5,
-                        "date": "2024-01-01T12:00:00+0000",
+                        "date": "2024-01-01T12:00:00+00:00",
                     }
                 ]
             )
@@ -1540,7 +1696,7 @@ class TestMain:
             "version": "photos-0.000-1",
             "total_bytes": 4,
             "file_count": 1,
-            "last_modified": "2024-01-01T12:00:00+0000",
+            "last_modified": "2024-01-01T12:00:00+00:00",
             "files": {json_file.name: calculate_file_hash(str(json_file))},
         }
         version_file.write_text(json.dumps(version_data))
@@ -1573,7 +1729,7 @@ class TestMain:
                         "size": 4,
                         "sha1": sha1,
                         "md5": md5,
-                        "date": "2024-01-01T12:00:00+0000",
+                        "date": "2024-01-01T12:00:00+00:00",
                     }
                 ]
             )
@@ -1589,7 +1745,7 @@ class TestMain:
             "version": "photos-0.000-1",
             "total_bytes": 4,
             "file_count": 1,
-            "last_modified": "2024-01-01T12:00:00+0000",
+            "last_modified": "2024-01-01T12:00:00+00:00",
             "files": {json_file.name: calculate_file_hash(str(json_file))},
         }
         version_file.write_text(json.dumps(version_data))
@@ -1627,7 +1783,7 @@ class TestMain:
                         "size": 4,
                         "sha1": sha1,
                         "md5": md5,
-                        "date": "2024-01-01T12:00:00+0000",
+                        "date": "2024-01-01T12:00:00+00:00",
                     }
                 ]
             )
@@ -1639,7 +1795,7 @@ class TestMain:
             "version": "photos-0.000-1",
             "total_bytes": 4,
             "file_count": 1,
-            "last_modified": "2024-01-01T12:00:00+0000",
+            "last_modified": "2024-01-01T12:00:00+00:00",
             "files": {json_file.name: calculate_file_hash(str(json_file))},
         }
         version_file.write_text(json.dumps(version_data))
@@ -1674,14 +1830,14 @@ class TestMain:
                         "size": 4,
                         "sha1": sha1,
                         "md5": md5,
-                        "date": "2024-01-01T12:00:00+0000",
+                        "date": "2024-01-01T12:00:00+00:00",
                     },
                     {
                         "path": str(missing_file),
                         "size": 100,
                         "sha1": "a" * 40,
                         "md5": "b" * 32,
-                        "date": "2024-01-02T12:00:00+0000",
+                        "date": "2024-01-02T12:00:00+00:00",
                     },
                 ]
             )
@@ -1693,7 +1849,7 @@ class TestMain:
             "version": "photos-0.000-2",
             "total_bytes": 104,
             "file_count": 2,
-            "last_modified": "2024-01-02T12:00:00+0000",
+            "last_modified": "2024-01-02T12:00:00+00:00",
             "files": {json_file.name: calculate_file_hash(str(json_file))},
         }
         version_file.write_text(json.dumps(version_data))

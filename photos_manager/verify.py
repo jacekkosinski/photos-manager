@@ -28,6 +28,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -781,6 +782,113 @@ def find_duplicate_checksums(
     return sha1_duplicates, md5_duplicates
 
 
+def validate_date_format(date_str: str) -> tuple[bool, str | None]:
+    """Validate that date string is in proper ISO 8601 format with colon in timezone.
+
+    Args:
+        date_str: Date string to validate.
+
+    Returns:
+        Tuple containing:
+            - bool: True if date format is valid, False otherwise
+            - str | None: Error message if invalid, None if valid
+
+    Examples:
+        >>> validate_date_format("2024-01-01T12:00:00+02:00")
+        (True, None)
+        >>> validate_date_format("2024-01-01T12:00:00+0200")
+        (False, "Timezone format should use colon (e.g., '+02:00' not '+0200')")
+    """
+    # Check if date can be parsed as ISO 8601
+    try:
+        datetime.fromisoformat(str(date_str))
+    except (ValueError, TypeError) as e:
+        return False, f"Invalid ISO 8601 format: {e}"
+
+    # Check timezone format - must have colon or be Z (UTC)
+    # Valid: +02:00, -05:00, Z
+    # Invalid: +0200, -0500
+    timezone_pattern = r"([+-]\d{2}:\d{2}|Z)$"
+    if not re.search(timezone_pattern, str(date_str)):
+        # Check if it has timezone without colon
+        if re.search(r"[+-]\d{4}$", str(date_str)):
+            return False, "Timezone format should use colon (e.g., '+02:00' not '+0200')"
+        return False, "Date must include timezone with colon format (e.g., '+02:00') or 'Z'"
+
+    return True, None
+
+
+def find_invalid_dates(all_data: list[dict[str, str | int]]) -> dict[str, list[tuple[str, str]]]:
+    """Find files with invalid date formats in metadata.
+
+    Args:
+        all_data: Combined data from all JSON metadata files.
+
+    Returns:
+        Dictionary mapping file paths to list of (date_value, error_message) tuples.
+
+    Examples:
+        >>> data = [{'path': '/a.jpg', 'date': '2024-01-01T12:00:00+0200'}]
+        >>> invalid = find_invalid_dates(data)
+        >>> len(invalid) > 0
+        True
+    """
+    invalid_dates: dict[str, list[tuple[str, str]]] = {}
+
+    for entry in all_data:
+        path = str(entry.get("path", ""))
+        date_str = entry.get("date")
+
+        if not path or not date_str:
+            continue
+
+        is_valid, error_msg = validate_date_format(str(date_str))
+        if not is_valid and error_msg:
+            if path not in invalid_dates:
+                invalid_dates[path] = []
+            invalid_dates[path].append((str(date_str), error_msg))
+
+    return invalid_dates
+
+
+def validate_version_file_dates(version_file: str) -> list[tuple[str, str, str]]:
+    """Validate date formats in version file.
+
+    Args:
+        version_file: Path to .version.json file.
+
+    Returns:
+        List of tuples (field_name, date_value, error_message) for invalid dates.
+
+    Examples:
+        >>> errors = validate_version_file_dates(".version.json")
+        >>> len(errors) == 0
+        True
+    """
+    errors: list[tuple[str, str, str]] = []
+
+    try:
+        version_data = load_version_json(version_file)
+    except SystemExit:
+        return errors
+
+    # Check last_modified field
+    if "last_modified" in version_data:
+        date_str = str(version_data["last_modified"])
+        is_valid, error_msg = validate_date_format(date_str)
+        if not is_valid and error_msg:
+            errors.append(("last_modified", date_str, error_msg))
+
+    # Check last_verified field
+    if "last_verified" in version_data:
+        date_str = str(version_data["last_verified"])
+        is_valid, error_msg = validate_date_format(date_str)
+        if not is_valid and error_msg:
+            errors.append(("last_verified", date_str, error_msg))
+
+    return errors
+
+
 def _get_json_files_list(directory: str, version_file: str | None) -> tuple[list[str], int]:
     """Get list of JSON files to process from version file or directory scan.
 
@@ -970,6 +1078,52 @@ def _verify_extra_files_check(
     return total_errors
 
 
+def _verify_date_formats(all_data: list[dict[str, str | int]], version_file: str | None) -> int:
+    """Verify date formats in metadata and version file.
+
+    Checks that all dates in JSON metadata and .version.json follow ISO 8601
+    format with proper timezone separator (colon).
+
+    Args:
+        all_data: Combined metadata from all JSON files.
+        version_file: Path to .version.json file if present, None otherwise.
+
+    Returns:
+        int: Number of errors found (invalid dates).
+    """
+    total_errors = 0
+
+    # Check date formats in metadata
+    print("\nChecking date formats in metadata...")
+    invalid_dates = find_invalid_dates(all_data)
+    if invalid_dates:
+        print(f"  Found {len(invalid_dates)} file(s) with invalid date format:")
+        for path, date_errors in sorted(invalid_dates.items()):
+            for date_val, error_msg in date_errors:
+                print(f"    {path}:", file=sys.stderr)
+                print(f"      Date: {date_val}", file=sys.stderr)
+                print(f"      Error: {error_msg}", file=sys.stderr)
+                total_errors += 1
+    else:
+        print("  All date formats are valid")
+
+    # Check date formats in version file
+    if version_file:
+        print("\nChecking date formats in version file...")
+        version_date_errors = validate_version_file_dates(version_file)
+        if version_date_errors:
+            print(f"  Found {len(version_date_errors)} invalid date(s) in version file:")
+            for field_name, date_val, error_msg in version_date_errors:
+                print(f"    Field '{field_name}':", file=sys.stderr)
+                print(f"      Date: {date_val}", file=sys.stderr)
+                print(f"      Error: {error_msg}", file=sys.stderr)
+                total_errors += 1
+        else:
+            print("  All version file date formats are valid")
+
+    return total_errors
+
+
 def setup_parser(parser: argparse.ArgumentParser) -> None:
     """Configure argument parser for verify command.
 
@@ -1023,6 +1177,8 @@ def run(args: argparse.Namespace) -> int:
     8. Optionally checks for extra files in filesystem (with check_extra_files flag)
     9. Checks for zero-byte files in metadata
     10. Checks for duplicate SHA1 and MD5 checksums
+    11. Validates date formats in metadata (ISO 8601 with colon in timezone)
+    12. Validates date formats in .version.json file
 
     Args:
         args: Parsed command-line arguments with fields:
@@ -1161,6 +1317,9 @@ def run(args: argparse.Namespace) -> int:
             # Don't double-count if already counted in SHA1
     else:
         print("  No duplicate MD5 checksums found")
+
+    # Check date formats in metadata and version file
+    total_errors += _verify_date_formats(all_data, version_file)
 
     # Summary
     print(f"\n{'=' * 60}")
