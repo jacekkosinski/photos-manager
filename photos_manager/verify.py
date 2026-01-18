@@ -713,6 +713,74 @@ def verify_version_file(
     return len(errors) == 0, errors
 
 
+def find_zero_byte_files(all_data: list[dict[str, str | int]]) -> list[str]:
+    """Find files with zero bytes in metadata.
+
+    Args:
+        all_data: Combined data from all JSON metadata files.
+
+    Returns:
+        List of file paths with zero bytes.
+
+    Examples:
+        >>> data = [{'path': '/archive/empty.txt', 'size': 0}]
+        >>> zero_files = find_zero_byte_files(data)
+        >>> len(zero_files)
+        1
+    """
+    zero_byte_files = []
+    for entry in all_data:
+        size = entry.get("size")
+        path = entry.get("path")
+        if size == 0 and path:
+            zero_byte_files.append(str(path))
+    return zero_byte_files
+
+
+def find_duplicate_checksums(
+    all_data: list[dict[str, str | int]],
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Find duplicate SHA1 and MD5 checksums in metadata.
+
+    Args:
+        all_data: Combined data from all JSON metadata files.
+
+    Returns:
+        Tuple containing:
+            - dict: SHA1 checksums that appear more than once, mapping to list of file paths
+            - dict: MD5 checksums that appear more than once, mapping to list of file paths
+
+    Examples:
+        >>> data = [
+        ...     {'path': '/a.jpg', 'sha1': 'abc123', 'md5': 'def456'},
+        ...     {'path': '/b.jpg', 'sha1': 'abc123', 'md5': 'def456'}
+        ... ]
+        >>> sha1_dups, md5_dups = find_duplicate_checksums(data)
+        >>> len(sha1_dups)
+        1
+    """
+    sha1_map: dict[str, list[str]] = {}
+    md5_map: dict[str, list[str]] = {}
+
+    # Build maps of checksums to file paths
+    for entry in all_data:
+        path = str(entry.get("path", ""))
+        sha1 = str(entry.get("sha1", ""))
+        md5 = str(entry.get("md5", ""))
+
+        if path and sha1:
+            sha1_map.setdefault(sha1, []).append(path)
+
+        if path and md5:
+            md5_map.setdefault(md5, []).append(path)
+
+    # Filter to only duplicates (more than one file)
+    sha1_duplicates = {k: v for k, v in sha1_map.items() if len(v) > 1}
+    md5_duplicates = {k: v for k, v in md5_map.items() if len(v) > 1}
+
+    return sha1_duplicates, md5_duplicates
+
+
 def _get_json_files_list(directory: str, version_file: str | None) -> tuple[list[str], int]:
     """Get list of JSON files to process from version file or directory scan.
 
@@ -953,6 +1021,8 @@ def run(args: argparse.Namespace) -> int:
     6. Optionally verifies JSON file timestamps (with check_timestamps flag)
     7. If .version.json found, verifies version integrity
     8. Optionally checks for extra files in filesystem (with check_extra_files flag)
+    9. Checks for zero-byte files in metadata
+    10. Checks for duplicate SHA1 and MD5 checksums
 
     Args:
         args: Parsed command-line arguments with fields:
@@ -1056,6 +1126,41 @@ def run(args: argparse.Namespace) -> int:
         total_errors += _verify_extra_files_check(
             args.directory, version_file, json_files, all_data
         )
+
+    # Check for zero-byte files
+    print("\nChecking for zero-byte files...")
+    zero_byte_files = find_zero_byte_files(all_data)
+    if zero_byte_files:
+        print(f"  Found {len(zero_byte_files)} zero-byte file(s):")
+        for file_path in sorted(zero_byte_files):
+            print(f"    - {file_path}", file=sys.stderr)
+            total_errors += 1
+    else:
+        print("  No zero-byte files found")
+
+    # Check for duplicate checksums
+    print("\nChecking for duplicate checksums...")
+    sha1_duplicates, md5_duplicates = find_duplicate_checksums(all_data)
+
+    if sha1_duplicates:
+        print(f"  Found {len(sha1_duplicates)} duplicate SHA1 checksum(s):")
+        for sha1, paths in sorted(sha1_duplicates.items()):
+            print(f"    SHA1 {sha1} appears in {len(paths)} file(s):", file=sys.stderr)
+            for path in sorted(paths):
+                print(f"      - {path}", file=sys.stderr)
+            total_errors += len(paths) - 1  # Count duplicates, not original
+    else:
+        print("  No duplicate SHA1 checksums found")
+
+    if md5_duplicates:
+        print(f"  Found {len(md5_duplicates)} duplicate MD5 checksum(s):")
+        for md5, paths in sorted(md5_duplicates.items()):
+            print(f"    MD5 {md5} appears in {len(paths)} file(s):", file=sys.stderr)
+            for path in sorted(paths):
+                print(f"      - {path}", file=sys.stderr)
+            # Don't double-count if already counted in SHA1
+    else:
+        print("  No duplicate MD5 checksums found")
 
     # Summary
     print(f"\n{'=' * 60}")

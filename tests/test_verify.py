@@ -14,9 +14,11 @@ from photos_manager.verify import (
     calculate_file_hash,
     collect_expected_files,
     collect_filesystem_files,
+    find_duplicate_checksums,
     find_extra_files,
     find_json_files,
     find_version_file,
+    find_zero_byte_files,
     load_json,
     load_version_json,
     main,
@@ -887,6 +889,144 @@ class TestFindExtraFiles:
         assert len(extra_json) == 0
         assert len(extra_regular) == 0
         assert len(missing) == 0
+
+
+class TestFindZeroByteFiles:
+    """Tests for find_zero_byte_files function."""
+
+    def test_finds_zero_byte_files(self) -> None:
+        """Test that function finds files with zero bytes."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo.jpg", "size": 1024},
+            {"path": "/archive/empty.txt", "size": 0},
+            {"path": "/archive/another.jpg", "size": 2048},
+            {"path": "/archive/empty2.dat", "size": 0},
+        ]
+
+        zero_files = find_zero_byte_files(data)
+
+        assert len(zero_files) == 2
+        assert "/archive/empty.txt" in zero_files
+        assert "/archive/empty2.dat" in zero_files
+        assert "/archive/photo.jpg" not in zero_files
+
+    def test_handles_no_zero_byte_files(self) -> None:
+        """Test that function returns empty list when no zero-byte files."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "size": 1024},
+            {"path": "/archive/photo2.jpg", "size": 2048},
+        ]
+
+        zero_files = find_zero_byte_files(data)
+
+        assert len(zero_files) == 0
+
+    def test_handles_empty_metadata(self) -> None:
+        """Test that function handles empty metadata list."""
+        zero_files = find_zero_byte_files([])
+
+        assert len(zero_files) == 0
+
+    def test_skips_entries_without_path(self) -> None:
+        """Test that function skips entries without path field."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo.jpg", "size": 1024},
+            {"size": 0},  # Missing path
+            {"path": "/archive/empty.txt", "size": 0},
+        ]
+
+        zero_files = find_zero_byte_files(data)
+
+        assert len(zero_files) == 1
+        assert "/archive/empty.txt" in zero_files
+
+
+class TestFindDuplicateChecksums:
+    """Tests for find_duplicate_checksums function."""
+
+    def test_finds_sha1_duplicates(self) -> None:
+        """Test that function finds duplicate SHA1 checksums."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "sha1": "abc123", "md5": "def456"},
+            {"path": "/archive/photo2.jpg", "sha1": "abc123", "md5": "ghi789"},
+            {"path": "/archive/photo3.jpg", "sha1": "xyz999", "md5": "uvw888"},
+        ]
+
+        sha1_dups, md5_dups = find_duplicate_checksums(data)
+
+        assert len(sha1_dups) == 1
+        assert "abc123" in sha1_dups
+        assert len(sha1_dups["abc123"]) == 2
+        assert "/archive/photo1.jpg" in sha1_dups["abc123"]
+        assert "/archive/photo2.jpg" in sha1_dups["abc123"]
+        assert len(md5_dups) == 0
+
+    def test_finds_md5_duplicates(self) -> None:
+        """Test that function finds duplicate MD5 checksums."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "sha1": "abc123", "md5": "same999"},
+            {"path": "/archive/photo2.jpg", "sha1": "def456", "md5": "same999"},
+            {"path": "/archive/photo3.jpg", "sha1": "xyz789", "md5": "diff888"},
+        ]
+
+        sha1_dups, md5_dups = find_duplicate_checksums(data)
+
+        assert len(sha1_dups) == 0
+        assert len(md5_dups) == 1
+        assert "same999" in md5_dups
+        assert len(md5_dups["same999"]) == 2
+        assert "/archive/photo1.jpg" in md5_dups["same999"]
+        assert "/archive/photo2.jpg" in md5_dups["same999"]
+
+    def test_finds_both_sha1_and_md5_duplicates(self) -> None:
+        """Test that function finds both SHA1 and MD5 duplicates."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "sha1": "dup1", "md5": "md5_1"},
+            {"path": "/archive/photo2.jpg", "sha1": "dup1", "md5": "md5_1"},
+            {"path": "/archive/photo3.jpg", "sha1": "dup2", "md5": "md5_2"},
+            {"path": "/archive/photo4.jpg", "sha1": "dup2", "md5": "md5_2"},
+        ]
+
+        sha1_dups, md5_dups = find_duplicate_checksums(data)
+
+        assert len(sha1_dups) == 2
+        assert len(md5_dups) == 2
+
+    def test_handles_no_duplicates(self) -> None:
+        """Test that function returns empty dicts when no duplicates."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "sha1": "unique1", "md5": "md5_1"},
+            {"path": "/archive/photo2.jpg", "sha1": "unique2", "md5": "md5_2"},
+            {"path": "/archive/photo3.jpg", "sha1": "unique3", "md5": "md5_3"},
+        ]
+
+        sha1_dups, md5_dups = find_duplicate_checksums(data)
+
+        assert len(sha1_dups) == 0
+        assert len(md5_dups) == 0
+
+    def test_handles_empty_metadata(self) -> None:
+        """Test that function handles empty metadata list."""
+        sha1_dups, md5_dups = find_duplicate_checksums([])
+
+        assert len(sha1_dups) == 0
+        assert len(md5_dups) == 0
+
+    def test_handles_multiple_files_with_same_checksums(self) -> None:
+        """Test that function handles more than 2 files with same checksum."""
+        data: list[dict[str, str | int]] = [
+            {"path": "/archive/photo1.jpg", "sha1": "same", "md5": "md5_1"},
+            {"path": "/archive/photo2.jpg", "sha1": "same", "md5": "md5_1"},
+            {"path": "/archive/photo3.jpg", "sha1": "same", "md5": "md5_1"},
+            {"path": "/archive/photo4.jpg", "sha1": "same", "md5": "md5_1"},
+        ]
+
+        sha1_dups, md5_dups = find_duplicate_checksums(data)
+
+        assert len(sha1_dups) == 1
+        assert len(sha1_dups["same"]) == 4
+        assert len(md5_dups) == 1
+        assert len(md5_dups["md5_1"]) == 4
 
 
 class TestMain:
