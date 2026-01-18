@@ -23,6 +23,7 @@ from photos_manager.verify import (
     load_json,
     load_version_json,
     main,
+    normalize_paths,
     validate_date_format,
     validate_version_file_dates,
     verify_directory_timestamps,
@@ -2038,3 +2039,70 @@ class TestVerifyPermissions:
 
         assert str(json_file) in errors
         assert any(issue_type == "permissions" for issue_type, _ in errors[str(json_file)])
+
+
+class TestNormalizePaths:
+    """Tests for normalize_paths function."""
+
+    def test_converts_relative_paths_to_absolute(self, tmp_path: Path) -> None:
+        """Test that relative paths are converted to absolute paths."""
+        data: list[dict[str, str | int]] = [
+            {"path": "photos/img1.jpg", "size": 100},
+            {"path": "photos/img2.jpg", "size": 200},
+        ]
+
+        result = normalize_paths(data, str(tmp_path))
+
+        assert Path(str(result[0]["path"])).is_absolute()
+        assert Path(str(result[1]["path"])).is_absolute()
+        assert str(result[0]["path"]) == str(tmp_path / "photos/img1.jpg")
+        assert str(result[1]["path"]) == str(tmp_path / "photos/img2.jpg")
+
+    def test_preserves_absolute_paths(self, tmp_path: Path) -> None:
+        """Test that absolute paths are not modified."""
+        abs_path1 = str(tmp_path / "photos/img1.jpg")
+        abs_path2 = str(tmp_path / "photos/img2.jpg")
+
+        data: list[dict[str, str | int]] = [
+            {"path": abs_path1, "size": 100},
+            {"path": abs_path2, "size": 200},
+        ]
+
+        result = normalize_paths(data, str(tmp_path))
+
+        assert str(result[0]["path"]) == abs_path1
+        assert str(result[1]["path"]) == abs_path2
+
+    def test_handles_empty_data(self, tmp_path: Path) -> None:
+        """Test that empty data is handled correctly."""
+        data: list[dict[str, str | int]] = []
+
+        result = normalize_paths(data, str(tmp_path))
+
+        assert result == []
+
+    def test_handles_entries_without_path(self, tmp_path: Path) -> None:
+        """Test that entries without path field are handled gracefully."""
+        data: list[dict[str, str | int]] = [
+            {"size": 100},
+            {"path": "photos/img.jpg", "size": 200},
+        ]
+
+        result = normalize_paths(data, str(tmp_path))
+
+        assert "path" not in result[0]
+        assert Path(str(result[1]["path"])).is_absolute()
+
+    def test_resolves_paths_correctly(self, tmp_path: Path) -> None:
+        """Test that paths are resolved relative to base directory."""
+        base_dir = tmp_path / "archive"
+        base_dir.mkdir()
+
+        data: list[dict[str, str | int]] = [
+            {"path": "subdir/file.jpg", "size": 100},
+        ]
+
+        result = normalize_paths(data, str(base_dir))
+
+        expected_path = base_dir / "subdir/file.jpg"
+        assert str(result[0]["path"]) == str(expected_path)

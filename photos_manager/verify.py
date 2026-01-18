@@ -215,6 +215,40 @@ def calculate_file_hash(file_path: str) -> str:
     return sha1_hash.hexdigest()
 
 
+def normalize_paths(
+    data: list[dict[str, str | int]], base_directory: str
+) -> list[dict[str, str | int]]:
+    """Normalize relative paths in metadata to absolute paths.
+
+    Converts relative file paths in JSON metadata to absolute paths based on
+    the archive directory. This ensures that verification works correctly
+    regardless of the current working directory.
+
+    Args:
+        data: List of file metadata dictionaries.
+        base_directory: Base directory of the archive (used to resolve relative paths).
+
+    Returns:
+        list: Modified data with absolute paths.
+
+    Examples:
+        >>> data = [{'path': 'photos/img.jpg', 'size': 100}]
+        >>> normalized = normalize_paths(data, '/archive')
+        >>> normalized[0]['path']
+        '/archive/photos/img.jpg'
+    """
+    base_path = Path(base_directory).resolve()
+
+    for entry in data:
+        if "path" in entry:
+            file_path = Path(str(entry["path"]))
+            # If path is relative, make it absolute relative to base_directory
+            if not file_path.is_absolute():
+                entry["path"] = str(base_path / file_path)
+
+    return data
+
+
 def verify_file_entry(
     entry: dict[str, str | int], verify_checksums: bool = False
 ) -> tuple[bool, list[str]]:
@@ -1414,6 +1448,8 @@ def run(args: argparse.Namespace) -> int:
 
         try:
             data = load_json(json_file)
+            # Normalize relative paths to absolute paths based on archive directory
+            data = normalize_paths(data, args.directory)
             all_data.extend(data)
             file_count = len(data)
             total_files += file_count
