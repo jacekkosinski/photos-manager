@@ -28,6 +28,7 @@ from photos_manager.verify import (
     verify_directory_timestamps,
     verify_file_entry,
     verify_json_file_timestamp,
+    verify_permissions,
     verify_timestamps,
     verify_version_file,
     verify_version_file_timestamp,
@@ -1862,3 +1863,178 @@ class TestMain:
         captured = capsys.readouterr()
         assert "missing file(s) from filesystem" in captured.out
         assert "missing.jpg" in captured.err
+
+
+class TestVerifyPermissions:
+    """Tests for verify_permissions function."""
+
+    def test_correct_permissions_and_ownership(self, tmp_path: Path) -> None:
+        """Test that correct permissions and ownership return no errors."""
+        # Create test structure
+        test_file = tmp_path / "photos" / "test.jpg"
+        test_file.parent.mkdir()
+        test_file.write_bytes(b"Test")
+
+        json_file = tmp_path / "archive.json"
+        sha1, md5 = calculate_checksums(str(test_file))
+        data: list[dict[str, str | int]] = [
+            {
+                "path": str(test_file),
+                "size": 4,
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2024-01-01T12:00:00+00:00",
+            }
+        ]
+        json_file.write_text(json.dumps(data))
+
+        # Set correct permissions
+        test_file.chmod(0o644)
+        test_file.parent.chmod(0o755)
+        json_file.chmod(0o644)
+        tmp_path.chmod(0o755)
+
+        # Get current user and group
+        import grp
+        import pwd
+
+        current_uid = os.getuid()
+        current_gid = os.getgid()
+        current_user = pwd.getpwuid(current_uid).pw_name
+        current_group = grp.getgrgid(current_gid).gr_name
+
+        errors = verify_permissions(
+            str(tmp_path), [str(json_file)], None, data, current_user, current_group
+        )
+
+        assert errors == {}
+
+    def test_detects_incorrect_file_permissions(self, tmp_path: Path) -> None:
+        """Test that incorrect file permissions are detected."""
+        test_file = tmp_path / "test.jpg"
+        test_file.write_bytes(b"Test")
+
+        # Set incorrect permissions (755 instead of 644)
+        test_file.chmod(0o755)
+
+        import grp
+        import pwd
+
+        current_uid = os.getuid()
+        current_gid = os.getgid()
+        current_user = pwd.getpwuid(current_uid).pw_name
+        current_group = grp.getgrgid(current_gid).gr_name
+
+        data: list[dict[str, str | int]] = [
+            {"path": str(test_file), "size": 4, "sha1": "abc", "md5": "def"}
+        ]
+
+        errors = verify_permissions(str(tmp_path), [], None, data, current_user, current_group)
+
+        assert str(test_file) in errors
+        assert any(issue_type == "permissions" for issue_type, _ in errors[str(test_file)])
+
+    def test_detects_incorrect_directory_permissions(self, tmp_path: Path) -> None:
+        """Test that incorrect directory permissions are detected."""
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        test_file = test_dir / "test.jpg"
+        test_file.write_bytes(b"Test")
+
+        # Set permissions - file first, then directory
+        test_file.chmod(0o644)
+        # Set incorrect directory permissions (644 instead of 755)
+        test_dir.chmod(0o644)
+
+        import grp
+        import pwd
+
+        current_uid = os.getuid()
+        current_gid = os.getgid()
+        current_user = pwd.getpwuid(current_uid).pw_name
+        current_group = grp.getgrgid(current_gid).gr_name
+
+        data: list[dict[str, str | int]] = [
+            {"path": str(test_file), "size": 4, "sha1": "abc", "md5": "def"}
+        ]
+
+        errors = verify_permissions(str(tmp_path), [], None, data, current_user, current_group)
+
+        # Restore permissions for cleanup
+        test_dir.chmod(0o755)
+
+        assert str(test_dir) in errors
+        assert any(issue_type == "permissions" for issue_type, _ in errors[str(test_dir)])
+
+    def test_handles_nonexistent_file(self, tmp_path: Path) -> None:
+        """Test that nonexistent files are handled gracefully."""
+        # Create subdirectory with correct permissions
+        photos_dir = tmp_path / "photos"
+        photos_dir.mkdir()
+        photos_dir.chmod(0o755)
+        tmp_path.chmod(0o755)
+
+        nonexistent = photos_dir / "nonexistent.jpg"
+
+        import grp
+        import pwd
+
+        current_uid = os.getuid()
+        current_gid = os.getgid()
+        current_user = pwd.getpwuid(current_uid).pw_name
+        current_group = grp.getgrgid(current_gid).gr_name
+
+        data: list[dict[str, str | int]] = [
+            {"path": str(nonexistent), "size": 4, "sha1": "abc", "md5": "def"}
+        ]
+
+        errors = verify_permissions(str(tmp_path), [], None, data, current_user, current_group)
+
+        # Nonexistent files should not generate errors (just skipped)
+        assert errors == {}
+
+    def test_checks_version_file_permissions(self, tmp_path: Path) -> None:
+        """Test that version file permissions are checked."""
+        version_file = tmp_path / ".version.json"
+        version_file.write_text(json.dumps({"version": "test"}))
+
+        # Set incorrect permissions
+        version_file.chmod(0o755)
+
+        import grp
+        import pwd
+
+        current_uid = os.getuid()
+        current_gid = os.getgid()
+        current_user = pwd.getpwuid(current_uid).pw_name
+        current_group = grp.getgrgid(current_gid).gr_name
+
+        errors = verify_permissions(
+            str(tmp_path), [], str(version_file), [], current_user, current_group
+        )
+
+        assert str(version_file) in errors
+        assert any(issue_type == "permissions" for issue_type, _ in errors[str(version_file)])
+
+    def test_checks_json_file_permissions(self, tmp_path: Path) -> None:
+        """Test that JSON file permissions are checked."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps([]))
+
+        # Set incorrect permissions
+        json_file.chmod(0o600)
+
+        import grp
+        import pwd
+
+        current_uid = os.getuid()
+        current_gid = os.getgid()
+        current_user = pwd.getpwuid(current_uid).pw_name
+        current_group = grp.getgrgid(current_gid).gr_name
+
+        errors = verify_permissions(
+            str(tmp_path), [str(json_file)], None, [], current_user, current_group
+        )
+
+        assert str(json_file) in errors
+        assert any(issue_type == "permissions" for issue_type, _ in errors[str(json_file)])

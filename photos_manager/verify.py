@@ -25,10 +25,13 @@ Usage:
 """
 
 import argparse
+import grp
 import hashlib
 import json
 import os
+import pwd
 import re
+import stat
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -1124,6 +1127,161 @@ def _verify_date_formats(all_data: list[dict[str, str | int]], version_file: str
     return total_errors
 
 
+def verify_permissions(
+    directory: str,
+    json_files: list[str],
+    version_file: str | None,
+    all_data: list[dict[str, str | int]],
+    expected_owner: str,
+    expected_group: str,
+) -> dict[str, list[tuple[str, str]]]:
+    """Verify file and directory permissions and ownership.
+
+    Checks that:
+    - All files (.version.json, *.json, archive files) have 644 permissions
+    - All directories have 755 permissions
+    - All files and directories have correct owner and group
+
+    Args:
+        directory: Root directory of the archive.
+        json_files: List of JSON metadata file paths.
+        version_file: Path to .version.json file if present, None otherwise.
+        all_data: Combined metadata from all JSON files.
+        expected_owner: Expected owner username.
+        expected_group: Expected group name.
+
+    Returns:
+        dict: Mapping of file/directory paths to list of tuples (issue_type, description).
+              Empty dict if all permissions are correct.
+
+    Examples:
+        >>> errors = verify_permissions('/archive', ['a.json'], None, data, 'storage', 'storage')
+        >>> errors['/archive/file.jpg']
+        [('permissions', 'Expected 644, got 755'), ('owner', 'Expected storage, got user')]
+    """
+    errors: dict[str, list[tuple[str, str]]] = {}
+    expected_file_perms = 0o644
+    expected_dir_perms = 0o755
+
+    def check_path(path_str: str, is_directory: bool) -> None:
+        """Check permissions and ownership for a single path."""
+        try:
+            path = Path(path_str)
+            if not path.exists():
+                return
+
+            file_stat = path.stat()
+            current_perms = stat.S_IMODE(file_stat.st_mode)
+            expected_perms = expected_dir_perms if is_directory else expected_file_perms
+
+            path_errors: list[tuple[str, str]] = []
+
+            # Check permissions
+            if current_perms != expected_perms:
+                path_errors.append(
+                    (
+                        "permissions",
+                        f"Expected {oct(expected_perms)}, got {oct(current_perms)}",
+                    )
+                )
+
+            # Check owner
+            try:
+                current_owner = pwd.getpwuid(file_stat.st_uid).pw_name
+                if current_owner != expected_owner:
+                    path_errors.append(("owner", f"Expected {expected_owner}, got {current_owner}"))
+            except KeyError:
+                path_errors.append(("owner", f"Unknown owner UID: {file_stat.st_uid}"))
+
+            # Check group
+            try:
+                current_group = grp.getgrgid(file_stat.st_gid).gr_name
+                if current_group != expected_group:
+                    path_errors.append(("group", f"Expected {expected_group}, got {current_group}"))
+            except KeyError:
+                path_errors.append(("group", f"Unknown group GID: {file_stat.st_gid}"))
+
+            if path_errors:
+                errors[str(path)] = path_errors
+
+        except (OSError, PermissionError) as e:
+            errors[str(path_str)] = [("access", f"Cannot access: {e}")]
+
+    # Check version file
+    if version_file:
+        check_path(version_file, is_directory=False)
+
+    # Check JSON files
+    for json_file in json_files:
+        check_path(json_file, is_directory=False)
+
+    # Check archive files from metadata
+    checked_dirs: set[str] = set()
+    for entry in all_data:
+        file_path = entry.get("path")
+        if not file_path:
+            continue
+
+        # Check file
+        check_path(str(file_path), is_directory=False)
+
+        # Check all parent directories
+        path = Path(str(file_path))
+        for parent in path.parents:
+            parent_str = str(parent)
+            if parent_str not in checked_dirs and parent_str.startswith(directory):
+                check_path(parent_str, is_directory=True)
+                checked_dirs.add(parent_str)
+
+    # Check archive directory itself
+    check_path(directory, is_directory=True)
+
+    return errors
+
+
+def _verify_permissions_check(
+    directory: str,
+    json_files: list[str],
+    version_file: str | None,
+    all_data: list[dict[str, str | int]],
+    expected_owner: str,
+    expected_group: str,
+) -> int:
+    """Verify permissions and ownership of files and directories.
+
+    Helper function for run() that checks permissions and ownership.
+
+    Args:
+        directory: Root directory of the archive.
+        json_files: List of JSON metadata file paths.
+        version_file: Path to .version.json file if present, None otherwise.
+        all_data: Combined metadata from all JSON files.
+        expected_owner: Expected owner username.
+        expected_group: Expected group name.
+
+    Returns:
+        int: Number of errors found (files/dirs with incorrect permissions/ownership).
+    """
+    total_errors = 0
+
+    print("\nChecking file and directory permissions...")
+    permission_errors = verify_permissions(
+        directory, json_files, version_file, all_data, expected_owner, expected_group
+    )
+
+    if permission_errors:
+        print(f"  Found {len(permission_errors)} file(s)/directory(ies) with incorrect settings:")
+        for path, issues in sorted(permission_errors.items()):
+            print(f"    {path}:", file=sys.stderr)
+            for issue_type, description in issues:
+                print(f"      {issue_type}: {description}", file=sys.stderr)
+                total_errors += 1
+    else:
+        print("  All permissions and ownership are correct")
+
+    return total_errors
+
+
 def setup_parser(parser: argparse.ArgumentParser) -> None:
     """Configure argument parser for verify command.
 
@@ -1157,6 +1315,24 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Check for extra files in filesystem not present in metadata",
     )
+    parser.add_argument(
+        "-p",
+        "--check-permissions",
+        action="store_true",
+        help="Verify file permissions (644) and directory permissions (755)",
+    )
+    parser.add_argument(
+        "--owner",
+        type=str,
+        default="storage",
+        help="Expected owner username for all files and directories (default: storage)",
+    )
+    parser.add_argument(
+        "--group",
+        type=str,
+        default="storage",
+        help="Expected group name for all files and directories (default: storage)",
+    )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -1179,6 +1355,7 @@ def run(args: argparse.Namespace) -> int:
     10. Checks for duplicate SHA1 and MD5 checksums
     11. Validates date formats in metadata (ISO 8601 with colon in timezone)
     12. Validates date formats in .version.json file
+    13. Optionally verifies file/directory permissions and ownership (with check_permissions flag)
 
     Args:
         args: Parsed command-line arguments with fields:
@@ -1187,6 +1364,9 @@ def run(args: argparse.Namespace) -> int:
             - check_timestamps: Whether to verify file and directory timestamps
             - tolerance: Timestamp tolerance in seconds
             - check_extra_files: Whether to check for extra files not in metadata
+            - check_permissions: Whether to verify permissions and ownership
+            - owner: Expected owner username (default: 'storage')
+            - group: Expected group name (default: 'storage')
 
     Returns:
         int: Exit code indicating success or failure
@@ -1320,6 +1500,12 @@ def run(args: argparse.Namespace) -> int:
 
     # Check date formats in metadata and version file
     total_errors += _verify_date_formats(all_data, version_file)
+
+    # Check permissions and ownership if requested
+    if args.check_permissions:
+        total_errors += _verify_permissions_check(
+            args.directory, json_files, version_file, all_data, args.owner, args.group
+        )
 
     # Summary
     print(f"\n{'=' * 60}")
