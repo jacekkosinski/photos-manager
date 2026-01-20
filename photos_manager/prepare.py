@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """prepare - Prepare directories for archiving by fixing permissions and filenames.
 
 This script checks and fixes:
@@ -666,26 +665,3 @@ def run(args: argparse.Namespace) -> int:
         print("\nMode: DRY-RUN (use without -n to apply fixes)")
 
     return os.EX_OK if all_success else 1
-
-
-def main() -> int:
-    """Main entry point for standalone execution.
-
-    Creates argument parser, parses command-line arguments, and executes
-    the prepare command.
-
-    Returns:
-        Exit code from the run function.
-    """
-    parser = argparse.ArgumentParser(
-        prog="prepare",
-        description="Prepare directories for archiving by fixing permissions and filenames",
-        epilog="Hidden files and directories (starting with .) are skipped.",
-    )
-    setup_parser(parser)
-    args = parser.parse_args()
-    return run(args)
-
-
-if __name__ == "__main__":
-    sys.exit(main())

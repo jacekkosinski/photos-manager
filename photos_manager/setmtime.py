@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """setmtime - Set file and directory timestamps based on JSON metadata.
 
 This script updates modification timestamps of files and directories to match
@@ -453,29 +452,3 @@ def run(args: argparse.Namespace) -> int:
             continue
 
     return os.EX_OK
-
-
-def main() -> int:
-    """Main entry point for standalone execution.
-
-    Creates argument parser, configures it with setup_parser(),
-    parses command-line arguments, and executes run().
-
-    This function exists for backward compatibility and standalone
-    execution. The unified CLI uses setup_parser() and run() directly.
-
-    Returns:
-        int: Exit code from run()
-            - os.EX_OK (0): Successful execution
-            - 1+: Error occurred during processing
-    """
-    parser = argparse.ArgumentParser(
-        description="Set timestamps for directories and JSON files based on newest file metadata."
-    )
-    setup_parser(parser)
-    args = parser.parse_args()
-    return run(args)
-
-
-if __name__ == "__main__":
-    sys.exit(main())

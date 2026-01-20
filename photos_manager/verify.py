@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """verify - Verify archive integrity based on JSON metadata.
 
 This script verifies the integrity of photo archives by checking:
@@ -1555,27 +1554,3 @@ def run(args: argparse.Namespace) -> int:
 
     print(f"  Result: FAIL - Verification failed with {total_errors} error(s)", file=sys.stderr)
     return 1
-
-
-def main() -> int:
-    """Main entry point for standalone execution.
-
-    Creates argument parser, configures it with setup_parser(),
-    parses command-line arguments, and executes run().
-
-    This function exists for backward compatibility and standalone
-    execution. The unified CLI uses setup_parser() and run() directly.
-
-    Returns:
-        int: Exit code from run()
-            - os.EX_OK (0): All verifications passed
-            - 1: One or more verifications failed
-    """
-    parser = argparse.ArgumentParser(description="Verify archive integrity based on JSON metadata.")
-    setup_parser(parser)
-    args = parser.parse_args()
-    return run(args)
-
-
-if __name__ == "__main__":
-    sys.exit(main())
