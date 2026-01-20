@@ -123,8 +123,11 @@ def find_json_files(directory: str) -> list[str]:
         >>> files[0]
         '/path/to/archive/data/file1.json'
     """
+    # Convert to absolute path with symlinks resolved to match normalize_paths behavior
+    base_path = Path(directory).resolve()
+
     json_files = []
-    for root, _, files in os.walk(directory):
+    for root, _, files in os.walk(base_path):
         for file in files:
             # Skip version.json files (they have different structure)
             if file.endswith(".json") and not file.endswith("version.json"):
@@ -153,7 +156,9 @@ def find_version_file(directory: str) -> str | None:
         >>> version_file
         '/path/to/archive/.version.json'
     """
-    version_path = Path(directory) / ".version.json"
+    # Convert to absolute path with symlinks resolved to match normalize_paths behavior
+    base_path = Path(directory).resolve()
+    version_path = base_path / ".version.json"
     if version_path.exists():
         return str(version_path)
     return None
@@ -946,8 +951,8 @@ def _get_json_files_list(directory: str, version_file: str | None) -> tuple[list
         try:
             version_data = load_version_json(version_file)
             if "files" in version_data:
-                # Convert filenames to full paths
-                version_dir = Path(directory)
+                # Convert filenames to full paths with symlinks resolved
+                version_dir = Path(directory).resolve()
                 json_files = [str(version_dir / filename) for filename in version_data["files"]]
             else:
                 print("Warning: Version file has no 'files' field", file=sys.stderr)
