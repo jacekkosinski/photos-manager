@@ -1073,6 +1073,13 @@ class TestValidateDateFormat:
         assert error is not None
         assert "ISO 8601" in error
 
+    def test_invalid_date_without_t_separator(self) -> None:
+        """Test that function rejects date without T separator between date and time."""
+        is_valid, error = validate_date_format("2024-01-01 12:00:00+02:00")
+        assert is_valid is False
+        assert error is not None
+        assert "T" in error
+
 
 class TestFindInvalidDates:
     """Tests for find_invalid_dates function."""

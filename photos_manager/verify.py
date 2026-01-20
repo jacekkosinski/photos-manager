@@ -849,6 +849,15 @@ def validate_date_format(date_str: str) -> tuple[bool, str | None]:
     except (ValueError, TypeError) as e:
         return False, f"Invalid ISO 8601 format: {e}"
 
+    # Check for 'T' separator between date and time
+    # Valid: 2024-01-01T12:00:00+02:00
+    # Invalid: 2024-01-01 12:00:00+02:00
+    if "T" not in str(date_str):
+        return (
+            False,
+            "Date format must use 'T' separator between date and time",
+        )
+
     # Check timezone format - must have colon or be Z (UTC)
     # Valid: +02:00, -05:00, Z
     # Invalid: +0200, -0500
