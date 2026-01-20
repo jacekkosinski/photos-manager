@@ -587,7 +587,10 @@ def collect_filesystem_files(directory: str) -> tuple[set[str], set[str]]:
     regular_files = set()
     json_files = set()
 
-    for root, _, files in os.walk(directory):
+    # Convert to absolute path with symlinks resolved to match normalize_paths behavior
+    base_path = Path(directory).resolve()
+
+    for root, _, files in os.walk(base_path):
         for file in files:
             file_path = str(Path(root) / file)
             if file.endswith(".json"):
