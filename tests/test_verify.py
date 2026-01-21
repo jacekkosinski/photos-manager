@@ -24,6 +24,7 @@ from photos_manager.verify import (
     normalize_paths,
     validate_date_format,
     validate_version_file_dates,
+    verify_archive_directory_timestamp,
     verify_directory_timestamps,
     verify_file_entry,
     verify_json_file_timestamp,
@@ -537,6 +538,93 @@ class TestVerifyVersionFileTimestamp:
         json_files: list[str] = []
 
         success, errors = verify_version_file_timestamp(str(version_file), json_files)
+
+        assert success is False
+        assert any("No JSON files" in err for err in errors)
+
+
+class TestVerifyArchiveDirectoryTimestamp:
+    """Tests for verify_archive_directory_timestamp function."""
+
+    def test_verifies_archive_directory_timestamp(self, tmp_path: Path) -> None:
+        """Test that archive directory timestamp is verified correctly."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+
+        json_file1 = archive_dir / "archive1.json"
+        json_file1.write_text("[]")
+
+        json_file2 = archive_dir / "archive2.json"
+        json_file2.write_text("[]")
+
+        # Set directory timestamp to match newest JSON file
+        target_timestamp = int(json_file2.stat().st_mtime)
+        os.utime(str(archive_dir), (target_timestamp, target_timestamp))
+
+        json_files = [str(json_file1), str(json_file2)]
+
+        success, errors = verify_archive_directory_timestamp(str(archive_dir), json_files)
+
+        assert success is True
+        assert len(errors) == 0
+
+    def test_detects_archive_directory_timestamp_mismatch(self, tmp_path: Path) -> None:
+        """Test that archive directory timestamp mismatch is detected."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+
+        json_file = archive_dir / "archive.json"
+        json_file.write_text("[]")
+
+        # Set very different timestamp on directory
+        old_timestamp = int(datetime.fromisoformat("2020-01-01T00:00:00+00:00").timestamp())
+        os.utime(str(archive_dir), (old_timestamp, old_timestamp))
+
+        json_files = [str(json_file)]
+
+        success, errors = verify_archive_directory_timestamp(str(archive_dir), json_files)
+
+        assert success is False
+        assert any("timestamp mismatch" in err for err in errors)
+
+    def test_handles_nonexistent_directory(self, tmp_path: Path) -> None:
+        """Test that error is returned for nonexistent directory."""
+        archive_dir = tmp_path / "archive"
+
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        json_files = [str(json_file)]
+
+        success, errors = verify_archive_directory_timestamp(str(archive_dir), json_files)
+
+        assert success is False
+        assert any("not found" in err for err in errors)
+
+    def test_handles_path_is_not_directory(self, tmp_path: Path) -> None:
+        """Test that error is returned when path is not a directory."""
+        # Create a file instead of a directory
+        archive_file = tmp_path / "archive.txt"
+        archive_file.write_text("not a directory")
+
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        json_files = [str(json_file)]
+
+        success, errors = verify_archive_directory_timestamp(str(archive_file), json_files)
+
+        assert success is False
+        assert any("not a directory" in err for err in errors)
+
+    def test_handles_empty_json_files_list(self, tmp_path: Path) -> None:
+        """Test that error is returned for empty JSON files list."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+
+        json_files: list[str] = []
+
+        success, errors = verify_archive_directory_timestamp(str(archive_dir), json_files)
 
         assert success is False
         assert any("No JSON files" in err for err in errors)

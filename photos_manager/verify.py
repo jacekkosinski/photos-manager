@@ -6,6 +6,7 @@ This script verifies the integrity of photo archives by checking:
 - File modification timestamps (mtime) match metadata
 - Directory timestamps match newest file
 - JSON file timestamps match newest entry
+- Archive directory timestamp matches newest JSON file (with --check-timestamps)
 - SHA-1 and MD5 checksums (with --all flag, time-consuming)
 - Version file integrity (.version.json)
 - Extra files in filesystem not present in metadata (with --check-extra-files)
@@ -570,6 +571,71 @@ def verify_version_file_timestamp(
     return True, errors
 
 
+def verify_archive_directory_timestamp(
+    directory: str, json_files: list[str]
+) -> tuple[bool, list[str]]:
+    """Verify archive directory timestamp matches newest JSON file.
+
+    Checks if the modification timestamp of the archive directory matches the
+    modification timestamp of the newest JSON metadata file in the archive.
+
+    Args:
+        directory: Path to the archive directory.
+        json_files: List of JSON metadata files to check.
+
+    Returns:
+        Tuple containing:
+            - bool: True if timestamp matches, False otherwise
+            - list[str]: List of error messages (empty if no errors)
+
+    Examples:
+        >>> success, errors = verify_archive_directory_timestamp("/archive", ["a.json"])
+        >>> success
+        True
+    """
+    errors = []
+
+    if not json_files:
+        errors.append("No JSON files to compare directory timestamp")
+        return False, errors
+
+    dir_path = Path(directory).resolve()
+    if not dir_path.exists():
+        errors.append(f"Directory not found: {directory}")
+        return False, errors
+
+    if not dir_path.is_dir():
+        errors.append(f"Path is not a directory: {directory}")
+        return False, errors
+
+    try:
+        # Find newest JSON file by modification time
+        newest_json_file = max(json_files, key=lambda f: Path(f).stat().st_mtime)
+        newest_json_path = Path(newest_json_file)
+
+        if not newest_json_path.exists():
+            errors.append(f"Newest JSON file not found: {newest_json_file}")
+            return False, errors
+
+        # Get timestamps
+        dir_mtime = int(dir_path.stat().st_mtime)
+        json_mtime = int(newest_json_path.stat().st_mtime)
+
+        if dir_mtime != json_mtime:
+            errors.append(
+                f"Archive directory timestamp mismatch: "
+                f"expected {json_mtime} (from {newest_json_path.name}), "
+                f"got {dir_mtime}, diff: {abs(dir_mtime - json_mtime)}s"
+            )
+            return False, errors
+
+    except OSError as e:
+        errors.append(f"Error verifying archive directory timestamp: {e}")
+        return False, errors
+
+    return True, errors
+
+
 def collect_filesystem_files(directory: str) -> tuple[set[str], set[str]]:
     """Collect all files from filesystem in given directory.
 
@@ -1034,6 +1100,7 @@ def _verify_version_file_and_timestamps(
     json_files: list[str],
     all_data: list[dict[str, str | int]],
     check_timestamps: bool,
+    directory: str,
 ) -> int:
     """Verify version file timestamp and integrity.
 
@@ -1042,6 +1109,7 @@ def _verify_version_file_and_timestamps(
         json_files: List of JSON metadata files.
         all_data: Combined data from all JSON files.
         check_timestamps: Whether to check timestamps.
+        directory: Path to the archive directory.
 
     Returns:
         Number of errors found.
@@ -1063,6 +1131,16 @@ def _verify_version_file_and_timestamps(
                     print(f"  Error: {error}", file=sys.stderr)
             else:
                 print("  Version file timestamp OK")
+
+        # Verify archive directory timestamp
+        print("\nVerifying archive directory timestamp...")
+        success, errors = verify_archive_directory_timestamp(directory, json_files)
+        if not success:
+            total_errors += len(errors)
+            for error in errors:
+                print(f"  Error: {error}", file=sys.stderr)
+        else:
+            print("  Archive directory timestamp OK")
 
     # Verify version file if found
     if version_file:
@@ -1399,13 +1477,15 @@ def run(args: argparse.Namespace) -> int:
     4. Optionally verifies SHA-1 and MD5 checksums (with all flag, time-consuming)
     5. Optionally verifies directory timestamps (with check_timestamps flag)
     6. Optionally verifies JSON file timestamps (with check_timestamps flag)
-    7. If .version.json found, verifies version integrity
-    8. Optionally checks for extra files in filesystem (with check_extra_files flag)
-    9. Checks for zero-byte files in metadata
-    10. Checks for duplicate SHA1 and MD5 checksums
-    11. Validates date formats in metadata (ISO 8601 with colon in timezone)
-    12. Validates date formats in .version.json file
-    13. Optionally verifies file/directory permissions and ownership (with check_permissions flag)
+    7. Optionally verifies archive directory timestamp matches newest JSON file
+       (with check_timestamps flag)
+    8. If .version.json found, verifies version integrity
+    9. Optionally checks for extra files in filesystem (with check_extra_files flag)
+    10. Checks for zero-byte files in metadata
+    11. Checks for duplicate SHA1 and MD5 checksums
+    12. Validates date formats in metadata (ISO 8601 with colon in timezone)
+    13. Validates date formats in .version.json file
+    14. Optionally verifies file/directory permissions and ownership (with check_permissions flag)
 
     Args:
         args: Parsed command-line arguments with fields:
@@ -1506,7 +1586,7 @@ def run(args: argparse.Namespace) -> int:
 
     # Verify version file and timestamps
     total_errors += _verify_version_file_and_timestamps(
-        version_file, json_files, all_data, args.check_timestamps
+        version_file, json_files, all_data, args.check_timestamps, args.directory
     )
 
     # Check for extra files if requested
