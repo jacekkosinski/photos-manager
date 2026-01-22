@@ -7,6 +7,7 @@ a unified interface to all photo management commands:
 - mkversion: Generate archive version information
 - setmtime: Update file timestamps based on metadata
 - verify: Verify archive integrity
+- sync: Synchronize source and destination archives
 - prepare: Prepare directories for archiving (fix permissions, ownership, filenames)
 
 Usage:
@@ -14,6 +15,7 @@ Usage:
     photos mkversion /path/to/archive
     photos setmtime archive.json
     photos verify /path/to/archive
+    photos sync /source/archive /dest/archive
     photos prepare /path/to/directory --dry-run
 """
 
@@ -21,7 +23,7 @@ import argparse
 import sys
 from typing import cast
 
-from photos_manager import __version__, mkjson, mkversion, prepare, setmtime, verify
+from photos_manager import __version__, mkjson, mkversion, prepare, setmtime, sync, verify
 
 
 def main() -> int:
@@ -100,6 +102,15 @@ def main() -> int:
     )
     verify.setup_parser(verify_parser)
     verify_parser.set_defaults(func=verify.run)
+
+    # sync subcommand
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Synchronize source and destination archives",
+        description="Generate minimal sync commands for archive synchronization",
+    )
+    sync.setup_parser(sync_parser)
+    sync_parser.set_defaults(func=sync.run)
 
     # prepare subcommand
     prepare_parser = subparsers.add_parser(
