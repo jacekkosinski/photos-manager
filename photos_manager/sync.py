@@ -279,36 +279,48 @@ def compute_sync_plan(
     return operations, warnings
 
 
-def optimize_operations(operations: list[SyncOperation]) -> list[SyncOperation]:
+def optimize_operations(
+    operations: list[SyncOperation], dest_data: list[dict[str, str | int]]
+) -> list[SyncOperation]:
     """Optimize operations to minimize work.
 
     Performs:
-    - Detects required directories and adds mkdir operations
+    - Detects required directories and adds mkdir operations only for new directories
     - Sorts operations by dependency order
 
     Args:
         operations: List of sync operations
+        dest_data: Destination archive metadata to check existing directories
 
     Returns:
         Optimized and sorted list of operations
 
     Examples:
         >>> ops = [SyncOperation('copy', '/src/a.jpg', '/dest/new/a.jpg', 123, 'test')]
-        >>> optimized = optimize_operations(ops)
+        >>> optimized = optimize_operations(ops, [])
         >>> optimized[0].op_type
         'mkdir'
     """
     optimized: list[SyncOperation] = []
+
+    # Build set of existing directories from destination data
+    existing_dirs: set[str] = set()
+    for entry in dest_data:
+        file_path = str(entry.get("path", ""))
+        if file_path:
+            parent = str(Path(file_path).parent)
+            if parent != "/" and parent != ".":
+                existing_dirs.add(parent)
 
     # Extract directories that need to exist
     required_dirs: set[str] = set()
     for op in operations:
         if op.op_type in ("copy", "move", "touch"):
             parent = str(Path(op.dest_path).parent)
-            if parent != "/" and parent != ".":
+            if parent != "/" and parent != "." and parent not in existing_dirs:
                 required_dirs.add(parent)
 
-    # Add mkdir operations
+    # Add mkdir operations only for directories that don't exist
     for dir_path in sorted(required_dirs):
         optimized.append(
             SyncOperation(
@@ -804,7 +816,7 @@ def run(args: argparse.Namespace) -> int:
     operations.extend(metadata_ops)
 
     # Optimize operations
-    operations = optimize_operations(operations)
+    operations = optimize_operations(operations, dest_data)
 
     # Filter operations if requested
     if args.no_delete:

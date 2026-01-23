@@ -334,7 +334,8 @@ class TestOptimizeOperations:
             )
         ]
 
-        optimized = sync.optimize_operations(operations)
+        # Empty dest_data means directory doesn't exist
+        optimized = sync.optimize_operations(operations, [])
 
         # Should have mkdir + copy
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -350,7 +351,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("move", "/dest/old.jpg", "/dest/new.jpg", None, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations)
+        optimized = sync.optimize_operations(operations, [])
 
         # Find indices of each operation type
         op_types = [op.op_type for op in optimized]
@@ -370,7 +371,7 @@ class TestOptimizeOperations:
 
     def test_optimize_empty_operations(self):
         """Test optimize with empty operations list."""
-        optimized = sync.optimize_operations([])
+        optimized = sync.optimize_operations([], [])
         assert len(optimized) == 0
 
     def test_optimize_no_new_directories(self):
@@ -379,9 +380,24 @@ class TestOptimizeOperations:
             sync.SyncOperation("touch", None, "/existing/file.jpg", 123, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations)
+        # Destination has file in /existing/ so directory exists
+        dest_data = [
+            {
+                "path": "/existing/other.jpg",
+                "sha1": "abc",
+                "md5": "def",
+                "size": 100,
+                "date": "2024-01-01T12:00:00+00:00",
+            }
+        ]
 
-        # Should have same operations (maybe with mkdir for parent)
+        optimized = sync.optimize_operations(operations, dest_data)
+
+        # Should have no mkdir since directory already exists
+        mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
+        assert len(mkdir_ops) == 0
+
+        # Should have the touch operation
         touch_ops = [op for op in optimized if op.op_type == "touch"]
         assert len(touch_ops) == 1
 
@@ -392,7 +408,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("copy", "/src/photo2.jpg", "/dest/newdir/photo2.jpg", 456, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations)
+        optimized = sync.optimize_operations(operations, [])
 
         # Should have one mkdir + two copies
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -407,7 +423,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("copy", "/src/m.jpg", "/dest/m.jpg", 789, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations)
+        optimized = sync.optimize_operations(operations, [])
 
         copy_ops = [op for op in optimized if op.op_type == "copy"]
         copy_paths = [op.dest_path for op in copy_ops]
