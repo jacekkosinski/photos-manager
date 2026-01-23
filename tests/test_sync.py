@@ -1022,3 +1022,362 @@ class TestMain:
 
         # Should cancel (exit code 1)
         assert exit_code == 1
+
+
+class TestLoadVersionData:
+    """Tests for load_version_data function."""
+
+    def test_load_version_data_valid(self, tmp_path):
+        """Test loading valid .version.json file."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+
+        version_file = archive_dir / ".version.json"
+        version_data = {
+            "version": "photos-1.234-567",
+            "files": {"photos.json": "abc123", "videos.json": "def456"},
+            "total_bytes": 1000000,
+            "file_count": 100,
+        }
+        version_file.write_text(json.dumps(version_data))
+
+        data, path = sync.load_version_data(str(archive_dir))
+
+        assert data is not None
+        assert path is not None
+        assert data["version"] == "photos-1.234-567"
+        assert "files" in data
+        files = data["files"]
+        assert isinstance(files, dict)
+        assert files["photos.json"] == "abc123"
+
+    def test_load_version_data_missing(self, tmp_path):
+        """Test loading when .version.json is missing."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+
+        data, path = sync.load_version_data(str(archive_dir))
+
+        assert data is None
+        assert path is None
+
+    def test_load_version_data_invalid_json(self, tmp_path):
+        """Test loading invalid .version.json file."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+
+        version_file = archive_dir / ".version.json"
+        version_file.write_text("{ invalid json }")
+
+        data, path = sync.load_version_data(str(archive_dir))
+
+        assert data is None
+        assert path is not None  # Path exists but data is None
+
+
+class TestCompareVersionFiles:
+    """Tests for compare_version_files function."""
+
+    def test_compare_identical_versions(self):
+        """Test comparing identical version files."""
+        source = {"files": {"a.json": "abc123", "b.json": "def456"}}
+        dest = {"files": {"a.json": "abc123", "b.json": "def456"}}
+
+        changed, new, deleted = sync.compare_version_files(source, dest)
+
+        assert len(changed) == 0
+        assert len(new) == 0
+        assert len(deleted) == 0
+
+    def test_compare_changed_json(self):
+        """Test detecting changed JSON files."""
+        source = {"files": {"a.json": "abc123", "b.json": "new456"}}
+        dest = {"files": {"a.json": "abc123", "b.json": "old456"}}
+
+        changed, new, deleted = sync.compare_version_files(source, dest)
+
+        assert "b.json" in changed
+        assert len(new) == 0
+        assert len(deleted) == 0
+
+    def test_compare_new_json(self):
+        """Test detecting new JSON files in source."""
+        source = {"files": {"a.json": "abc123", "c.json": "new789"}}
+        dest = {"files": {"a.json": "abc123"}}
+
+        changed, new, deleted = sync.compare_version_files(source, dest)
+
+        assert len(changed) == 0
+        assert "c.json" in new
+        assert len(deleted) == 0
+
+    def test_compare_deleted_json(self):
+        """Test detecting deleted JSON files."""
+        source = {"files": {"a.json": "abc123"}}
+        dest = {"files": {"a.json": "abc123", "old.json": "delete"}}
+
+        changed, new, deleted = sync.compare_version_files(source, dest)
+
+        assert len(changed) == 0
+        assert len(new) == 0
+        assert "old.json" in deleted
+
+    def test_compare_with_none_source(self):
+        """Test comparing when source version is None."""
+        dest = {"files": {"a.json": "abc123"}}
+
+        changed, new, deleted = sync.compare_version_files(None, dest)
+
+        assert len(changed) == 0
+        assert len(new) == 0
+        assert "a.json" in deleted
+
+    def test_compare_with_none_dest(self):
+        """Test comparing when dest version is None."""
+        source = {"files": {"a.json": "abc123"}}
+
+        changed, new, deleted = sync.compare_version_files(source, None)
+
+        assert len(changed) == 0
+        assert "a.json" in new
+        assert len(deleted) == 0
+
+    def test_compare_both_none(self):
+        """Test comparing when both versions are None."""
+        changed, new, deleted = sync.compare_version_files(None, None)
+
+        assert len(changed) == 0
+        assert len(new) == 0
+        assert len(deleted) == 0
+
+
+class TestComputeJsonOperations:
+    """Tests for compute_json_operations function."""
+
+    def test_compute_json_ops_changed(self, tmp_path):
+        """Test generating operations for changed JSON files."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        # Create source JSON file
+        source_json = source_dir / "photos.json"
+        source_json.write_text("[]")
+
+        ops = sync.compute_json_operations(
+            changed_jsons={"photos.json"},
+            new_jsons=set(),
+            deleted_jsons=set(),
+            source_dir=str(source_dir),
+            dest_dir=str(dest_dir),
+        )
+
+        assert len(ops) == 1
+        assert ops[0].op_type == "copy"
+        assert ops[0].source_path is not None
+        assert "photos.json" in ops[0].source_path
+        assert ops[0].reason == "JSON changed"
+
+    def test_compute_json_ops_new(self, tmp_path):
+        """Test generating operations for new JSON files."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        # Create source JSON file
+        source_json = source_dir / "new.json"
+        source_json.write_text("[]")
+
+        ops = sync.compute_json_operations(
+            changed_jsons=set(),
+            new_jsons={"new.json"},
+            deleted_jsons=set(),
+            source_dir=str(source_dir),
+            dest_dir=str(dest_dir),
+        )
+
+        assert len(ops) == 1
+        assert ops[0].op_type == "copy"
+        assert ops[0].reason == "new JSON"
+
+    def test_compute_json_ops_deleted(self, tmp_path):
+        """Test generating operations for deleted JSON files."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        ops = sync.compute_json_operations(
+            changed_jsons=set(),
+            new_jsons=set(),
+            deleted_jsons={"old.json"},
+            source_dir=str(source_dir),
+            dest_dir=str(dest_dir),
+        )
+
+        assert len(ops) == 1
+        assert ops[0].op_type == "delete"
+        assert "old.json" in ops[0].dest_path
+        assert ops[0].reason == "JSON not in source"
+
+    def test_compute_json_ops_empty(self, tmp_path):
+        """Test with no JSON changes."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        ops = sync.compute_json_operations(
+            changed_jsons=set(),
+            new_jsons=set(),
+            deleted_jsons=set(),
+            source_dir=str(source_dir),
+            dest_dir=str(dest_dir),
+        )
+
+        assert len(ops) == 0
+
+
+class TestComputeVersionOperation:
+    """Tests for compute_version_operation function."""
+
+    def test_compute_version_op_exists(self, tmp_path):
+        """Test generating operation when version file exists."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        version_file = source_dir / ".version.json"
+        version_file.write_text('{"version": "test"}')
+
+        op = sync.compute_version_operation(str(version_file), str(dest_dir))
+
+        assert op is not None
+        assert op.op_type == "copy"
+        assert op.source_path is not None
+        assert ".version.json" in op.source_path
+        assert str(dest_dir) in op.dest_path
+        assert op.reason == "sync version file"
+
+    def test_compute_version_op_none_path(self, tmp_path):
+        """Test when version path is None."""
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        op = sync.compute_version_operation(None, str(dest_dir))
+
+        assert op is None
+
+    def test_compute_version_op_missing_file(self, tmp_path):
+        """Test when version file doesn't exist."""
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        op = sync.compute_version_operation("/nonexistent/.version.json", str(dest_dir))
+
+        assert op is None
+
+
+class TestLoadArchiveWithFilter:
+    """Tests for load_archive with json_filter parameter."""
+
+    def test_load_archive_with_filter(self, tmp_path):
+        """Test loading archive with JSON filter."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+
+        # Create two JSON files
+        json1 = archive_dir / "photos.json"
+        json1.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": "photo.jpg",
+                        "sha1": "a",
+                        "md5": "b",
+                        "size": 1,
+                        "date": "2024-01-01T12:00:00+01:00",
+                    }
+                ]
+            )
+        )
+
+        json2 = archive_dir / "videos.json"
+        json2.write_text(
+            json.dumps(
+                [
+                    {
+                        "path": "video.mp4",
+                        "sha1": "c",
+                        "md5": "d",
+                        "size": 2,
+                        "date": "2024-01-02T12:00:00+01:00",
+                    }
+                ]
+            )
+        )
+
+        # Load only photos.json
+        all_data, json_files, _version, errors = sync.load_archive(
+            str(archive_dir), json_filter={"photos.json"}
+        )
+
+        assert len(errors) == 0
+        assert len(all_data) == 1
+        assert all_data[0]["path"] == "photo.jpg"
+        assert len(json_files) == 1
+        assert "photos.json" in json_files[0]
+
+    def test_load_archive_filter_excludes_all(self, tmp_path):
+        """Test loading archive with filter that excludes all files."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+
+        # Create JSON file
+        json_file = archive_dir / "photos.json"
+        json_file.write_text(json.dumps([]))
+
+        # Load with filter that matches nothing
+        all_data, json_files, _version, errors = sync.load_archive(
+            str(archive_dir), json_filter={"nonexistent.json"}
+        )
+
+        assert len(errors) == 0
+        assert len(all_data) == 0
+        assert len(json_files) == 0
+
+
+class TestVersionOptimization:
+    """Integration tests for version-based optimization."""
+
+    def test_identical_archives_skip_comparison(self, tmp_path):
+        """Test that identical archives skip detailed comparison."""
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        # Create identical version files
+        version_data = {
+            "version": "photos-1.0",
+            "files": {"photos.json": "same_hash"},
+        }
+
+        (source_dir / ".version.json").write_text(json.dumps(version_data))
+        (dest_dir / ".version.json").write_text(json.dumps(version_data))
+
+        # Create JSON files (content doesn't matter since hashes match)
+        (source_dir / "photos.json").write_text(json.dumps([]))
+        (dest_dir / "photos.json").write_text(json.dumps([]))
+
+        parser = argparse.ArgumentParser()
+        sync.setup_parser(parser)
+        args = parser.parse_args([str(source_dir), str(dest_dir)])
+
+        exit_code = sync.run(args)
+
+        # Should succeed with no operations needed
+        assert exit_code == 0

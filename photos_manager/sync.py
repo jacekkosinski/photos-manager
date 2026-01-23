@@ -19,6 +19,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import stat
 import sys
@@ -129,6 +130,93 @@ def build_file_index(data: list[dict[str, str | int]]) -> dict[FileIdentity, dic
                 index[identity] = entry
 
     return index
+
+
+def load_version_data(directory: str) -> tuple[dict[str, object] | None, str | None]:
+    """Load .version.json file data and path.
+
+    Attempts to load and parse the .version.json file from the specified
+    directory. Returns both the parsed data and the file path for later use.
+
+    Args:
+        directory: Archive directory path to search for .version.json
+
+    Returns:
+        Tuple containing:
+            - Parsed version data dictionary, or None if not found/invalid
+            - Path to the version file, or None if not found
+
+    Examples:
+        >>> data, path = load_version_data("/archive")
+        >>> data["version"] if data else None
+        'photos-1.234-567'
+    """
+    version_file = find_version_file(directory)
+    if not version_file:
+        return None, None
+
+    try:
+        with Path(version_file).open(encoding="utf-8") as f:
+            return json.load(f), version_file
+    except (json.JSONDecodeError, OSError):
+        return None, version_file
+
+
+def compare_version_files(
+    source_version: dict[str, object] | None,
+    dest_version: dict[str, object] | None,
+) -> tuple[set[str], set[str], set[str]]:
+    """Compare version files to find changed, new, and deleted JSON files.
+
+    Compares the SHA1 hashes of JSON files recorded in both version files
+    to determine which files have changed, which are new, and which have
+    been deleted.
+
+    Args:
+        source_version: Source .version.json data (with 'files' mapping)
+        dest_version: Destination .version.json data (with 'files' mapping)
+
+    Returns:
+        Tuple containing three sets of JSON filenames:
+            - changed_jsons: Files present in both but with different SHA1
+            - new_jsons: Files only in source
+            - deleted_jsons: Files only in destination
+
+    Examples:
+        >>> source = {"files": {"photos.json": "abc123"}}
+        >>> dest = {"files": {"photos.json": "def456"}}
+        >>> changed, new, deleted = compare_version_files(source, dest)
+        >>> "photos.json" in changed
+        True
+    """
+    source_files: dict[str, str] = {}
+    dest_files: dict[str, str] = {}
+
+    if source_version:
+        files_data = source_version.get("files")
+        if isinstance(files_data, dict):
+            source_files = files_data
+
+    if dest_version:
+        files_data = dest_version.get("files")
+        if isinstance(files_data, dict):
+            dest_files = files_data
+
+    changed: set[str] = set()
+    new: set[str] = set()
+    deleted: set[str] = set()
+
+    for name, sha1 in source_files.items():
+        if name not in dest_files:
+            new.add(name)
+        elif dest_files[name] != sha1:
+            changed.add(name)
+
+    for name in dest_files:
+        if name not in source_files:
+            deleted.add(name)
+
+    return changed, new, deleted
 
 
 def compute_sync_plan(
@@ -439,11 +527,114 @@ def compute_metadata_updates(
     return metadata_ops
 
 
+def compute_json_operations(
+    changed_jsons: set[str],
+    new_jsons: set[str],
+    deleted_jsons: set[str],
+    source_dir: str,
+    dest_dir: str,
+) -> list[SyncOperation]:
+    """Generate operations for JSON metadata files.
+
+    Creates copy operations for changed and new JSON files, and delete
+    operations for JSON files that no longer exist in source.
+
+    Args:
+        changed_jsons: JSON filenames with different SHA1 in source vs dest
+        new_jsons: JSON filenames only present in source
+        deleted_jsons: JSON filenames only present in destination
+        source_dir: Source archive directory path
+        dest_dir: Destination archive directory path
+
+    Returns:
+        List of SyncOperation for JSON metadata files
+
+    Examples:
+        >>> ops = compute_json_operations({"a.json"}, set(), set(), "/src", "/dest")
+        >>> ops[0].op_type
+        'copy'
+    """
+    operations: list[SyncOperation] = []
+    source_base = Path(source_dir)
+    dest_base = Path(dest_dir)
+
+    # Copy changed and new JSONs
+    for json_name in sorted(changed_jsons | new_jsons):
+        source_json = source_base / json_name
+        dest_json = dest_base / json_name
+        mtime = int(source_json.stat().st_mtime) if source_json.exists() else None
+
+        operations.append(
+            SyncOperation(
+                op_type="copy",
+                source_path=str(source_json),
+                dest_path=str(dest_json),
+                expected_mtime=mtime,
+                reason="JSON changed" if json_name in changed_jsons else "new JSON",
+            )
+        )
+
+    # Delete removed JSONs
+    for json_name in sorted(deleted_jsons):
+        operations.append(
+            SyncOperation(
+                op_type="delete",
+                source_path=None,
+                dest_path=str(dest_base / json_name),
+                expected_mtime=None,
+                reason="JSON not in source",
+            )
+        )
+
+    return operations
+
+
+def compute_version_operation(
+    source_version_path: str | None,
+    dest_dir: str,
+) -> SyncOperation | None:
+    """Generate operation for .version.json file.
+
+    Creates a copy operation to sync the .version.json file from source
+    to destination archive.
+
+    Args:
+        source_version_path: Path to source .version.json file, or None
+        dest_dir: Destination archive directory path
+
+    Returns:
+        SyncOperation to copy .version.json, or None if no source version
+
+    Examples:
+        >>> op = compute_version_operation("/src/.version.json", "/dest")
+        >>> op.op_type if op else None
+        'copy'
+    """
+    if not source_version_path:
+        return None
+
+    source_path = Path(source_version_path)
+    if not source_path.exists():
+        return None
+
+    dest_path = Path(dest_dir) / source_path.name
+    mtime = int(source_path.stat().st_mtime)
+
+    return SyncOperation(
+        op_type="copy",
+        source_path=str(source_path),
+        dest_path=str(dest_path),
+        expected_mtime=mtime,
+        reason="sync version file",
+    )
+
+
 def load_archive(
     directory: str,
+    json_filter: set[str] | None = None,
 ) -> tuple[
     list[dict[str, str | int]],  # all_data
-    list[str],  # json_files
+    list[str],  # json_files (loaded ones)
     str | None,  # version_file
     list[str],  # errors
 ]:
@@ -451,11 +642,13 @@ def load_archive(
 
     Args:
         directory: Path to archive directory
+        json_filter: If provided, only load JSON files whose names are in this set.
+            This enables optimization when only certain directories need syncing.
 
     Returns:
         Tuple containing:
-            - Combined data from all JSON files
-            - List of JSON file paths
+            - Combined data from all loaded JSON files
+            - List of loaded JSON file paths
             - Version file path (or None)
             - List of error messages
 
@@ -463,9 +656,12 @@ def load_archive(
         >>> data, json_files, version, errors = load_archive("/archive")
         >>> len(errors) == 0
         True
+        >>> # Load only specific JSON files
+        >>> data, json_files, version, errors = load_archive("/archive", {"photos.json"})
     """
     errors: list[str] = []
     all_data: list[dict[str, str | int]] = []
+    loaded_json_files: list[str] = []
 
     # Find version file
     version_file = find_version_file(directory)
@@ -479,13 +675,20 @@ def load_archive(
 
     # Load data from each JSON file (keep relative paths for comparison)
     for json_file in json_files:
+        # Skip if filter provided and this file not in filter
+        if json_filter is not None:
+            json_name = Path(json_file).name
+            if json_name not in json_filter:
+                continue
+
         try:
             data = load_json(json_file)
             all_data.extend(data)
+            loaded_json_files.append(json_file)
         except SystemExit as e:
             errors.append(f"Failed to load {json_file}: {e}")
 
-    return all_data, json_files, version_file, errors
+    return all_data, loaded_json_files, version_file, errors
 
 
 def validate_archive_directories(
@@ -796,8 +999,39 @@ def run(args: argparse.Namespace) -> int:
             print(f"Error: {error}", file=sys.stderr)
         return 1
 
-    # Load source archive
-    source_data, source_json_files, source_version, source_errors = load_archive(args.source)
+    # Load and compare version files first (optimization)
+    source_version_data, source_version_path = load_version_data(args.source)
+    dest_version_data, _dest_version_path = load_version_data(args.dest)
+
+    changed_jsons, new_jsons, deleted_jsons = compare_version_files(
+        source_version_data, dest_version_data
+    )
+
+    # Determine which JSONs to process
+    jsons_to_process: set[str] | None = None
+    if source_version_data and dest_version_data:
+        # Optimization: only load changed/new JSONs
+        jsons_to_process = changed_jsons | new_jsons
+        if not jsons_to_process and not deleted_jsons:
+            print("Archives are identical (all JSON files have matching SHA1)")
+            return os.EX_OK
+        print(
+            f"  Version comparison: {len(changed_jsons)} changed, "
+            f"{len(new_jsons)} new, {len(deleted_jsons)} deleted JSON(s)"
+        )
+    else:
+        # Fallback: no version files, process all
+        if source_version_data:
+            print("  Source has version file, destination does not")
+        elif dest_version_data:
+            print("  Destination has version file, source does not")
+        else:
+            print("  No version files found, comparing all files")
+
+    # Load source archive (filtered if optimization applies)
+    source_data, source_json_files, source_version, source_errors = load_archive(
+        args.source, json_filter=jsons_to_process
+    )
     if source_errors:
         for error in source_errors:
             print(f"Error: {error}", file=sys.stderr)
@@ -810,8 +1044,10 @@ def run(args: argparse.Namespace) -> int:
 
     print(f"\nScanning destination archive: {args.dest}")
 
-    # Load destination archive
-    dest_data, dest_json_files, dest_version, dest_errors = load_archive(args.dest)
+    # Load destination archive (filtered if optimization applies)
+    dest_data, dest_json_files, dest_version, dest_errors = load_archive(
+        args.dest, json_filter=jsons_to_process
+    )
     if dest_errors:
         for error in dest_errors:
             print(f"Error: {error}", file=sys.stderr)
@@ -830,6 +1066,17 @@ def run(args: argparse.Namespace) -> int:
     # Add metadata updates
     metadata_ops = compute_metadata_updates(operations, source_data, args.dest)
     operations.extend(metadata_ops)
+
+    # Add JSON file operations (copy changed/new, delete removed)
+    json_ops = compute_json_operations(
+        changed_jsons, new_jsons, deleted_jsons, args.source, args.dest
+    )
+    operations.extend(json_ops)
+
+    # Add version file operation
+    version_op = compute_version_operation(source_version_path, args.dest)
+    if version_op:
+        operations.append(version_op)
 
     # Optimize operations
     operations = optimize_operations(operations, dest_data, source_data, args.dest)
