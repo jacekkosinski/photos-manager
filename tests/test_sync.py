@@ -335,7 +335,7 @@ class TestOptimizeOperations:
         ]
 
         # Empty dest_data means directory doesn't exist
-        optimized = sync.optimize_operations(operations, [], [], "/dest")
+        optimized = sync.optimize_operations(operations, [], "/dest")
 
         # Should have mkdir + copy
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -351,7 +351,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("move", "/dest/old.jpg", "/dest/new.jpg", None, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations, [], [], "/dest")
+        optimized = sync.optimize_operations(operations, [], "/dest")
 
         # Find indices of each operation type
         op_types = [op.op_type for op in optimized]
@@ -371,7 +371,7 @@ class TestOptimizeOperations:
 
     def test_optimize_empty_operations(self):
         """Test optimize with empty operations list."""
-        optimized = sync.optimize_operations([], [], [], "/dest")
+        optimized = sync.optimize_operations([], [], "/dest")
         assert len(optimized) == 0
 
     def test_optimize_no_new_directories(self):
@@ -391,7 +391,7 @@ class TestOptimizeOperations:
             }
         ]
 
-        optimized = sync.optimize_operations(operations, dest_data, [], "/dest")
+        optimized = sync.optimize_operations(operations, dest_data, "/dest")
 
         # Should have no mkdir since directory already exists
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -408,7 +408,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("copy", "/src/photo2.jpg", "/dest/newdir/photo2.jpg", 456, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations, [], [], "/dest")
+        optimized = sync.optimize_operations(operations, [], "/dest")
 
         # Should have one mkdir + two copies
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -423,7 +423,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("copy", "/src/m.jpg", "/dest/m.jpg", 789, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations, [], [], "/dest")
+        optimized = sync.optimize_operations(operations, [], "/dest")
 
         copy_ops = [op for op in optimized if op.op_type == "copy"]
         copy_paths = [op.dest_path for op in copy_ops]
@@ -622,7 +622,7 @@ class TestGenerateSyncScript:
     """Tests for generate_sync_script function."""
 
     def test_generate_script_basic(self, tmp_path):
-        """Test basic script generation."""
+        """Test basic script generation with block comments."""
         output_path = tmp_path / "sync.sh"
         operations = [
             sync.SyncOperation("mkdir", None, "/dest/newdir", None, "create directory"),
@@ -638,8 +638,9 @@ class TestGenerateSyncScript:
         assert "#!/bin/bash" in script_content
         assert "mkdir" in script_content
         assert "rsync" in script_content
-        assert "# create directory" in script_content
-        assert "# new file" in script_content
+        # Block comments instead of individual operation comments
+        assert "# Create directories" in script_content
+        assert "# Copy files" in script_content
 
     def test_generate_script_is_executable(self, tmp_path):
         """Test that generated script is executable."""
