@@ -129,6 +129,8 @@ def build_file_index(data: list[dict[str, str | int]]) -> dict[FileIdentity, dic
 def compute_sync_plan(
     source_data: list[dict[str, str | int]],
     dest_data: list[dict[str, str | int]],
+    source_dir: str,
+    dest_dir: str,
 ) -> tuple[list[SyncOperation], list[str]]:
     """Generate minimal sync operations to synchronize archives.
 
@@ -136,37 +138,43 @@ def compute_sync_plan(
     and generates operations to synchronize. Timestamps must match exactly.
 
     Args:
-        source_data: File metadata from source archive
-        dest_data: File metadata from destination archive
+        source_data: File metadata from source archive (relative paths)
+        dest_data: File metadata from destination archive (relative paths)
+        source_dir: Source archive directory path
+        dest_dir: Destination archive directory path
 
     Returns:
         Tuple containing:
-            - List of SyncOperation objects
+            - List of SyncOperation objects (with absolute paths)
             - List of warning messages
 
     Examples:
-        >>> source = [{'path': '/src/a.jpg', 'sha1': 'abc', 'md5': 'def',
+        >>> source = [{'path': 'a.jpg', 'sha1': 'abc', 'md5': 'def',
         ...            'size': 100, 'date': '2024-01-01T12:00:00+0100'}]
         >>> dest = []
-        >>> ops, warnings = compute_sync_plan(source, dest)
+        >>> ops, warnings = compute_sync_plan(source, dest, '/src', '/dest')
         >>> ops[0].op_type
         'copy'
     """
     operations: list[SyncOperation] = []
     warnings: list[str] = []
 
+    # Convert to Path objects for joining
+    source_base = Path(source_dir)
+    dest_base = Path(dest_dir)
+
     # Build indices for fast lookup
     dest_index = build_file_index(dest_data)
 
-    # Build path mappings
+    # Build path mappings (using relative paths as keys)
     dest_by_path = {str(entry["path"]): entry for entry in dest_data}
 
-    # Track which dest files we've handled
+    # Track which dest files we've handled (using relative paths)
     handled_dest_files: set[str] = set()
 
     # Phase 1: Process source files
     for source_entry in source_data:
-        source_path = str(source_entry["path"])
+        rel_path = str(source_entry["path"])  # Relative path
         sha1 = str(source_entry.get("sha1", ""))
         md5 = str(source_entry.get("md5", ""))
         size = int(source_entry.get("size", 0))
@@ -177,12 +185,12 @@ def compute_sync_plan(
         # Check if file exists in destination by identity
         if identity in dest_index:
             dest_entry = dest_index[identity]
-            dest_path = str(dest_entry["path"])
+            dest_rel_path = str(dest_entry["path"])  # Relative path in dest
             dest_date = str(dest_entry.get("date", ""))
 
-            handled_dest_files.add(dest_path)
+            handled_dest_files.add(dest_rel_path)
 
-            if source_path == dest_path:
+            if rel_path == dest_rel_path:
                 # Same path, same content - check timestamp
                 source_mtime = int(datetime.fromisoformat(source_date).timestamp())
                 dest_mtime = int(datetime.fromisoformat(dest_date).timestamp())
@@ -192,24 +200,26 @@ def compute_sync_plan(
                         SyncOperation(
                             op_type="touch",
                             source_path=None,
-                            dest_path=dest_path,
+                            dest_path=str(dest_base / rel_path),  # Full path in dest
                             expected_mtime=source_mtime,
                             reason=f"timestamp mismatch: expected {source_mtime}, got {dest_mtime}",
                         )
                     )
             else:
-                # Same content, different path - move operation
+                # Same content, different path - move operation in dest
                 operations.append(
                     SyncOperation(
                         op_type="move",
-                        source_path=dest_path,  # Move FROM dest location
-                        dest_path=source_path,  # Move TO source location
+                        source_path=str(
+                            dest_base / dest_rel_path
+                        ),  # Move FROM old location in dest
+                        dest_path=str(dest_base / rel_path),  # Move TO new location in dest
                         expected_mtime=None,
-                        reason=f"file moved/renamed from {dest_path}",
+                        reason=f"file moved/renamed from {dest_rel_path} to {rel_path}",
                     )
                 )
 
-                handled_dest_files.add(dest_path)
+                handled_dest_files.add(dest_rel_path)
 
                 # Check if timestamp needs updating after move
                 source_mtime = int(datetime.fromisoformat(source_date).timestamp())
@@ -220,26 +230,26 @@ def compute_sync_plan(
                         SyncOperation(
                             op_type="touch",
                             source_path=None,
-                            dest_path=source_path,
+                            dest_path=str(dest_base / rel_path),  # Full path in dest
                             expected_mtime=source_mtime,
                             reason="timestamp correction after move",
                         )
                     )
         else:
-            # File not found by identity
+            # File not found by identity in dest - needs to be copied
             # Check if same path exists with different content (file modified)
-            if source_path in dest_by_path:
+            if rel_path in dest_by_path:
                 # File content changed at same path
-                warnings.append(f"File modified: {source_path} (will be replaced)")
-                handled_dest_files.add(source_path)
+                warnings.append(f"File modified: {rel_path} (will be replaced)")
+                handled_dest_files.add(rel_path)
 
                 source_mtime = int(datetime.fromisoformat(source_date).timestamp())
 
                 operations.append(
                     SyncOperation(
                         op_type="copy",
-                        source_path=source_path,
-                        dest_path=source_path,
+                        source_path=str(source_base / rel_path),  # Full path in source
+                        dest_path=str(dest_base / rel_path),  # Full path in dest
                         expected_mtime=source_mtime,
                         reason="file content changed",
                     )
@@ -251,8 +261,8 @@ def compute_sync_plan(
                 operations.append(
                     SyncOperation(
                         op_type="copy",
-                        source_path=source_path,
-                        dest_path=source_path,  # Keep same path structure
+                        source_path=str(source_base / rel_path),  # Full path in source
+                        dest_path=str(dest_base / rel_path),  # Full path in dest
                         expected_mtime=source_mtime,
                         reason="new file in source",
                     )
@@ -260,9 +270,9 @@ def compute_sync_plan(
 
     # Phase 2: Find files to delete (in dest but not in source)
     for dest_entry in dest_data:
-        dest_path = str(dest_entry["path"])
+        dest_rel_path = str(dest_entry["path"])
 
-        if dest_path in handled_dest_files:
+        if dest_rel_path in handled_dest_files:
             continue
 
         # Pure deletion (file not in source at all)
@@ -270,7 +280,7 @@ def compute_sync_plan(
             SyncOperation(
                 op_type="delete",
                 source_path=None,
-                dest_path=dest_path,
+                dest_path=str(dest_base / dest_rel_path),  # Full path in dest
                 expected_mtime=None,
                 reason="file not in source",
             )
@@ -280,7 +290,9 @@ def compute_sync_plan(
 
 
 def optimize_operations(
-    operations: list[SyncOperation], dest_data: list[dict[str, str | int]]
+    operations: list[SyncOperation],
+    dest_data: list[dict[str, str | int]],
+    dest_dir: str,
 ) -> list[SyncOperation]:
     """Optimize operations to minimize work.
 
@@ -289,26 +301,31 @@ def optimize_operations(
     - Sorts operations by dependency order
 
     Args:
-        operations: List of sync operations
-        dest_data: Destination archive metadata to check existing directories
+        operations: List of sync operations (with absolute paths)
+        dest_data: Destination archive metadata (with relative paths)
+        dest_dir: Destination archive directory path
 
     Returns:
         Optimized and sorted list of operations
 
     Examples:
         >>> ops = [SyncOperation('copy', '/src/a.jpg', '/dest/new/a.jpg', 123, 'test')]
-        >>> optimized = optimize_operations(ops, [])
+        >>> optimized = optimize_operations(ops, [], '/dest')
         >>> optimized[0].op_type
         'mkdir'
     """
     optimized: list[SyncOperation] = []
 
-    # Build set of existing directories from destination data
+    dest_base = Path(dest_dir)
+
+    # Build set of existing directories from destination data (as absolute paths)
     existing_dirs: set[str] = set()
     for entry in dest_data:
-        file_path = str(entry.get("path", ""))
-        if file_path:
-            parent = str(Path(file_path).parent)
+        rel_path = str(entry.get("path", ""))
+        if rel_path:
+            # Convert to absolute path then get parent
+            full_path = dest_base / rel_path
+            parent = str(full_path.parent)
             if parent != "/" and parent != ".":
                 existing_dirs.add(parent)
 
@@ -360,6 +377,7 @@ def optimize_operations(
 def compute_metadata_updates(
     operations: list[SyncOperation],
     source_data: list[dict[str, str | int]],
+    dest_dir: str,
 ) -> list[SyncOperation]:
     """Generate directory and JSON timestamp updates.
 
@@ -367,29 +385,34 @@ def compute_metadata_updates(
     generates operations to update their timestamps to match source.
 
     Args:
-        operations: List of sync operations that will be performed
-        source_data: Source archive metadata
+        operations: List of sync operations that will be performed (with absolute paths)
+        source_data: Source archive metadata (with relative paths)
+        dest_dir: Destination archive directory path
 
     Returns:
         List of additional SyncOperation objects for metadata updates
 
     Examples:
         >>> ops = [SyncOperation('copy', '/src/a.jpg', '/dest/a.jpg', 123, 'test')]
-        >>> source = [{'path': '/dest/a.jpg', 'date': '2024-01-01T12:00:00+0100'}]
-        >>> metadata_ops = compute_metadata_updates(ops, source)
+        >>> source = [{'path': 'a.jpg', 'date': '2024-01-01T12:00:00+0100'}]
+        >>> metadata_ops = compute_metadata_updates(ops, source, '/dest')
         >>> len(metadata_ops) >= 0
         True
     """
     metadata_ops: list[SyncOperation] = []
 
-    # Group source files by directory
+    dest_base = Path(dest_dir)
+
+    # Group source files by directory (using absolute paths for consistency with operations)
     dir_files: dict[str, list[dict[str, str | int]]] = {}
     for entry in source_data:
-        file_path = str(entry.get("path", ""))
-        if not file_path:
+        rel_path = str(entry.get("path", ""))
+        if not rel_path:
             continue
 
-        dir_path = str(Path(file_path).parent)
+        # Convert to absolute path in dest to match operations
+        full_path = dest_base / rel_path
+        dir_path = str(full_path.parent)
         if dir_path not in dir_files:
             dir_files[dir_path] = []
         dir_files[dir_path].append(entry)
@@ -809,14 +832,14 @@ def run(args: argparse.Namespace) -> int:
     print("\nAnalyzing differences...")
 
     # Compute sync plan
-    operations, warnings = compute_sync_plan(source_data, dest_data)
+    operations, warnings = compute_sync_plan(source_data, dest_data, args.source, args.dest)
 
     # Add metadata updates
-    metadata_ops = compute_metadata_updates(operations, source_data)
+    metadata_ops = compute_metadata_updates(operations, source_data, args.dest)
     operations.extend(metadata_ops)
 
     # Optimize operations
-    operations = optimize_operations(operations, dest_data)
+    operations = optimize_operations(operations, dest_data, args.dest)
 
     # Filter operations if requested
     if args.no_delete:

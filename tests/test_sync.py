@@ -102,7 +102,7 @@ class TestComputeSyncPlan:
         ]
         dest_data = []
 
-        operations, _warnings = sync.compute_sync_plan(source_data, dest_data)
+        operations, _warnings = sync.compute_sync_plan(source_data, dest_data, "/source", "/dest")
 
         # Should have copy operation
         copy_ops = [op for op in operations if op.op_type == "copy"]
@@ -124,7 +124,7 @@ class TestComputeSyncPlan:
             }
         ]
 
-        operations, _warnings = sync.compute_sync_plan(source_data, dest_data)
+        operations, _warnings = sync.compute_sync_plan(source_data, dest_data, "/source", "/dest")
 
         # Should have delete operation
         delete_ops = [op for op in operations if op.op_type == "delete"]
@@ -152,7 +152,7 @@ class TestComputeSyncPlan:
             }
         ]
 
-        operations, _warnings = sync.compute_sync_plan(source_data, dest_data)
+        operations, _warnings = sync.compute_sync_plan(source_data, dest_data, "/source", "/dest")
 
         # Should have move operation
         move_ops = [op for op in operations if op.op_type == "move"]
@@ -182,7 +182,7 @@ class TestComputeSyncPlan:
             }
         ]
 
-        operations, _warnings = sync.compute_sync_plan(source_data, dest_data)
+        operations, _warnings = sync.compute_sync_plan(source_data, dest_data, "/source", "/dest")
 
         # Should have touch operation
         touch_ops = [op for op in operations if op.op_type == "touch"]
@@ -211,7 +211,7 @@ class TestComputeSyncPlan:
             }
         ]
 
-        operations, warnings = sync.compute_sync_plan(source_data, dest_data)
+        operations, warnings = sync.compute_sync_plan(source_data, dest_data, "/source", "/dest")
 
         # Should warn and have copy operation
         assert len(warnings) > 0
@@ -233,7 +233,7 @@ class TestComputeSyncPlan:
             }
         ]
 
-        operations, _warnings = sync.compute_sync_plan(data, data)
+        operations, _warnings = sync.compute_sync_plan(data, data, "/source", "/dest")
 
         # Should have no operations
         assert len(operations) == 0
@@ -273,7 +273,7 @@ class TestComputeSyncPlan:
             },
         ]
 
-        operations, _warnings = sync.compute_sync_plan(source_data, dest_data)
+        operations, _warnings = sync.compute_sync_plan(source_data, dest_data, "/source", "/dest")
 
         # Should have mix of operations
         op_types = {op.op_type for op in operations}
@@ -283,7 +283,7 @@ class TestComputeSyncPlan:
 
     def test_sync_plan_empty_archives(self):
         """Test sync plan with empty archives."""
-        operations, warnings = sync.compute_sync_plan([], [])
+        operations, warnings = sync.compute_sync_plan([], [], "/source", "/dest")
         assert len(operations) == 0
         assert len(warnings) == 0
 
@@ -308,7 +308,7 @@ class TestComputeSyncPlan:
             }
         ]
 
-        operations, _warnings = sync.compute_sync_plan(source_data, dest_data)
+        operations, _warnings = sync.compute_sync_plan(source_data, dest_data, "/source", "/dest")
 
         # Should have move + touch operations
         move_ops = [op for op in operations if op.op_type == "move"]
@@ -335,7 +335,7 @@ class TestOptimizeOperations:
         ]
 
         # Empty dest_data means directory doesn't exist
-        optimized = sync.optimize_operations(operations, [])
+        optimized = sync.optimize_operations(operations, [], "/dest")
 
         # Should have mkdir + copy
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -351,7 +351,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("move", "/dest/old.jpg", "/dest/new.jpg", None, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations, [])
+        optimized = sync.optimize_operations(operations, [], "/dest")
 
         # Find indices of each operation type
         op_types = [op.op_type for op in optimized]
@@ -371,7 +371,7 @@ class TestOptimizeOperations:
 
     def test_optimize_empty_operations(self):
         """Test optimize with empty operations list."""
-        optimized = sync.optimize_operations([], [])
+        optimized = sync.optimize_operations([], [], "/dest")
         assert len(optimized) == 0
 
     def test_optimize_no_new_directories(self):
@@ -391,7 +391,7 @@ class TestOptimizeOperations:
             }
         ]
 
-        optimized = sync.optimize_operations(operations, dest_data)
+        optimized = sync.optimize_operations(operations, dest_data, "/dest")
 
         # Should have no mkdir since directory already exists
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -408,7 +408,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("copy", "/src/photo2.jpg", "/dest/newdir/photo2.jpg", 456, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations, [])
+        optimized = sync.optimize_operations(operations, [], "/dest")
 
         # Should have one mkdir + two copies
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -423,7 +423,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("copy", "/src/m.jpg", "/dest/m.jpg", 789, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations, [])
+        optimized = sync.optimize_operations(operations, [], "/dest")
 
         copy_ops = [op for op in optimized if op.op_type == "copy"]
         copy_paths = [op.dest_path for op in copy_ops]
@@ -452,7 +452,7 @@ class TestComputeMetadataUpdates:
             }
         ]
 
-        metadata_ops = sync.compute_metadata_updates(operations, source_data)
+        metadata_ops = sync.compute_metadata_updates(operations, source_data, "/dest")
 
         # Should have directory mtime update
         dir_ops = [op for op in metadata_ops if op.op_type == "update-dir-mtime"]
@@ -471,7 +471,7 @@ class TestComputeMetadataUpdates:
             }
         ]
 
-        metadata_ops = sync.compute_metadata_updates(operations, source_data)
+        metadata_ops = sync.compute_metadata_updates(operations, source_data, "/dest")
 
         # Should have directory mtime update
         dir_ops = [op for op in metadata_ops if op.op_type == "update-dir-mtime"]
@@ -479,7 +479,7 @@ class TestComputeMetadataUpdates:
 
     def test_metadata_updates_empty_operations(self):
         """Test metadata updates with no operations."""
-        metadata_ops = sync.compute_metadata_updates([], [])
+        metadata_ops = sync.compute_metadata_updates([], [], "/dest")
         assert len(metadata_ops) == 0
 
     def test_metadata_updates_newest_file_in_directory(self):
@@ -502,7 +502,7 @@ class TestComputeMetadataUpdates:
             },
         ]
 
-        metadata_ops = sync.compute_metadata_updates(operations, source_data)
+        metadata_ops = sync.compute_metadata_updates(operations, source_data, "/dest")
 
         dir_ops = [op for op in metadata_ops if op.op_type == "update-dir-mtime"]
         if dir_ops:
