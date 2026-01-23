@@ -463,12 +463,14 @@ def load_archive(
 def validate_archive_directories(
     source_dir: str,
     dest_dir: str,
+    check_dest_writable: bool = False,
 ) -> tuple[bool, list[str]]:
     """Validate that both archives are accessible and have required files.
 
     Args:
         source_dir: Source archive directory
         dest_dir: Destination archive directory
+        check_dest_writable: Whether to check if destination is writable
 
     Returns:
         Tuple containing:
@@ -499,7 +501,7 @@ def validate_archive_directories(
         errors.append(f"Destination path is not a directory: {dest_dir}")
     elif not os.access(dest_dir, os.R_OK):
         errors.append(f"Destination directory is not readable: {dest_dir}")
-    elif not os.access(dest_dir, os.W_OK):
+    elif check_dest_writable and not os.access(dest_dir, os.W_OK):
         errors.append(f"Destination directory is not writable: {dest_dir}")
 
     return len(errors) == 0, errors
@@ -654,17 +656,10 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Destination archive directory",
     )
     parser.add_argument(
-        "-n",
-        "--dry-run",
-        action="store_true",
-        default=True,
-        help="Show operations without executing (DEFAULT)",
-    )
-    parser.add_argument(
         "-x",
         "--execute",
         action="store_true",
-        help="Actually execute sync operations",
+        help="Actually execute sync operations (default: dry-run preview only)",
     )
     parser.add_argument(
         "--no-delete",
@@ -764,8 +759,10 @@ def run(args: argparse.Namespace) -> int:
     """
     print(f"Scanning source archive: {args.source}")
 
-    # Validate archives
-    valid, errors = validate_archive_directories(args.source, args.dest)
+    # Validate archives (check write permission only when executing)
+    valid, errors = validate_archive_directories(
+        args.source, args.dest, check_dest_writable=args.execute
+    )
     if not valid:
         for error in errors:
             print(f"Error: {error}", file=sys.stderr)
