@@ -30,7 +30,6 @@ from photos_manager.verify import (
     find_json_files,
     find_version_file,
     load_json,
-    normalize_paths,
 )
 
 # Type alias for file identity (sha1, md5, size)
@@ -478,11 +477,10 @@ def load_archive(
         errors.append(f"Failed to find JSON files: {e}")
         return [], [], version_file, errors
 
-    # Load and normalize data from each JSON file
+    # Load data from each JSON file (keep relative paths for comparison)
     for json_file in json_files:
         try:
             data = load_json(json_file)
-            data = normalize_paths(data, directory)
             all_data.extend(data)
         except SystemExit as e:
             errors.append(f"Failed to load {json_file}: {e}")
