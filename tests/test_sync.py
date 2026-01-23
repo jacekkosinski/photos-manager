@@ -93,7 +93,7 @@ class TestComputeSyncPlan:
         """Test sync plan with new file in source."""
         source_data = [
             {
-                "path": "/archive/new.jpg",
+                "path": "photos/new.jpg",
                 "sha1": "abc123",
                 "md5": "def456",
                 "size": 1000,
@@ -107,8 +107,8 @@ class TestComputeSyncPlan:
         # Should have copy operation
         copy_ops = [op for op in operations if op.op_type == "copy"]
         assert len(copy_ops) == 1
-        assert copy_ops[0].source_path == "/archive/new.jpg"
-        assert copy_ops[0].dest_path == "/archive/new.jpg"
+        assert copy_ops[0].source_path == "/source/photos/new.jpg"
+        assert copy_ops[0].dest_path == "/dest/photos/new.jpg"
         assert "new file" in copy_ops[0].reason
 
     def test_sync_plan_deleted_file(self):
@@ -116,7 +116,7 @@ class TestComputeSyncPlan:
         source_data = []
         dest_data = [
             {
-                "path": "/archive/deleted.jpg",
+                "path": "photos/deleted.jpg",
                 "sha1": "abc123",
                 "md5": "def456",
                 "size": 1000,
@@ -129,13 +129,13 @@ class TestComputeSyncPlan:
         # Should have delete operation
         delete_ops = [op for op in operations if op.op_type == "delete"]
         assert len(delete_ops) == 1
-        assert delete_ops[0].dest_path == "/archive/deleted.jpg"
+        assert delete_ops[0].dest_path == "/dest/photos/deleted.jpg"
 
     def test_sync_plan_moved_file(self):
         """Test sync plan with file moved/renamed."""
         source_data = [
             {
-                "path": "/archive/new_name.jpg",
+                "path": "photos/new_name.jpg",
                 "sha1": "abc123",
                 "md5": "def456",
                 "size": 1000,
@@ -144,7 +144,7 @@ class TestComputeSyncPlan:
         ]
         dest_data = [
             {
-                "path": "/archive/old_name.jpg",
+                "path": "photos/old_name.jpg",
                 "sha1": "abc123",
                 "md5": "def456",
                 "size": 1000,
@@ -154,18 +154,18 @@ class TestComputeSyncPlan:
 
         operations, _warnings = sync.compute_sync_plan(source_data, dest_data, "/source", "/dest")
 
-        # Should have move operation
+        # Should have move operation (within dest archive)
         move_ops = [op for op in operations if op.op_type == "move"]
         assert len(move_ops) == 1
-        assert move_ops[0].source_path == "/archive/old_name.jpg"
-        assert move_ops[0].dest_path == "/archive/new_name.jpg"
-        assert "moved" in move_ops[0].reason or "renamed" in move_ops[0].reason
+        assert move_ops[0].source_path == "/dest/photos/old_name.jpg"
+        assert move_ops[0].dest_path == "/dest/photos/new_name.jpg"
+        assert "rename" in move_ops[0].reason
 
     def test_sync_plan_timestamp_mismatch(self):
         """Test sync plan with timestamp mismatch."""
         source_data = [
             {
-                "path": "/archive/photo.jpg",
+                "path": "photos/photo.jpg",
                 "sha1": "abc123",
                 "md5": "def456",
                 "size": 1000,
@@ -174,7 +174,7 @@ class TestComputeSyncPlan:
         ]
         dest_data = [
             {
-                "path": "/archive/photo.jpg",
+                "path": "photos/photo.jpg",
                 "sha1": "abc123",
                 "md5": "def456",
                 "size": 1000,
@@ -187,14 +187,14 @@ class TestComputeSyncPlan:
         # Should have touch operation
         touch_ops = [op for op in operations if op.op_type == "touch"]
         assert len(touch_ops) == 1
-        assert touch_ops[0].dest_path == "/archive/photo.jpg"
+        assert touch_ops[0].dest_path == "/dest/photos/photo.jpg"
         assert "timestamp" in touch_ops[0].reason
 
     def test_sync_plan_content_changed(self):
         """Test sync plan with file content changed (same path, different content)."""
         source_data = [
             {
-                "path": "/archive/photo.jpg",
+                "path": "photos/photo.jpg",
                 "sha1": "new_sha",
                 "md5": "new_md5",
                 "size": 2000,
@@ -203,7 +203,7 @@ class TestComputeSyncPlan:
         ]
         dest_data = [
             {
-                "path": "/archive/photo.jpg",
+                "path": "photos/photo.jpg",
                 "sha1": "old_sha",
                 "md5": "old_md5",
                 "size": 1000,
@@ -219,13 +219,13 @@ class TestComputeSyncPlan:
 
         copy_ops = [op for op in operations if op.op_type == "copy"]
         assert len(copy_ops) == 1
-        assert "changed" in copy_ops[0].reason or "modified" in copy_ops[0].reason
+        assert "changed" in copy_ops[0].reason
 
     def test_sync_plan_identical_archives(self):
         """Test sync plan with identical archives."""
         data = [
             {
-                "path": "/archive/photo.jpg",
+                "path": "photos/photo.jpg",
                 "sha1": "abc123",
                 "md5": "def456",
                 "size": 1000,
@@ -235,21 +235,21 @@ class TestComputeSyncPlan:
 
         operations, _warnings = sync.compute_sync_plan(data, data, "/source", "/dest")
 
-        # Should have no operations
+        # Should have no operations (identical content, path, and timestamp)
         assert len(operations) == 0
 
     def test_sync_plan_multiple_operations(self):
         """Test sync plan with multiple operation types."""
         source_data = [
             {
-                "path": "/archive/new.jpg",
+                "path": "photos/new.jpg",
                 "sha1": "new_sha",
                 "md5": "new_md5",
                 "size": 1000,
                 "date": "2024-01-01T12:00:00+01:00",
             },
             {
-                "path": "/archive/renamed.jpg",
+                "path": "photos/renamed.jpg",
                 "sha1": "move_sha",
                 "md5": "move_md5",
                 "size": 2000,
@@ -258,14 +258,14 @@ class TestComputeSyncPlan:
         ]
         dest_data = [
             {
-                "path": "/archive/old_name.jpg",
+                "path": "photos/old_name.jpg",
                 "sha1": "move_sha",
                 "md5": "move_md5",
                 "size": 2000,
                 "date": "2024-01-02T12:00:00+01:00",
             },
             {
-                "path": "/archive/deleted.jpg",
+                "path": "photos/deleted.jpg",
                 "sha1": "del_sha",
                 "md5": "del_md5",
                 "size": 3000,
@@ -291,7 +291,7 @@ class TestComputeSyncPlan:
         """Test sync plan with moved file that needs timestamp correction."""
         source_data = [
             {
-                "path": "/archive/new_path.jpg",
+                "path": "photos/new_path.jpg",
                 "sha1": "abc123",
                 "md5": "def456",
                 "size": 1000,
@@ -300,7 +300,7 @@ class TestComputeSyncPlan:
         ]
         dest_data = [
             {
-                "path": "/archive/old_path.jpg",
+                "path": "photos/old_path.jpg",
                 "sha1": "abc123",
                 "md5": "def456",
                 "size": 1000,
@@ -335,7 +335,7 @@ class TestOptimizeOperations:
         ]
 
         # Empty dest_data means directory doesn't exist
-        optimized = sync.optimize_operations(operations, [], "/dest")
+        optimized = sync.optimize_operations(operations, [], [], "/dest")
 
         # Should have mkdir + copy
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -351,7 +351,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("move", "/dest/old.jpg", "/dest/new.jpg", None, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations, [], "/dest")
+        optimized = sync.optimize_operations(operations, [], [], "/dest")
 
         # Find indices of each operation type
         op_types = [op.op_type for op in optimized]
@@ -371,19 +371,19 @@ class TestOptimizeOperations:
 
     def test_optimize_empty_operations(self):
         """Test optimize with empty operations list."""
-        optimized = sync.optimize_operations([], [], "/dest")
+        optimized = sync.optimize_operations([], [], [], "/dest")
         assert len(optimized) == 0
 
     def test_optimize_no_new_directories(self):
         """Test optimize when no new directories are needed."""
         operations = [
-            sync.SyncOperation("touch", None, "/existing/file.jpg", 123, "test"),
+            sync.SyncOperation("touch", None, "/dest/existing/file.jpg", 123, "test"),
         ]
 
-        # Destination has file in /existing/ so directory exists
+        # Destination has file in existing/ so directory exists (relative path)
         dest_data = [
             {
-                "path": "/existing/other.jpg",
+                "path": "existing/other.jpg",
                 "sha1": "abc",
                 "md5": "def",
                 "size": 100,
@@ -391,7 +391,7 @@ class TestOptimizeOperations:
             }
         ]
 
-        optimized = sync.optimize_operations(operations, dest_data, "/dest")
+        optimized = sync.optimize_operations(operations, dest_data, [], "/dest")
 
         # Should have no mkdir since directory already exists
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -408,7 +408,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("copy", "/src/photo2.jpg", "/dest/newdir/photo2.jpg", 456, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations, [], "/dest")
+        optimized = sync.optimize_operations(operations, [], [], "/dest")
 
         # Should have one mkdir + two copies
         mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
@@ -423,7 +423,7 @@ class TestOptimizeOperations:
             sync.SyncOperation("copy", "/src/m.jpg", "/dest/m.jpg", 789, "test"),
         ]
 
-        optimized = sync.optimize_operations(operations, [], "/dest")
+        optimized = sync.optimize_operations(operations, [], [], "/dest")
 
         copy_ops = [op for op in optimized if op.op_type == "copy"]
         copy_paths = [op.dest_path for op in copy_ops]
@@ -442,9 +442,10 @@ class TestComputeMetadataUpdates:
                 "copy", "/src/newdir/photo.jpg", "/dest/newdir/photo.jpg", 1234567890, "test"
             )
         ]
+        # source_data uses relative paths
         source_data = [
             {
-                "path": "/dest/newdir/photo.jpg",
+                "path": "newdir/photo.jpg",
                 "date": "2024-01-01T12:00:00+01:00",
                 "sha1": "abc",
                 "md5": "def",
@@ -461,9 +462,10 @@ class TestComputeMetadataUpdates:
     def test_metadata_updates_for_delete(self):
         """Test metadata updates after delete operation."""
         operations = [sync.SyncOperation("delete", None, "/dest/dir/photo.jpg", None, "test")]
+        # source_data uses relative paths
         source_data = [
             {
-                "path": "/dest/dir/other.jpg",
+                "path": "dir/other.jpg",
                 "date": "2024-01-01T12:00:00+01:00",
                 "sha1": "abc",
                 "md5": "def",
@@ -475,7 +477,7 @@ class TestComputeMetadataUpdates:
 
         # Should have directory mtime update
         dir_ops = [op for op in metadata_ops if op.op_type == "update-dir-mtime"]
-        assert len(dir_ops) >= 0  # May or may not have update depending on remaining files
+        assert len(dir_ops) >= 1  # Now expecting update since we have files in that dir
 
     def test_metadata_updates_empty_operations(self):
         """Test metadata updates with no operations."""
@@ -485,16 +487,17 @@ class TestComputeMetadataUpdates:
     def test_metadata_updates_newest_file_in_directory(self):
         """Test that directory mtime is set to newest file."""
         operations = [sync.SyncOperation("touch", None, "/dest/dir/photo.jpg", 1234567890, "test")]
+        # source_data uses relative paths
         source_data = [
             {
-                "path": "/dest/dir/photo1.jpg",
+                "path": "dir/photo1.jpg",
                 "date": "2024-01-01T12:00:00+01:00",
                 "sha1": "abc",
                 "md5": "def",
                 "size": 100,
             },
             {
-                "path": "/dest/dir/photo2.jpg",
+                "path": "dir/photo2.jpg",
                 "date": "2024-01-02T12:00:00+01:00",  # Newer
                 "sha1": "xyz",
                 "md5": "uvw",
@@ -505,10 +508,10 @@ class TestComputeMetadataUpdates:
         metadata_ops = sync.compute_metadata_updates(operations, source_data, "/dest")
 
         dir_ops = [op for op in metadata_ops if op.op_type == "update-dir-mtime"]
-        if dir_ops:
-            # Should use timestamp from photo2 (newer)
-            expected_mtime = int(datetime.fromisoformat("2024-01-02T12:00:00+01:00").timestamp())
-            assert any(op.expected_mtime == expected_mtime for op in dir_ops)
+        assert len(dir_ops) >= 1
+        # Should use timestamp from photo2 (newer)
+        expected_mtime = int(datetime.fromisoformat("2024-01-02T12:00:00+01:00").timestamp())
+        assert any(op.expected_mtime == expected_mtime for op in dir_ops)
 
 
 class TestValidateArchiveDirectories:

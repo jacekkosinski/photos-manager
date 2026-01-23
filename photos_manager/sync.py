@@ -68,7 +68,13 @@ class SyncOperation:
             ['rsync -a --times /src/a.jpg /dest/a.jpg']
         """
         if self.op_type == "mkdir":
-            return [f"mkdir -p {self.dest_path}"]
+            cmds = [f"mkdir -p {self.dest_path}"]
+            # Set directory timestamp if specified
+            if self.expected_mtime is not None:
+                dt = datetime.fromtimestamp(self.expected_mtime)
+                touch_time = dt.strftime("%Y%m%d%H%M.%S")
+                cmds.append(f"touch -t {touch_time} {self.dest_path}")
+            return cmds
 
         if self.op_type == "copy":
             return [f"rsync -a --times {self.source_path} {self.dest_path}"]
@@ -163,128 +169,103 @@ def compute_sync_plan(
     source_base = Path(source_dir)
     dest_base = Path(dest_dir)
 
-    # Build indices for fast lookup
+    # Build index mapping file identity (sha1, md5, size) to metadata
     dest_index = build_file_index(dest_data)
 
-    # Build path mappings (using relative paths as keys)
+    # Build path mapping for destination files
     dest_by_path = {str(entry["path"]): entry for entry in dest_data}
 
-    # Track which dest files we've handled (using relative paths)
-    handled_dest_files: set[str] = set()
+    # Track which dest files we've matched (using relative paths)
+    matched_dest_files: set[str] = set()
 
-    # Phase 1: Process source files
+    # Phase 1: Process each source file
     for source_entry in source_data:
-        rel_path = str(source_entry["path"])  # Relative path
+        rel_path = str(source_entry["path"])
         sha1 = str(source_entry.get("sha1", ""))
         md5 = str(source_entry.get("md5", ""))
         size = int(source_entry.get("size", 0))
         source_date = str(source_entry.get("date", ""))
+        source_mtime = int(datetime.fromisoformat(source_date).timestamp())
 
         identity: FileIdentity = (sha1, md5, size)
 
-        # Check if file exists in destination by identity
+        # Check if file with same content exists in destination
         if identity in dest_index:
             dest_entry = dest_index[identity]
-            dest_rel_path = str(dest_entry["path"])  # Relative path in dest
+            dest_rel_path = str(dest_entry["path"])
             dest_date = str(dest_entry.get("date", ""))
+            dest_mtime = int(datetime.fromisoformat(dest_date).timestamp())
 
-            handled_dest_files.add(dest_rel_path)
+            matched_dest_files.add(dest_rel_path)
 
-            if rel_path == dest_rel_path:
-                # Same path, same content - check timestamp
-                source_mtime = int(datetime.fromisoformat(source_date).timestamp())
-                dest_mtime = int(datetime.fromisoformat(dest_date).timestamp())
-
-                if source_mtime != dest_mtime:
-                    operations.append(
-                        SyncOperation(
-                            op_type="touch",
-                            source_path=None,
-                            dest_path=str(dest_base / rel_path),  # Full path in dest
-                            expected_mtime=source_mtime,
-                            reason=f"timestamp mismatch: expected {source_mtime}, got {dest_mtime}",
-                        )
+            if rel_path == dest_rel_path and source_mtime == dest_mtime:
+                # Identical file: same content, same path, same timestamp
+                # No operation needed
+                pass
+            elif rel_path == dest_rel_path:
+                # Same content and path, different timestamp -> touch
+                operations.append(
+                    SyncOperation(
+                        op_type="touch",
+                        source_path=None,
+                        dest_path=str(dest_base / rel_path),
+                        expected_mtime=source_mtime,
+                        reason=f"timestamp mismatch: {dest_date} -> {source_date}",
                     )
+                )
             else:
-                # Same content, different path - move operation in dest
+                # Same content, different path -> move within destination
                 operations.append(
                     SyncOperation(
                         op_type="move",
-                        source_path=str(
-                            dest_base / dest_rel_path
-                        ),  # Move FROM old location in dest
-                        dest_path=str(dest_base / rel_path),  # Move TO new location in dest
+                        source_path=str(dest_base / dest_rel_path),
+                        dest_path=str(dest_base / rel_path),
                         expected_mtime=None,
-                        reason=f"file moved/renamed from {dest_rel_path} to {rel_path}",
+                        reason=f"rename: {dest_rel_path} -> {rel_path}",
                     )
                 )
-
-                handled_dest_files.add(dest_rel_path)
-
-                # Check if timestamp needs updating after move
-                source_mtime = int(datetime.fromisoformat(source_date).timestamp())
-                dest_mtime = int(datetime.fromisoformat(dest_date).timestamp())
-
+                # After move, fix timestamp if needed
                 if source_mtime != dest_mtime:
                     operations.append(
                         SyncOperation(
                             op_type="touch",
                             source_path=None,
-                            dest_path=str(dest_base / rel_path),  # Full path in dest
+                            dest_path=str(dest_base / rel_path),
                             expected_mtime=source_mtime,
                             reason="timestamp correction after move",
                         )
                     )
         else:
-            # File not found by identity in dest - needs to be copied
-            # Check if same path exists with different content (file modified)
+            # File content not found in destination -> copy
             if rel_path in dest_by_path:
-                # File content changed at same path
+                # Same path exists but different content (file modified)
                 warnings.append(f"File modified: {rel_path} (will be replaced)")
-                handled_dest_files.add(rel_path)
+                matched_dest_files.add(rel_path)
 
-                source_mtime = int(datetime.fromisoformat(source_date).timestamp())
-
-                operations.append(
-                    SyncOperation(
-                        op_type="copy",
-                        source_path=str(source_base / rel_path),  # Full path in source
-                        dest_path=str(dest_base / rel_path),  # Full path in dest
-                        expected_mtime=source_mtime,
-                        reason="file content changed",
-                    )
+            operations.append(
+                SyncOperation(
+                    op_type="copy",
+                    source_path=str(source_base / rel_path),
+                    dest_path=str(dest_base / rel_path),
+                    expected_mtime=source_mtime,
+                    reason="new file" if rel_path not in dest_by_path else "content changed",
                 )
-            else:
-                # New file - needs to be copied
-                source_mtime = int(datetime.fromisoformat(source_date).timestamp())
+            )
 
-                operations.append(
-                    SyncOperation(
-                        op_type="copy",
-                        source_path=str(source_base / rel_path),  # Full path in source
-                        dest_path=str(dest_base / rel_path),  # Full path in dest
-                        expected_mtime=source_mtime,
-                        reason="new file in source",
-                    )
-                )
-
-    # Phase 2: Find files to delete (in dest but not in source)
+    # Phase 2: Find files to delete (in dest but not matched to any source file)
     for dest_entry in dest_data:
         dest_rel_path = str(dest_entry["path"])
 
-        if dest_rel_path in handled_dest_files:
-            continue
-
-        # Pure deletion (file not in source at all)
-        operations.append(
-            SyncOperation(
-                op_type="delete",
-                source_path=None,
-                dest_path=str(dest_base / dest_rel_path),  # Full path in dest
-                expected_mtime=None,
-                reason="file not in source",
+        if dest_rel_path not in matched_dest_files:
+            operations.append(
+                SyncOperation(
+                    op_type="delete",
+                    source_path=None,
+                    dest_path=str(dest_base / dest_rel_path),
+                    expected_mtime=None,
+                    reason="file not in source",
+                )
             )
-        )
 
     return operations, warnings
 
@@ -292,17 +273,20 @@ def compute_sync_plan(
 def optimize_operations(
     operations: list[SyncOperation],
     dest_data: list[dict[str, str | int]],
+    source_data: list[dict[str, str | int]],
     dest_dir: str,
 ) -> list[SyncOperation]:
     """Optimize operations to minimize work.
 
     Performs:
     - Detects required directories and adds mkdir operations only for new directories
+    - Adds touch operations for new directories with proper timestamps
     - Sorts operations by dependency order
 
     Args:
         operations: List of sync operations (with absolute paths)
         dest_data: Destination archive metadata (with relative paths)
+        source_data: Source archive metadata (with relative paths)
         dest_dir: Destination archive directory path
 
     Returns:
@@ -310,7 +294,7 @@ def optimize_operations(
 
     Examples:
         >>> ops = [SyncOperation('copy', '/src/a.jpg', '/dest/new/a.jpg', 123, 'test')]
-        >>> optimized = optimize_operations(ops, [], '/dest')
+        >>> optimized = optimize_operations(ops, [], [], '/dest')
         >>> optimized[0].op_type
         'mkdir'
     """
@@ -323,13 +307,24 @@ def optimize_operations(
     for entry in dest_data:
         rel_path = str(entry.get("path", ""))
         if rel_path:
-            # Convert to absolute path then get parent
             full_path = dest_base / rel_path
             parent = str(full_path.parent)
             if parent != "/" and parent != ".":
                 existing_dirs.add(parent)
 
-    # Extract directories that need to exist
+    # Build mapping of directories to their newest file timestamp (from source)
+    dir_newest_mtime: dict[str, int] = {}
+    for entry in source_data:
+        rel_path = str(entry.get("path", ""))
+        date_str = str(entry.get("date", ""))
+        if rel_path and date_str:
+            full_path = dest_base / rel_path
+            dir_path = str(full_path.parent)
+            mtime = int(datetime.fromisoformat(date_str).timestamp())
+            if dir_path not in dir_newest_mtime or mtime > dir_newest_mtime[dir_path]:
+                dir_newest_mtime[dir_path] = mtime
+
+    # Extract directories that need to be created
     required_dirs: set[str] = set()
     for op in operations:
         if op.op_type in ("copy", "move", "touch"):
@@ -337,15 +332,15 @@ def optimize_operations(
             if parent != "/" and parent != "." and parent not in existing_dirs:
                 required_dirs.add(parent)
 
-    # Add mkdir operations only for directories that don't exist
+    # Add mkdir operations for new directories (with touch for timestamp)
     for dir_path in sorted(required_dirs):
         optimized.append(
             SyncOperation(
                 op_type="mkdir",
                 source_path=None,
                 dest_path=dir_path,
-                expected_mtime=None,
-                reason="ensure directory exists",
+                expected_mtime=dir_newest_mtime.get(dir_path),
+                reason="create directory",
             )
         )
 
@@ -417,16 +412,16 @@ def compute_metadata_updates(
             dir_files[dir_path] = []
         dir_files[dir_path].append(entry)
 
-    # Find affected directories (directories with file changes)
+    # Find directories affected by operations (need timestamp update)
     affected_dirs: set[str] = set()
     for op in operations:
         if op.op_type in ("copy", "move", "delete", "touch"):
             affected_dirs.add(str(Path(op.dest_path).parent))
 
-    # Generate directory timestamp updates
+    # Generate directory timestamp updates for all affected directories
     for dir_path in sorted(affected_dirs):
         if dir_path in dir_files:
-            # Find newest file in directory
+            # Find newest file in directory to set directory mtime
             files = dir_files[dir_path]
             if files:
                 newest_file = max(files, key=lambda x: datetime.fromisoformat(str(x["date"])))
@@ -839,7 +834,7 @@ def run(args: argparse.Namespace) -> int:
     operations.extend(metadata_ops)
 
     # Optimize operations
-    operations = optimize_operations(operations, dest_data, args.dest)
+    operations = optimize_operations(operations, dest_data, source_data, args.dest)
 
     # Filter operations if requested
     if args.no_delete:
