@@ -534,7 +534,9 @@ class TestComputeMetadataUpdates:
     def test_metadata_updates_base_directory(self):
         """Test that base destination directory gets mtime update."""
         operations = [
-            sync.SyncOperation("copy", "/src/subdir/photo.jpg", "/dest/subdir/photo.jpg", 123, "test")
+            sync.SyncOperation(
+                "copy", "/src/subdir/photo.jpg", "/dest/subdir/photo.jpg", 123, "test"
+            )
         ]
         # source_data with files at different timestamps
         source_data = [
@@ -558,7 +560,9 @@ class TestComputeMetadataUpdates:
 
         # Should have update for base directory /dest
         base_dir_ops = [
-            op for op in metadata_ops if op.op_type == "update-dir-mtime" and op.dest_path == "/dest"
+            op
+            for op in metadata_ops
+            if op.op_type == "update-dir-mtime" and op.dest_path == "/dest"
         ]
         assert len(base_dir_ops) == 1
 
@@ -601,11 +605,6 @@ class TestComputeMetadataUpdates:
 
     def test_metadata_updates_sorted_deepest_first(self):
         """Test that directory mtime updates are sorted from deepest to shallowest."""
-        operations = [
-            sync.SyncOperation(
-                "copy", "/src/dir1/dir2/photo.jpg", "/dest/dir1/dir2/photo.jpg", 123, "test"
-            )
-        ]
         source_data = [
             {
                 "path": "dir1/dir2/photo.jpg",
@@ -703,7 +702,7 @@ class TestOperationToCommand:
         commands = op.to_command()
 
         assert len(commands) == 1
-        assert "rsync" in commands[0]
+        assert "cp -p" in commands[0]
         assert "/src/photo.jpg" in commands[0]
         assert "/dest/photo.jpg" in commands[0]
 
@@ -895,7 +894,7 @@ class TestGenerateSyncScript:
         # Check script contains expected elements
         assert "#!/bin/bash" in script_content
         assert "mkdir" in script_content
-        assert "rsync" in script_content
+        assert "cp -p" in script_content
         # Block comments instead of individual operation comments
         assert "# Create directories" in script_content
         assert "# Copy files" in script_content
