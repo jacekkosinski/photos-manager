@@ -99,7 +99,7 @@ def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
             'path': '/path/to/photos/image.jpg',
             'sha1': 'a1b2c3...',
             'md5': 'd4e5f6...',
-            'date': '2025-01-04T12:34:56+0100',
+            'date': '2025-01-04T12:34:56+01:00',
             'size': 1234567
         }
     """
@@ -120,9 +120,8 @@ def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
                 stat_info = file_path.stat()
                 size = stat_info.st_size
                 mod_time = stat_info.st_mtime
-                mod_time_with_tz = datetime.fromtimestamp(mod_time, local_tz).strftime(
-                    "%Y-%m-%dT%H:%M:%S%z"
-                )
+                # Use isoformat() for proper ISO 8601 with timezone (+01:00 instead of +0100)
+                mod_time_with_tz = datetime.fromtimestamp(mod_time, local_tz).isoformat()
 
                 # Append file information to the list
                 file_info_list.append(
