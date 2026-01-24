@@ -834,9 +834,11 @@ def generate_sync_script(
             groups[op.op_type] = []
         groups[op.op_type].append(op)
 
-    # Sort each group alphabetically by dest_path
-    for ops_list in groups.values():
-        ops_list.sort(key=lambda op: op.dest_path)
+    # Sort each group alphabetically by dest_path, except update-dir-mtime
+    # which must maintain depth-first ordering from optimize_operations()
+    for op_type, ops_list in groups.items():
+        if op_type != "update-dir-mtime":
+            ops_list.sort(key=lambda op: op.dest_path)
 
     # Define group order and labels
     group_order = [
