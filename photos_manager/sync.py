@@ -395,7 +395,13 @@ def optimize_operations(
     for op in operations:
         if op.op_type in ("copy", "move", "touch"):
             parent = str(Path(op.dest_path).parent)
-            if parent != "/" and parent != "." and parent not in existing_dirs:
+            # Exclude root, current dir, base dest directory, and existing directories
+            if (
+                parent != "/"
+                and parent != "."
+                and parent != str(dest_base)
+                and parent not in existing_dirs
+            ):
                 required_dirs.add(parent)
 
     # Add mkdir operations for new directories
@@ -502,6 +508,21 @@ def compute_metadata_updates(
                         reason="sync directory timestamp with newest file",
                     )
                 )
+
+    # Set timestamp for base destination directory to match newest file in entire archive
+    if source_data:
+        newest_file = max(source_data, key=lambda x: datetime.fromisoformat(str(x["date"])))
+        newest_mtime = int(datetime.fromisoformat(str(newest_file["date"])).timestamp())
+
+        metadata_ops.append(
+            SyncOperation(
+                op_type="update-dir-mtime",
+                source_path=None,
+                dest_path=str(dest_base),
+                expected_mtime=newest_mtime,
+                reason="sync base directory timestamp with newest file in archive",
+            )
+        )
 
     return metadata_ops
 

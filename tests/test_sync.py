@@ -431,6 +431,24 @@ class TestOptimizeOperations:
         # Should be sorted
         assert copy_paths == sorted(copy_paths)
 
+    def test_optimize_excludes_base_directory_mkdir(self):
+        """Test that base destination directory is not included in mkdir operations."""
+        # Operation that would create a file directly in dest_dir
+        operations = [
+            sync.SyncOperation("copy", "/src/photo.jpg", "/dest/photo.jpg", 123, "test"),
+        ]
+
+        optimized = sync.optimize_operations(operations, [], "/dest")
+
+        # Should not create mkdir for /dest (it already exists)
+        mkdir_ops = [op for op in optimized if op.op_type == "mkdir"]
+        mkdir_paths = [op.dest_path for op in mkdir_ops]
+
+        assert "/dest" not in mkdir_paths
+        # Should only have the copy operation
+        copy_ops = [op for op in optimized if op.op_type == "copy"]
+        assert len(copy_ops) == 1
+
 
 class TestComputeMetadataUpdates:
     """Tests for compute_metadata_updates function."""
@@ -512,6 +530,42 @@ class TestComputeMetadataUpdates:
         # Should use timestamp from photo2 (newer)
         expected_mtime = int(datetime.fromisoformat("2024-01-02T12:00:00+01:00").timestamp())
         assert any(op.expected_mtime == expected_mtime for op in dir_ops)
+
+    def test_metadata_updates_base_directory(self):
+        """Test that base destination directory gets mtime update."""
+        operations = [
+            sync.SyncOperation("copy", "/src/subdir/photo.jpg", "/dest/subdir/photo.jpg", 123, "test")
+        ]
+        # source_data with files at different timestamps
+        source_data = [
+            {
+                "path": "subdir/photo1.jpg",
+                "date": "2024-01-01T12:00:00+01:00",
+                "sha1": "abc",
+                "md5": "def",
+                "size": 100,
+            },
+            {
+                "path": "subdir/photo2.jpg",
+                "date": "2024-01-05T15:30:00+01:00",  # Newest file in archive
+                "sha1": "xyz",
+                "md5": "uvw",
+                "size": 200,
+            },
+        ]
+
+        metadata_ops = sync.compute_metadata_updates(operations, source_data, "/dest")
+
+        # Should have update for base directory /dest
+        base_dir_ops = [
+            op for op in metadata_ops if op.op_type == "update-dir-mtime" and op.dest_path == "/dest"
+        ]
+        assert len(base_dir_ops) == 1
+
+        # Base directory should get timestamp of newest file in entire archive
+        expected_mtime = int(datetime.fromisoformat("2024-01-05T15:30:00+01:00").timestamp())
+        assert base_dir_ops[0].expected_mtime == expected_mtime
+        assert "base directory" in base_dir_ops[0].reason
 
 
 class TestValidateArchiveDirectories:
