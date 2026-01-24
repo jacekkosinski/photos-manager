@@ -618,6 +618,144 @@ class TestOperationToCommand:
         assert "/dest/photo.jpg" in commands[0]
 
 
+class TestRewriteOperationPaths:
+    """Tests for rewrite_operation_paths function."""
+
+    def test_rewrite_copy_operation(self):
+        """Test rewriting copy operation paths."""
+        operations = [
+            sync.SyncOperation(
+                op_type="copy",
+                source_path="/source/photos/photo.jpg",
+                dest_path="/local/dest/photos/photo.jpg",
+                expected_mtime=1234567890,
+                reason="new file",
+            )
+        ]
+
+        rewritten = sync.rewrite_operation_paths(operations, "/local/dest", "/remote/dest")
+
+        assert len(rewritten) == 1
+        # source_path should NOT be rewritten for copy (it's from source archive)
+        assert rewritten[0].source_path == "/source/photos/photo.jpg"
+        # dest_path should be rewritten
+        assert rewritten[0].dest_path == "/remote/dest/photos/photo.jpg"
+        assert rewritten[0].op_type == "copy"
+        assert rewritten[0].expected_mtime == 1234567890
+        assert rewritten[0].reason == "new file"
+
+    def test_rewrite_move_operation(self):
+        """Test rewriting move operation paths (both source and dest)."""
+        operations = [
+            sync.SyncOperation(
+                op_type="move",
+                source_path="/local/dest/photos/old.jpg",
+                dest_path="/local/dest/photos/new.jpg",
+                expected_mtime=None,
+                reason="rename",
+            )
+        ]
+
+        rewritten = sync.rewrite_operation_paths(operations, "/local/dest", "/remote/dest")
+
+        assert len(rewritten) == 1
+        # For move, both paths should be rewritten (both are within dest)
+        assert rewritten[0].source_path == "/remote/dest/photos/old.jpg"
+        assert rewritten[0].dest_path == "/remote/dest/photos/new.jpg"
+
+    def test_rewrite_mkdir_operation(self):
+        """Test rewriting mkdir operation paths."""
+        operations = [
+            sync.SyncOperation(
+                op_type="mkdir",
+                source_path=None,
+                dest_path="/local/dest/photos/newdir",
+                expected_mtime=None,
+                reason="create directory",
+            )
+        ]
+
+        rewritten = sync.rewrite_operation_paths(operations, "/local/dest", "/remote/dest")
+
+        assert len(rewritten) == 1
+        assert rewritten[0].source_path is None
+        assert rewritten[0].dest_path == "/remote/dest/photos/newdir"
+
+    def test_rewrite_touch_operation(self):
+        """Test rewriting touch operation paths."""
+        operations = [
+            sync.SyncOperation(
+                op_type="touch",
+                source_path=None,
+                dest_path="/local/dest/photos/photo.jpg",
+                expected_mtime=1234567890,
+                reason="timestamp mismatch",
+            )
+        ]
+
+        rewritten = sync.rewrite_operation_paths(operations, "/local/dest", "/remote/dest")
+
+        assert len(rewritten) == 1
+        assert rewritten[0].dest_path == "/remote/dest/photos/photo.jpg"
+        assert rewritten[0].expected_mtime == 1234567890
+
+    def test_rewrite_delete_operation(self):
+        """Test rewriting delete operation paths."""
+        operations = [
+            sync.SyncOperation(
+                op_type="delete",
+                source_path=None,
+                dest_path="/local/dest/photos/old.jpg",
+                expected_mtime=None,
+                reason="file not in source",
+            )
+        ]
+
+        rewritten = sync.rewrite_operation_paths(operations, "/local/dest", "/remote/dest")
+
+        assert len(rewritten) == 1
+        assert rewritten[0].dest_path == "/remote/dest/photos/old.jpg"
+
+    def test_rewrite_multiple_operations(self):
+        """Test rewriting multiple operations of different types."""
+        operations = [
+            sync.SyncOperation("mkdir", None, "/local/dest/newdir", None, "test"),
+            sync.SyncOperation("copy", "/src/a.jpg", "/local/dest/a.jpg", 123, "test"),
+            sync.SyncOperation("move", "/local/dest/b.jpg", "/local/dest/c.jpg", None, "test"),
+            sync.SyncOperation("touch", None, "/local/dest/d.jpg", 456, "test"),
+            sync.SyncOperation("delete", None, "/local/dest/e.jpg", None, "test"),
+        ]
+
+        rewritten = sync.rewrite_operation_paths(operations, "/local/dest", "/remote/dest")
+
+        assert len(rewritten) == 5
+        assert rewritten[0].dest_path == "/remote/dest/newdir"
+        assert rewritten[1].dest_path == "/remote/dest/a.jpg"
+        assert rewritten[1].source_path == "/src/a.jpg"  # Not rewritten
+        assert rewritten[2].source_path == "/remote/dest/b.jpg"  # Rewritten for move
+        assert rewritten[2].dest_path == "/remote/dest/c.jpg"
+        assert rewritten[3].dest_path == "/remote/dest/d.jpg"
+        assert rewritten[4].dest_path == "/remote/dest/e.jpg"
+
+    def test_rewrite_empty_operations(self):
+        """Test rewriting empty operations list."""
+        rewritten = sync.rewrite_operation_paths([], "/local/dest", "/remote/dest")
+        assert len(rewritten) == 0
+
+    def test_rewrite_preserves_original_list(self):
+        """Test that original operations list is not modified."""
+        operations = [
+            sync.SyncOperation("copy", "/src/a.jpg", "/local/dest/a.jpg", 123, "test"),
+        ]
+
+        rewritten = sync.rewrite_operation_paths(operations, "/local/dest", "/remote/dest")
+
+        # Original should be unchanged
+        assert operations[0].dest_path == "/local/dest/a.jpg"
+        # Rewritten should have new path
+        assert rewritten[0].dest_path == "/remote/dest/a.jpg"
+
+
 class TestGenerateSyncScript:
     """Tests for generate_sync_script function."""
 
@@ -988,6 +1126,54 @@ class TestMain:
 
         # Should succeed
         assert exit_code == 0
+
+    def test_run_with_rewrite_dest(self, tmp_path):
+        """Test run with --rewrite-dest flag rewrites paths in output script."""
+        # Create archives
+        source_dir = tmp_path / "source"
+        source_dir.mkdir()
+        source_json = source_dir / "photos.json"
+        source_data = [
+            {
+                "path": "photo.jpg",
+                "sha1": "abc123",
+                "md5": "def456",
+                "size": 1000,
+                "date": "2024-01-01T12:00:00+01:00",
+            }
+        ]
+        source_json.write_text(json.dumps(source_data))
+
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+        dest_json = dest_dir / "photos.json"
+        dest_json.write_text(json.dumps([]))
+
+        output_script = tmp_path / "sync.sh"
+
+        parser = argparse.ArgumentParser()
+        sync.setup_parser(parser)
+        args = parser.parse_args(
+            [
+                str(source_dir),
+                str(dest_dir),
+                "--output",
+                str(output_script),
+                "--rewrite-dest",
+                "/remote/archive",
+            ]
+        )
+
+        exit_code = sync.run(args)
+
+        assert exit_code == 0
+        assert output_script.exists()
+
+        # Check that script contains rewritten paths
+        script_content = output_script.read_text()
+        assert "/remote/archive" in script_content
+        # Original dest path should NOT be in the script (rewritten)
+        assert str(dest_dir) not in script_content
 
     @patch("builtins.input")
     def test_run_execute_mode_cancellation(self, mock_input, tmp_path):

@@ -717,6 +717,54 @@ def validate_archive_directories(
     return len(errors) == 0, errors
 
 
+def rewrite_operation_paths(
+    operations: list[SyncOperation],
+    original_dest: str,
+    new_dest: str,
+) -> list[SyncOperation]:
+    """Rewrite destination paths in operations for output.
+
+    This function replaces the original destination path prefix with a new
+    destination path in all operations. Useful for generating scripts that
+    will be executed on a remote server with a different path structure.
+
+    Args:
+        operations: List of sync operations with original paths
+        original_dest: Original destination directory path to replace
+        new_dest: New destination directory path for output
+
+    Returns:
+        New list of SyncOperation objects with rewritten paths
+
+    Examples:
+        >>> ops = [SyncOperation('copy', '/src/a.jpg', '/local/dest/a.jpg', 123, 'test')]
+        >>> rewritten = rewrite_operation_paths(ops, '/local/dest', '/remote/dest')
+        >>> rewritten[0].dest_path
+        '/remote/dest/a.jpg'
+    """
+    rewritten: list[SyncOperation] = []
+
+    for op in operations:
+        new_dest_path = op.dest_path.replace(original_dest, new_dest, 1)
+        new_source_path = op.source_path
+
+        # Also rewrite source_path for move operations (within dest)
+        if op.op_type == "move" and op.source_path:
+            new_source_path = op.source_path.replace(original_dest, new_dest, 1)
+
+        rewritten.append(
+            SyncOperation(
+                op_type=op.op_type,
+                source_path=new_source_path,
+                dest_path=new_dest_path,
+                expected_mtime=op.expected_mtime,
+                reason=op.reason,
+            )
+        )
+
+    return rewritten
+
+
 def generate_sync_script(
     operations: list[SyncOperation],
     output_path: str,
@@ -917,6 +965,13 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Show detailed operation information",
     )
+    parser.add_argument(
+        "-r",
+        "--rewrite-dest",
+        type=str,
+        metavar="PATH",
+        help="Rewrite destination path in output commands (for remote execution)",
+    )
 
 
 def _print_operation_summary(op_counts: dict[str, int], total_ops: int) -> None:
@@ -1115,6 +1170,10 @@ def run(args: argparse.Namespace) -> int:
 
     # Show detailed operations if verbose
     _print_verbose_operations(operations, args.verbose)
+
+    # Rewrite destination paths if requested (for remote execution)
+    if args.rewrite_dest:
+        operations = rewrite_operation_paths(operations, args.dest, args.rewrite_dest)
 
     # Generate script if requested
     if args.output:
