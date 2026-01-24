@@ -68,7 +68,7 @@ class SyncOperation:
             ['cp -pv /src/a.jpg /dest/a.jpg']
         """
         if self.op_type == "mkdir":
-            return [f"mkdir -p -m 755 {self.dest_path}"]
+            return [f"mkdir -p {self.dest_path}"]
 
         if self.op_type == "copy":
             return [f"cp -pv {self.source_path} {self.dest_path}"]
@@ -854,7 +854,8 @@ def generate_sync_script(
     try:
         with Path(output_path).open("w", encoding="utf-8") as f:
             f.write("#!/bin/bash\n")
-            f.write("set -e\n\n")
+            f.write("set -e\n")
+            f.write("umask 022\n\n")
 
             for op_type, label in group_order:
                 if op_type not in groups:

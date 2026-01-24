@@ -694,7 +694,7 @@ class TestOperationToCommand:
         commands = op.to_command()
 
         assert len(commands) == 1
-        assert "mkdir -p -m 755 /dest/newdir" in commands[0]
+        assert "mkdir -p /dest/newdir" in commands[0]
 
     def test_copy_command(self):
         """Test copy operation command generation."""
@@ -893,8 +893,9 @@ class TestGenerateSyncScript:
 
         # Check script contains expected elements
         assert "#!/bin/bash" in script_content
+        assert "umask 022" in script_content
         assert "mkdir" in script_content
-        assert "cp -p" in script_content
+        assert "cp -pv" in script_content
         # Block comments instead of individual operation comments
         assert "# Create directories" in script_content
         assert "# Copy files" in script_content
