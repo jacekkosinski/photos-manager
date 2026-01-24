@@ -65,13 +65,13 @@ class SyncOperation:
         Examples:
             >>> op = SyncOperation('copy', '/src/a.jpg', '/dest/a.jpg', 1234567890, 'new file')
             >>> op.to_command()
-            ['cp -p /src/a.jpg /dest/a.jpg']
+            ['cp -pv /src/a.jpg /dest/a.jpg']
         """
         if self.op_type == "mkdir":
-            return [f"mkdir -p {self.dest_path}"]
+            return [f"mkdir -p -m 755 {self.dest_path}"]
 
         if self.op_type == "copy":
-            return [f"cp -p {self.source_path} {self.dest_path}"]
+            return [f"cp -pv {self.source_path} {self.dest_path}"]
 
         if self.op_type == "move":
             return [f"mv {self.source_path} {self.dest_path}"]

@@ -694,7 +694,7 @@ class TestOperationToCommand:
         commands = op.to_command()
 
         assert len(commands) == 1
-        assert "mkdir -p /dest/newdir" in commands[0]
+        assert "mkdir -p -m 755 /dest/newdir" in commands[0]
 
     def test_copy_command(self):
         """Test copy operation command generation."""
@@ -702,7 +702,7 @@ class TestOperationToCommand:
         commands = op.to_command()
 
         assert len(commands) == 1
-        assert "cp -p" in commands[0]
+        assert "cp -pv" in commands[0]
         assert "/src/photo.jpg" in commands[0]
         assert "/dest/photo.jpg" in commands[0]
 
