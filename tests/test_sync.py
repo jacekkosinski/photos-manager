@@ -565,7 +565,73 @@ class TestComputeMetadataUpdates:
         # Base directory should get timestamp of newest file in entire archive
         expected_mtime = int(datetime.fromisoformat("2024-01-05T15:30:00+01:00").timestamp())
         assert base_dir_ops[0].expected_mtime == expected_mtime
-        assert "base directory" in base_dir_ops[0].reason
+        assert "subtree" in base_dir_ops[0].reason
+
+    def test_metadata_updates_parent_directories(self):
+        """Test that all parent directories get mtime updates."""
+        operations = [
+            sync.SyncOperation(
+                "copy", "/src/dir1/dir2/photo.jpg", "/dest/dir1/dir2/photo.jpg", 123, "test"
+            )
+        ]
+        source_data = [
+            {
+                "path": "dir1/dir2/photo.jpg",
+                "date": "2024-01-10T10:00:00+01:00",
+                "sha1": "abc",
+                "md5": "def",
+                "size": 100,
+            }
+        ]
+
+        metadata_ops = sync.compute_metadata_updates(operations, source_data, "/dest")
+
+        # Should have updates for /dest, /dest/dir1, and /dest/dir1/dir2
+        dir_ops = [op for op in metadata_ops if op.op_type == "update-dir-mtime"]
+        dir_paths = {op.dest_path for op in dir_ops}
+
+        assert "/dest" in dir_paths
+        assert "/dest/dir1" in dir_paths
+        assert "/dest/dir1/dir2" in dir_paths
+
+        # All should have the same mtime (newest file in subtree)
+        expected_mtime = int(datetime.fromisoformat("2024-01-10T10:00:00+01:00").timestamp())
+        for op in dir_ops:
+            assert op.expected_mtime == expected_mtime
+
+    def test_metadata_updates_sorted_deepest_first(self):
+        """Test that directory mtime updates are sorted from deepest to shallowest."""
+        operations = [
+            sync.SyncOperation(
+                "copy", "/src/dir1/dir2/photo.jpg", "/dest/dir1/dir2/photo.jpg", 123, "test"
+            )
+        ]
+        source_data = [
+            {
+                "path": "dir1/dir2/photo.jpg",
+                "date": "2024-01-10T10:00:00+01:00",
+                "sha1": "abc",
+                "md5": "def",
+                "size": 100,
+            }
+        ]
+
+        # Get optimized operations including metadata updates
+        sync_ops, _ = sync.compute_sync_plan(source_data, [], "/src", "/dest")
+        metadata_ops = sync.compute_metadata_updates(sync_ops, source_data, "/dest")
+        all_ops = sync_ops + metadata_ops
+        optimized = sync.optimize_operations(all_ops, [], "/dest")
+
+        # Find update-dir-mtime operations
+        dir_mtime_ops = [op for op in optimized if op.op_type == "update-dir-mtime"]
+
+        # Should be sorted deepest first
+        if len(dir_mtime_ops) >= 2:
+            for i in range(len(dir_mtime_ops) - 1):
+                current_depth = dir_mtime_ops[i].dest_path.count("/")
+                next_depth = dir_mtime_ops[i + 1].dest_path.count("/")
+                # Current should be deeper or equal depth to next
+                assert current_depth >= next_depth
 
 
 class TestValidateArchiveDirectories:

@@ -422,7 +422,7 @@ def optimize_operations(
     # 3. move - relocate existing files
     # 4. copy - add new files
     # 5. touch - fix file timestamps
-    # 6. update-dir-mtime - fix directory timestamps
+    # 6. update-dir-mtime - fix directory timestamps (deepest first)
     # 7. update-json-mtime - fix JSON timestamps
     op_priority = {
         "mkdir": 0,
@@ -434,9 +434,28 @@ def optimize_operations(
         "update-json-mtime": 6,
     }
 
+    def sort_key(op: SyncOperation) -> tuple[int, int, str]:
+        """Generate sort key for operation.
+
+        Returns:
+            Tuple of (priority, depth_or_zero, path) where:
+            - priority: operation type priority
+            - depth_or_zero: negative depth for update-dir-mtime (deepest first), 0 otherwise
+            - path: destination path for alphabetical sorting
+        """
+        priority = op_priority.get(op.op_type, 99)
+
+        # For update-dir-mtime, sort by depth (deepest first), then alphabetically
+        if op.op_type == "update-dir-mtime":
+            depth = op.dest_path.count(os.sep)
+            return (priority, -depth, op.dest_path)  # Negative depth for reverse order
+
+        # For other operations, sort by priority then path
+        return (priority, 0, op.dest_path)
+
     # Add remaining operations and sort
     optimized.extend(operations)
-    optimized.sort(key=lambda op: (op_priority.get(op.op_type, 99), op.dest_path))
+    optimized.sort(key=sort_key)
 
     return optimized
 
@@ -450,6 +469,8 @@ def compute_metadata_updates(
 
     Identifies directories and JSON files affected by sync operations and
     generates operations to update their timestamps to match source.
+    Timestamps are set for all directories in the path hierarchy, not just
+    leaf directories.
 
     Args:
         operations: List of sync operations that will be performed (with absolute paths)
@@ -467,62 +488,61 @@ def compute_metadata_updates(
         True
     """
     metadata_ops: list[SyncOperation] = []
-
     dest_base = Path(dest_dir)
 
-    # Group source files by directory (using absolute paths for consistency with operations)
-    dir_files: dict[str, list[dict[str, str | int]]] = {}
+    # Build a mapping of all directories to their newest file timestamp
+    # This includes parent directories up to dest_base
+    dir_newest_mtime: dict[str, int] = {}
+
     for entry in source_data:
         rel_path = str(entry.get("path", ""))
         if not rel_path:
             continue
 
-        # Convert to absolute path in dest to match operations
+        file_date = str(entry.get("date", ""))
+        file_mtime = int(datetime.fromisoformat(file_date).timestamp())
+
+        # Convert to absolute path in dest
         full_path = dest_base / rel_path
-        dir_path = str(full_path.parent)
-        if dir_path not in dir_files:
-            dir_files[dir_path] = []
-        dir_files[dir_path].append(entry)
+
+        # Update all parent directories up to and including dest_base
+        current = full_path.parent
+        while str(current) != str(current.parent):  # Stop at root
+            dir_path = str(current)
+            if dir_path not in dir_newest_mtime:
+                dir_newest_mtime[dir_path] = file_mtime
+            else:
+                dir_newest_mtime[dir_path] = max(dir_newest_mtime[dir_path], file_mtime)
+
+            # Stop after processing dest_base
+            if current == dest_base:
+                break
+            current = current.parent
 
     # Find directories affected by operations (need timestamp update)
     affected_dirs: set[str] = set()
     for op in operations:
         if op.op_type in ("copy", "move", "delete", "touch"):
-            affected_dirs.add(str(Path(op.dest_path).parent))
+            # Add the directory and all parents up to and including dest_base
+            current = Path(op.dest_path).parent
+            while str(current) != str(current.parent):
+                affected_dirs.add(str(current))
+                if current == dest_base:
+                    break
+                current = current.parent
 
     # Generate directory timestamp updates for all affected directories
-    for dir_path in sorted(affected_dirs):
-        if dir_path in dir_files:
-            # Find newest file in directory to set directory mtime
-            files = dir_files[dir_path]
-            if files:
-                newest_file = max(files, key=lambda x: datetime.fromisoformat(str(x["date"])))
-                newest_mtime = int(datetime.fromisoformat(str(newest_file["date"])).timestamp())
-
-                metadata_ops.append(
-                    SyncOperation(
-                        op_type="update-dir-mtime",
-                        source_path=None,
-                        dest_path=dir_path,
-                        expected_mtime=newest_mtime,
-                        reason="sync directory timestamp with newest file",
-                    )
+    for dir_path in affected_dirs:
+        if dir_path in dir_newest_mtime:
+            metadata_ops.append(
+                SyncOperation(
+                    op_type="update-dir-mtime",
+                    source_path=None,
+                    dest_path=dir_path,
+                    expected_mtime=dir_newest_mtime[dir_path],
+                    reason="sync directory timestamp with newest file in subtree",
                 )
-
-    # Set timestamp for base destination directory to match newest file in entire archive
-    if source_data:
-        newest_file = max(source_data, key=lambda x: datetime.fromisoformat(str(x["date"])))
-        newest_mtime = int(datetime.fromisoformat(str(newest_file["date"])).timestamp())
-
-        metadata_ops.append(
-            SyncOperation(
-                op_type="update-dir-mtime",
-                source_path=None,
-                dest_path=str(dest_base),
-                expected_mtime=newest_mtime,
-                reason="sync base directory timestamp with newest file in archive",
             )
-        )
 
     return metadata_ops
 
