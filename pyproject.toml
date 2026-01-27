@@ -53,6 +53,11 @@ optional-dependencies.dev = [
   "ruff>=0.7,<1",
   "xenon>=0.9,<1",
 ]
+optional-dependencies.exif = [
+  "piexif>=1.1,<2",       # Pure Python EXIF reader
+  "pillow>=10,<12",       # Image formats + EXIF
+  "pillow-heif>=0.11,<1", # HEIF/HEIC support
+]
 urls.Changelog = "https://github.com/softflow-tech/photos-manager/blob/master/CHANGELOG.md"
 urls.Homepage = "https://github.com/softflow-tech/photos-manager"
 urls.Issues = "https://github.com/softflow-tech/photos-manager/issues"

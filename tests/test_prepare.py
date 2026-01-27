@@ -4,9 +4,10 @@ import grp
 import os
 import pwd
 import stat
+from datetime import datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from _pytest.capture import CaptureFixture
@@ -15,21 +16,38 @@ from photos_manager.prepare import (
     DIR_PERMISSIONS,
     FILE_PERMISSIONS,
     check_dir_permissions,
+    check_exif_libraries_available,
     check_file_permissions,
     check_ownership,
+    extract_date_from_video,
+    extract_exif_date_from_image,
     fix_dir_permissions,
     fix_file_permissions,
     fix_ownership,
+    get_file_type,
     get_items_depth_first,
     get_unique_normalized_path,
     has_spaces,
     has_uppercase,
     is_hidden,
     needs_normalization,
+    parse_exif_date,
     process_directory,
     rename_to_normalized,
+    run,
     scan_directory,
+    set_file_mtime_from_exif,
+    setup_parser,
 )
+
+# Try to import EXIF libraries for integration tests
+try:
+    import piexif
+    from PIL import Image
+
+    EXIF_LIBS_INSTALLED = True
+except ImportError:
+    EXIF_LIBS_INSTALLED = False
 
 
 class TestIsHidden:
@@ -704,3 +722,592 @@ class TestErrorHandling:
             result = process_directory(tmp_path, current_user, current_group, dry_run=False)
 
         assert result is False
+
+
+class TestExifLibraryCheck:
+    """Tests for EXIF library availability checks."""
+
+    def test_check_raises_error_when_not_available(self) -> None:
+        """Test that check raises SystemExit when EXIF libraries not available."""
+        with (
+            patch("photos_manager.prepare.EXIF_AVAILABLE", False),
+            pytest.raises(SystemExit, match="EXIF libraries not installed"),
+        ):
+            check_exif_libraries_available()
+
+    def test_check_succeeds_when_available(self) -> None:
+        """Test that check succeeds when EXIF libraries are available."""
+        with patch("photos_manager.prepare.EXIF_AVAILABLE", True):
+            check_exif_libraries_available()  # Should not raise
+
+
+class TestFileTypeDetection:
+    """Tests for get_file_type function."""
+
+    def test_detects_jpeg_as_image(self) -> None:
+        """Test that JPEG files are detected as image."""
+        assert get_file_type(Path("photo.jpg")) == "image"
+        assert get_file_type(Path("photo.jpeg")) == "image"
+        assert get_file_type(Path("PHOTO.JPG")) == "image"
+
+    def test_detects_png_as_image(self) -> None:
+        """Test that PNG files are detected as image."""
+        assert get_file_type(Path("photo.png")) == "image"
+
+    def test_detects_tiff_as_image(self) -> None:
+        """Test that TIFF files are detected as image."""
+        assert get_file_type(Path("photo.tiff")) == "image"
+        assert get_file_type(Path("photo.tif")) == "image"
+
+    def test_detects_raw_as_image(self) -> None:
+        """Test that RAW files are detected as image."""
+        assert get_file_type(Path("photo.cr2")) == "image"
+        assert get_file_type(Path("photo.nef")) == "image"
+        assert get_file_type(Path("photo.arw")) == "image"
+        assert get_file_type(Path("photo.dng")) == "image"
+
+    def test_detects_heic_as_heif(self) -> None:
+        """Test that HEIC/HEIF files are detected as heif."""
+        assert get_file_type(Path("photo.heic")) == "heif"
+        assert get_file_type(Path("photo.heif")) == "heif"
+        assert get_file_type(Path("PHOTO.HEIC")) == "heif"
+
+    def test_detects_mp4_as_video(self) -> None:
+        """Test that MP4 files are detected as video."""
+        assert get_file_type(Path("video.mp4")) == "video"
+        assert get_file_type(Path("video.m4v")) == "video"
+
+    def test_detects_mov_as_video(self) -> None:
+        """Test that MOV files are detected as video."""
+        assert get_file_type(Path("video.mov")) == "video"
+        assert get_file_type(Path("VIDEO.MOV")) == "video"
+
+    def test_detects_avi_as_video(self) -> None:
+        """Test that AVI files are detected as video."""
+        assert get_file_type(Path("video.avi")) == "video"
+        assert get_file_type(Path("video.3gp")) == "video"
+
+    def test_returns_none_for_unsupported(self) -> None:
+        """Test that unsupported file types return None."""
+        assert get_file_type(Path("document.txt")) is None
+        assert get_file_type(Path("archive.zip")) is None
+        assert get_file_type(Path("data.json")) is None
+
+    def test_case_insensitive_extension(self) -> None:
+        """Test that file type detection is case insensitive."""
+        assert get_file_type(Path("PHOTO.JPG")) == "image"
+        assert get_file_type(Path("Photo.Jpeg")) == "image"
+        assert get_file_type(Path("VIDEO.MP4")) == "video"
+
+
+class TestExifDateParsing:
+    """Tests for parse_exif_date function."""
+
+    def test_parses_standard_format(self) -> None:
+        """Test parsing standard EXIF date format."""
+        result = parse_exif_date("2025:01:24 15:30:45")
+        assert result == datetime(2025, 1, 24, 15, 30, 45)
+
+    def test_parses_with_subseconds(self) -> None:
+        """Test parsing EXIF date with subseconds."""
+        result = parse_exif_date("2025:01:24 15:30:45.123")
+        assert result == datetime(2025, 1, 24, 15, 30, 45)
+
+    def test_handles_invalid_format(self) -> None:
+        """Test that invalid format returns None."""
+        assert parse_exif_date("invalid") is None
+        assert parse_exif_date("2025-01-24 15:30:45") is None  # Wrong separator
+
+    def test_handles_empty_string(self) -> None:
+        """Test that empty string returns None."""
+        assert parse_exif_date("") is None
+
+    def test_handles_null_bytes(self) -> None:
+        """Test that null bytes are handled."""
+        result = parse_exif_date("2025:01:24 15:30:45\x00")
+        assert result == datetime(2025, 1, 24, 15, 30, 45)
+
+    def test_handles_whitespace(self) -> None:
+        """Test that whitespace is stripped."""
+        result = parse_exif_date("  2025:01:24 15:30:45  ")
+        assert result == datetime(2025, 1, 24, 15, 30, 45)
+
+    def test_handles_only_null_bytes(self) -> None:
+        """Test that string with only null bytes returns None."""
+        assert parse_exif_date("\x00\x00") is None
+
+
+class TestExifDateExtraction:
+    """Tests for extract_exif_date_from_image function."""
+
+    def test_returns_none_when_exif_not_available(self) -> None:
+        """Test that function returns None when EXIF libraries not available."""
+        with patch("photos_manager.prepare.EXIF_AVAILABLE", False):
+            result = extract_exif_date_from_image(Path("photo.jpg"))
+            assert result is None
+
+    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")  # type: ignore[untyped-decorator]
+    def test_extracts_datetime_original_with_piexif(self, tmp_path: Path) -> None:
+        """Test extracting DateTimeOriginal using piexif."""
+        test_file = tmp_path / "test.jpg"
+        img = Image.new("RGB", (100, 100), color="red")
+
+        exif_dict = {
+            "Exif": {
+                piexif.ExifIFD.DateTimeOriginal: b"2025:01:24 15:30:45",
+            }
+        }
+        exif_bytes = piexif.dump(exif_dict)
+        img.save(test_file, exif=exif_bytes)
+
+        result = extract_exif_date_from_image(test_file)
+        assert result == datetime(2025, 1, 24, 15, 30, 45)
+
+    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")  # type: ignore[untyped-decorator]
+    def test_extracts_datetime_digitized_with_piexif(self, tmp_path: Path) -> None:
+        """Test extracting DateTimeDigitized using piexif."""
+        test_file = tmp_path / "test.jpg"
+        img = Image.new("RGB", (100, 100), color="red")
+
+        exif_dict = {
+            "Exif": {
+                piexif.ExifIFD.DateTimeDigitized: b"2025:01:24 16:00:00",
+            }
+        }
+        exif_bytes = piexif.dump(exif_dict)
+        img.save(test_file, exif=exif_bytes)
+
+        result = extract_exif_date_from_image(test_file)
+        assert result == datetime(2025, 1, 24, 16, 0, 0)
+
+    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")  # type: ignore[untyped-decorator]
+    def test_prefers_datetime_original_over_digitized(self, tmp_path: Path) -> None:
+        """Test that DateTimeOriginal takes priority over DateTimeDigitized."""
+        test_file = tmp_path / "test.jpg"
+        img = Image.new("RGB", (100, 100), color="red")
+
+        exif_dict = {
+            "Exif": {
+                piexif.ExifIFD.DateTimeOriginal: b"2025:01:24 15:30:45",
+                piexif.ExifIFD.DateTimeDigitized: b"2025:01:24 16:00:00",
+            }
+        }
+        exif_bytes = piexif.dump(exif_dict)
+        img.save(test_file, exif=exif_bytes)
+
+        result = extract_exif_date_from_image(test_file)
+        assert result == datetime(2025, 1, 24, 15, 30, 45)
+
+    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")  # type: ignore[untyped-decorator]
+    def test_extracts_datetime_from_0th_ifd(self, tmp_path: Path) -> None:
+        """Test extracting DateTime from 0th IFD."""
+        test_file = tmp_path / "test.jpg"
+        img = Image.new("RGB", (100, 100), color="red")
+
+        exif_dict = {
+            "0th": {
+                piexif.ImageIFD.DateTime: b"2025:01:24 17:00:00",
+            }
+        }
+        exif_bytes = piexif.dump(exif_dict)
+        img.save(test_file, exif=exif_bytes)
+
+        result = extract_exif_date_from_image(test_file)
+        assert result == datetime(2025, 1, 24, 17, 0, 0)
+
+    def test_returns_none_for_no_exif(self, tmp_path: Path) -> None:
+        """Test that files without EXIF return None."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("no exif here")
+
+        result = extract_exif_date_from_image(test_file)
+        assert result is None
+
+    def test_handles_corrupted_exif(self, tmp_path: Path) -> None:
+        """Test that corrupted EXIF data is handled gracefully."""
+        test_file = tmp_path / "test.jpg"
+        test_file.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 100)  # Invalid JPEG
+
+        result = extract_exif_date_from_image(test_file)
+        assert result is None
+
+    def test_fallback_to_pillow(self, tmp_path: Path) -> None:
+        """Test fallback to Pillow when piexif fails."""
+        test_file = tmp_path / "test.jpg"
+        test_file.touch()
+
+        # Mock piexif.load to fail
+        if EXIF_LIBS_INSTALLED:
+            with patch("piexif.load", side_effect=Exception("piexif failed")):
+                # Should not crash, returns None if Pillow also can't read EXIF
+                result = extract_exif_date_from_image(test_file)
+                assert result is None
+        else:
+            # If EXIF libs not installed, just verify it returns None
+            result = extract_exif_date_from_image(test_file)
+            assert result is None
+
+
+class TestExtractDateFromVideo:
+    """Tests for extract_date_from_video function."""
+
+    def test_returns_none_stub_implementation(self, tmp_path: Path) -> None:
+        """Test that stub implementation returns None."""
+        test_file = tmp_path / "video.mp4"
+        test_file.touch()
+
+        result = extract_date_from_video(test_file)
+        assert result is None
+
+
+class TestSetMtimeFromExif:
+    """Tests for set_file_mtime_from_exif function."""
+
+    def test_skips_unsupported_file_types(self, tmp_path: Path) -> None:
+        """Test that unsupported file types are skipped."""
+        test_file = tmp_path / "document.txt"
+        test_file.touch()
+
+        result = set_file_mtime_from_exif(test_file, dry_run=False)
+        assert result is False
+
+    def test_skips_files_without_exif(self, tmp_path: Path) -> None:
+        """Test that files without EXIF data are skipped."""
+        test_file = tmp_path / "photo.jpg"
+        test_file.touch()
+
+        with patch("photos_manager.prepare.extract_exif_date_from_image", return_value=None):
+            result = set_file_mtime_from_exif(test_file, dry_run=False)
+            assert result is False
+
+    def test_sets_mtime_from_exif(self, tmp_path: Path) -> None:
+        """Test that mtime is set from EXIF date."""
+        test_file = tmp_path / "photo.jpg"
+        test_file.touch()
+
+        exif_date = datetime(2025, 1, 24, 15, 30, 45)
+        with patch("photos_manager.prepare.extract_exif_date_from_image", return_value=exif_date):
+            result = set_file_mtime_from_exif(test_file, dry_run=False)
+            assert result is True
+
+            # Verify mtime was updated
+            new_mtime = test_file.stat().st_mtime
+            assert abs(new_mtime - exif_date.timestamp()) < 1.0
+
+    def test_dry_run_shows_changes(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+        """Test that dry run shows what would be changed."""
+        test_file = tmp_path / "photo.jpg"
+        test_file.touch()
+
+        exif_date = datetime(2025, 1, 24, 15, 30, 45)
+        original_mtime = test_file.stat().st_mtime
+
+        with patch("photos_manager.prepare.extract_exif_date_from_image", return_value=exif_date):
+            result = set_file_mtime_from_exif(test_file, dry_run=True)
+            assert result is True
+
+            # Verify mtime was NOT changed
+            assert test_file.stat().st_mtime == original_mtime
+
+            # Verify output
+            captured = capsys.readouterr()
+            assert "[FIX]" in captured.out
+            assert "2025-01-24 15:30:45" in captured.out
+
+    def test_handles_oserror(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+        """Test that OSError is handled gracefully."""
+        test_file = tmp_path / "photo.jpg"
+        test_file.touch()
+
+        exif_date = datetime(2025, 1, 24, 15, 30, 45)
+        with (
+            patch("photos_manager.prepare.extract_exif_date_from_image", return_value=exif_date),
+            patch("os.utime", side_effect=OSError("Permission denied")),
+        ):
+            result = set_file_mtime_from_exif(test_file, dry_run=False)
+            assert result is False
+
+            captured = capsys.readouterr()
+            assert "Warning:" in captured.err
+
+    def test_skips_if_mtime_already_correct(self, tmp_path: Path) -> None:
+        """Test that files with correct mtime are skipped."""
+        test_file = tmp_path / "photo.jpg"
+        test_file.touch()
+
+        exif_date = datetime(2025, 1, 24, 15, 30, 45)
+        # Set mtime to match EXIF date
+        os.utime(test_file, (exif_date.timestamp(), exif_date.timestamp()))
+
+        with patch("photos_manager.prepare.extract_exif_date_from_image", return_value=exif_date):
+            result = set_file_mtime_from_exif(test_file, dry_run=False)
+            assert result is False
+
+    def test_processes_image_files(self, tmp_path: Path) -> None:
+        """Test that image files are processed."""
+        test_file = tmp_path / "photo.jpg"
+        test_file.touch()
+
+        exif_date = datetime(2025, 1, 24, 15, 30, 45)
+        with patch("photos_manager.prepare.extract_exif_date_from_image", return_value=exif_date):
+            result = set_file_mtime_from_exif(test_file, dry_run=False)
+            assert result is True
+
+    def test_processes_heif_files(self, tmp_path: Path) -> None:
+        """Test that HEIF files are processed."""
+        test_file = tmp_path / "photo.heic"
+        test_file.touch()
+
+        exif_date = datetime(2025, 1, 24, 15, 30, 45)
+        with patch("photos_manager.prepare.extract_exif_date_from_image", return_value=exif_date):
+            result = set_file_mtime_from_exif(test_file, dry_run=False)
+            assert result is True
+
+    def test_processes_video_files(self, tmp_path: Path) -> None:
+        """Test that video files are processed (returns None in stub)."""
+        test_file = tmp_path / "video.mp4"
+        test_file.touch()
+
+        with patch("photos_manager.prepare.extract_date_from_video", return_value=None):
+            result = set_file_mtime_from_exif(test_file, dry_run=False)
+            assert result is False
+
+
+class TestProcessDirectoryWithExif:
+    """Tests for process_directory with EXIF support."""
+
+    def test_processes_exif_when_flag_set(
+        self, tmp_path: Path, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that EXIF processing occurs when use_exif=True."""
+        test_file = tmp_path / "photo.jpg"
+        test_file.touch()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        with patch(
+            "photos_manager.prepare._process_exif_timestamps", return_value=False
+        ) as mock_exif:
+            process_directory(tmp_path, current_user, current_group, dry_run=True, use_exif=True)
+
+            # Verify EXIF processing was called
+            assert mock_exif.called
+
+    def test_skips_exif_when_flag_not_set(self, tmp_path: Path) -> None:
+        """Test that EXIF processing is skipped when use_exif=False."""
+        test_file = tmp_path / "photo.jpg"
+        test_file.touch()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        with patch("photos_manager.prepare._process_exif_timestamps") as mock_exif:
+            process_directory(tmp_path, current_user, current_group, dry_run=True, use_exif=False)
+
+            # Verify EXIF processing was NOT called
+            assert not mock_exif.called
+
+    def test_exif_phase_runs_after_rename(self, tmp_path: Path) -> None:
+        """Test that EXIF phase runs after filename normalization."""
+        test_file = tmp_path / "PHOTO.JPG"
+        test_file.touch()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        call_order = []
+
+        def track_rename(*_args: Any, **_kwargs: Any) -> tuple[bool, dict[Path, Path]]:
+            call_order.append("rename")
+            return False, {}
+
+        def track_exif(*_args: Any, **_kwargs: Any) -> bool:
+            call_order.append("exif")
+            return False
+
+        with (
+            patch("photos_manager.prepare._process_filenames", side_effect=track_rename),
+            patch("photos_manager.prepare._process_exif_timestamps", side_effect=track_exif),
+            patch("photos_manager.prepare._process_file_permissions", return_value=False),
+            patch("photos_manager.prepare._process_dir_permissions", return_value=False),
+            patch("photos_manager.prepare._process_ownership", return_value=False),
+        ):
+            process_directory(tmp_path, current_user, current_group, dry_run=True, use_exif=True)
+
+            # Verify order: rename first, then EXIF
+            assert call_order == ["rename", "exif"]
+
+    def test_exif_errors_affect_return_value(self, tmp_path: Path) -> None:
+        """Test that EXIF errors cause process_directory to return False."""
+        test_file = tmp_path / "photo.jpg"
+        test_file.touch()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        with patch("photos_manager.prepare._process_exif_timestamps", return_value=True):
+            result = process_directory(
+                tmp_path, current_user, current_group, dry_run=True, use_exif=True
+            )
+
+            assert result is False
+
+
+class TestRunWithExifFlag:
+    """Tests for run() with --use-exif flag."""
+
+    def test_checks_libraries_when_flag_set(self) -> None:
+        """Test that EXIF libraries are checked when --use-exif is set."""
+        parser = MagicMock()
+        setup_parser(parser)
+
+        args = MagicMock()
+        args.use_exif = True
+        args.directories = []
+
+        with (
+            patch("photos_manager.prepare.EXIF_AVAILABLE", False),
+            pytest.raises(SystemExit, match="EXIF libraries not installed"),
+        ):
+            run(args)
+
+    def test_exits_if_libraries_not_available(self) -> None:
+        """Test that run() exits if EXIF libraries not available and flag is set."""
+        args = MagicMock()
+        args.use_exif = True
+        args.directories = []
+
+        with (
+            patch("photos_manager.prepare.EXIF_AVAILABLE", False),
+            pytest.raises(SystemExit, match="EXIF libraries not installed"),
+        ):
+            run(args)
+
+    def test_does_not_check_libraries_when_flag_not_set(self, tmp_path: Path) -> None:
+        """Test that EXIF libraries are not checked when --use-exif is not set."""
+        test_dir = tmp_path / "test"
+        test_dir.mkdir()
+
+        args = MagicMock()
+        args.use_exif = False
+        args.dry_run = True
+        args.user = "storage"
+        args.group = "storage"
+        args.directories = [str(test_dir)]
+
+        with patch("photos_manager.prepare.check_exif_libraries_available") as mock_check:
+            run(args)
+
+            # Verify check was NOT called
+            assert not mock_check.called
+
+    def test_passes_use_exif_to_process_directory(self, tmp_path: Path) -> None:
+        """Test that use_exif flag is passed to process_directory."""
+        test_dir = tmp_path / "test"
+        test_dir.mkdir()
+
+        args = MagicMock()
+        args.use_exif = True
+        args.dry_run = True
+        args.user = "storage"
+        args.group = "storage"
+        args.directories = [str(test_dir)]
+
+        with (
+            patch("photos_manager.prepare.EXIF_AVAILABLE", True),
+            patch("photos_manager.prepare.process_directory") as mock_process,
+        ):
+            mock_process.return_value = True
+            run(args)
+
+            # Verify process_directory was called with use_exif=True
+            assert mock_process.called
+            call_args = mock_process.call_args
+            assert call_args[0][4] is True  # 5th positional argument is use_exif
+
+
+class TestProcessExifTimestamps:
+    """Tests for _process_exif_timestamps function."""
+
+    def test_processes_supported_files(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+        """Test that supported files are processed."""
+        jpg_file = tmp_path / "photo.jpg"
+        jpg_file.touch()
+        png_file = tmp_path / "photo.png"
+        png_file.touch()
+        txt_file = tmp_path / "document.txt"
+        txt_file.touch()
+
+        from photos_manager.prepare import _process_exif_timestamps
+
+        all_items = [jpg_file, png_file, txt_file]
+
+        exif_date = datetime(2025, 1, 24, 15, 30, 45)
+        with patch("photos_manager.prepare.extract_exif_date_from_image", return_value=exif_date):
+            result = _process_exif_timestamps(all_items, dry_run=True)
+
+            assert result is False  # No errors
+
+            captured = capsys.readouterr()
+            # Should process jpg and png, skip txt
+            assert "photo.jpg" in captured.out
+            assert "photo.png" in captured.out
+
+    def test_prints_ok_when_all_correct(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+        """Test that OK message is printed when all files have correct timestamps."""
+        jpg_file = tmp_path / "photo.jpg"
+        jpg_file.touch()
+
+        from photos_manager.prepare import _process_exif_timestamps
+
+        all_items = [jpg_file]
+
+        # Mock to return False (no update needed)
+        with patch("photos_manager.prepare.set_file_mtime_from_exif", return_value=False):
+            result = _process_exif_timestamps(all_items, dry_run=True)
+
+            assert result is False
+
+            captured = capsys.readouterr()
+            assert "[OK]" in captured.out
+            assert "correct EXIF timestamps" in captured.out
+
+    def test_prints_ok_when_no_media_files(
+        self, tmp_path: Path, capsys: CaptureFixture[Any]
+    ) -> None:
+        """Test that OK message is printed when no media files found."""
+        txt_file = tmp_path / "document.txt"
+        txt_file.touch()
+
+        from photos_manager.prepare import _process_exif_timestamps
+
+        all_items = [txt_file]
+
+        result = _process_exif_timestamps(all_items, dry_run=True)
+
+        assert result is False
+
+        captured = capsys.readouterr()
+        assert "[OK]" in captured.out
+        assert "No supported media files" in captured.out
+
+    def test_handles_exceptions(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+        """Test that exceptions are handled and reported as errors."""
+        jpg_file = tmp_path / "photo.jpg"
+        jpg_file.touch()
+
+        from photos_manager.prepare import _process_exif_timestamps
+
+        all_items = [jpg_file]
+
+        with patch(
+            "photos_manager.prepare.set_file_mtime_from_exif",
+            side_effect=Exception("Test error"),
+        ):
+            result = _process_exif_timestamps(all_items, dry_run=True)
+
+            assert result is True  # Errors occurred
+
+            captured = capsys.readouterr()
+            assert "Error:" in captured.err
