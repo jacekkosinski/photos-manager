@@ -52,19 +52,19 @@ class TestMainFunction:
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
         assert "photos" in captured.out
-        assert "mkjson" in captured.out
+        assert "index" in captured.out
         assert "mkversion" in captured.out
         assert "setmtime" in captured.out
         assert "verify" in captured.out
 
 
-class TestMkjsonSubcommand:
-    """Tests for mkjson subcommand."""
+class TestIndexSubcommand:
+    """Tests for index subcommand."""
 
-    def test_mkjson_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that mkjson subcommand delegates to mkjson.run()."""
-        with patch("photos_manager.mkjson.run", return_value=0) as mock_run:
-            monkeypatch.setattr(sys, "argv", ["photos", "mkjson", "/test/path"])
+    def test_index_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that index subcommand delegates to index.run()."""
+        with patch("photos_manager.index.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "index", "/test/path"])
 
             exit_code = main()
 
@@ -74,24 +74,24 @@ class TestMkjsonSubcommand:
             assert isinstance(args, argparse.Namespace)
             assert args.directory == "/test/path"
 
-    def test_mkjson_with_help_flag(
+    def test_index_with_help_flag(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test that mkjson --help displays help message."""
-        monkeypatch.setattr(sys, "argv", ["photos", "mkjson", "--help"])
+        """Test that index --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "index", "--help"])
 
         with pytest.raises(SystemExit) as exc_info:
             main()
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        assert "mkjson" in captured.out
+        assert "index" in captured.out
         assert "JSON" in captured.out or "metadata" in captured.out
 
-    def test_mkjson_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that mkjson returns error code when run() fails."""
-        with patch("photos_manager.mkjson.run", return_value=1) as mock_run:
-            monkeypatch.setattr(sys, "argv", ["photos", "mkjson", "/test/path"])
+    def test_index_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that index returns error code when run() fails."""
+        with patch("photos_manager.index.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "index", "/test/path"])
 
             exit_code = main()
 

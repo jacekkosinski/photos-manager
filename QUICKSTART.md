@@ -27,7 +27,7 @@ poetry run pre-commit install
 ```bash
 # Using Poetry - unified CLI (recommended)
 poetry run photos --help
-poetry run photos mkjson --help
+poetry run photos index --help
 poetry run photos mkversion --help
 poetry run photos setmtime --help
 poetry run photos verify --help
@@ -35,10 +35,10 @@ poetry run photos verify --help
 # Or activate shell first
 poetry shell
 photos --help
-photos mkjson --help
+photos index --help
 
 # Legacy individual commands (still work)
-mkjson --help
+index --help
 mkversion --help
 ```
 
@@ -53,7 +53,7 @@ echo "test image 1" > test_photos/photo1.jpg
 echo "test image 2" > test_photos/photo2.jpg
 
 # Generate JSON metadata using unified CLI
-photos mkjson test_photos
+photos index test_photos
 
 # This creates test_photos.json with checksums, sizes, and timestamps
 cat test_photos.json
@@ -62,7 +62,7 @@ cat test_photos.json
 ### Generate version info from JSON files
 
 ```bash
-# Create a directory with JSON files (from mkjson)
+# Create a directory with JSON files (from index)
 mkdir -p archive
 cp test_photos.json archive/
 
@@ -96,12 +96,12 @@ make help
 photos-manager-cli/
 ├── photos_manager/       # Main source code
 │   ├── __init__.py      # Package initialization
-│   ├── mkjson.py        # Generate file metadata JSON
+│   ├── index.py        # Generate file metadata JSON
 │   ├── mkversion.py     # Generate archive version info
 │   ├── setmtime.py      # Update file timestamps from metadata
 │   └── verify.py        # Verify archive integrity
 ├── tests/               # Test files (120 tests, 85.46% coverage)
-│   ├── test_mkjson.py   # Tests for mkjson (32 tests)
+│   ├── test_index.py   # Tests for index (32 tests)
 │   ├── test_mkversion.py # Tests for mkversion (19 tests)
 │   ├── test_setmtime.py  # Tests for setmtime (26 tests)
 │   └── test_verify.py    # Tests for verify (43 tests)
@@ -115,7 +115,7 @@ photos-manager-cli/
 
 ```bash
 # 1. Scan your entire photo collection
-photos mkjson /photos/2024 --time-zone Europe/Warsaw
+photos index /photos/2024 --time-zone Europe/Warsaw
 
 # 2. Generate version info
 photos mkversion /photos --output /photos/.version.json
@@ -147,10 +147,10 @@ photos setmtime /photos/2024.json --all
 
 ```bash
 # Scan first directory
-photos mkjson /photos/january
+photos index /photos/january
 
 # Scan second directory and merge
-photos mkjson /photos/february --merge january.json
+photos index /photos/february --merge january.json
 
 # Result: february.json contains both january and february photos
 ```
@@ -159,7 +159,7 @@ photos mkjson /photos/february --merge january.json
 
 ```bash
 # If your photos are named: IMG_001.jpg, IMG_002.jpg, etc.
-photos mkjson /photos --sort-by-number
+photos index /photos --sort-by-number
 
 # Results will be sorted: 1, 2, 3... instead of 1, 10, 11, 2, 20...
 ```
@@ -216,7 +216,7 @@ sudo apt-get install gcc g++ ccache patchelf
 
 # Test the binary
 ./dist/photos --help
-./dist/photos mkjson /path/to/photos
+./dist/photos index /path/to/photos
 
 # Deploy to target system
 scp dist/photos user@server:/usr/local/bin/

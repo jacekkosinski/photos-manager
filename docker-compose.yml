@@ -60,7 +60,7 @@ services:
       - .:/workspace:ro
     working_dir: /workspace
     # Override with your command, e.g.:
-    # docker-compose run --rm photos-runtime mkjson /workspace/test_photos
+    # docker-compose run --rm photos-runtime index /workspace/test_photos
     command: ["--help"]
     profiles:
       - runtime
@@ -75,7 +75,7 @@ services:
 #   docker-compose build photos-builder
 #
 # Run binary in container for testing:
-#   docker-compose run --rm photos-runtime mkjson --help
+#   docker-compose run --rm photos-runtime index --help
 #   docker-compose run --rm photos-runtime verify /workspace/archive
 #
 # Clean up:

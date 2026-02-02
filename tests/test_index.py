@@ -1,4 +1,4 @@
-"""Tests for mkjson module."""
+"""Tests for index module."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from photos_manager.common import calculate_checksums, load_json
-from photos_manager.mkjson import extract_numbers, get_file_info
+from photos_manager.index import extract_numbers, get_file_info
 
 
 class TestCalculateChecksums:

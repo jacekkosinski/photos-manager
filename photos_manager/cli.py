@@ -3,7 +3,7 @@
 
 This is the main entry point for the photos-manager CLI suite, providing
 a unified interface to all photo management commands:
-- mkjson: Generate JSON file with file metadata
+- index: Generate JSON file with file metadata
 - mkversion: Generate archive version information
 - setmtime: Update file timestamps based on metadata
 - verify: Verify archive integrity
@@ -12,7 +12,7 @@ a unified interface to all photo management commands:
 - dedup: Find duplicate and missing files by comparing with archive
 
 Usage:
-    photos mkjson /path/to/directory
+    photos index /path/to/directory
     photos mkversion /path/to/archive
     photos setmtime archive.json
     photos verify /path/to/archive
@@ -25,7 +25,7 @@ import argparse
 import sys
 from typing import cast
 
-from photos_manager import __version__, dedup, mkjson, mkversion, prepare, setmtime, sync, verify
+from photos_manager import __version__, dedup, index, mkversion, prepare, setmtime, sync, verify
 
 
 def main() -> int:
@@ -41,7 +41,7 @@ def main() -> int:
             - 1+: Error occurred during processing
 
     Examples:
-        $ photos mkjson /path/to/photos
+        $ photos index /path/to/photos
         $ photos mkversion /path/to/archive --output version.json
         $ photos setmtime archive.json --all
         $ photos verify /path/to/archive --all --check-timestamps
@@ -69,14 +69,14 @@ def main() -> int:
         help="Command to execute",
     )
 
-    # mkjson subcommand
-    mkjson_parser = subparsers.add_parser(
-        "mkjson",
+    # index subcommand
+    index_parser = subparsers.add_parser(
+        "index",
         help="Generate JSON file with file metadata from directory",
         description="Generate JSON file with file metadata from directory",
     )
-    mkjson.setup_parser(mkjson_parser)
-    mkjson_parser.set_defaults(func=mkjson.run)
+    index.setup_parser(index_parser)
+    index_parser.set_defaults(func=index.run)
 
     # mkversion subcommand
     mkversion_parser = subparsers.add_parser(

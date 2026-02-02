@@ -182,7 +182,7 @@ docker run --rm -v "$(pwd)/dist:/dist" debian:trixie /dist/photos --version
 
 # Or use docker-compose runtime service
 docker-compose run --rm photos-runtime --help
-docker-compose run --rm photos-runtime mkjson --help
+docker-compose run --rm photos-runtime index --help
 ```
 
 ### Build Performance
@@ -361,13 +361,13 @@ After building, test the binary:
 ./dist/photos --help
 
 # Test each subcommand
-./dist/photos mkjson --help
+./dist/photos index --help
 ./dist/photos mkversion --help
 ./dist/photos setmtime --help
 ./dist/photos verify --help
 
 # Run actual commands
-./dist/photos mkjson /path/to/test/directory
+./dist/photos index /path/to/test/directory
 ./dist/photos mkversion /path/to/test/directory
 ```
 
@@ -396,7 +396,7 @@ photos --version
 photos --help
 
 # Use it
-photos mkjson /path/to/photos
+photos index /path/to/photos
 photos verify /path/to/archive
 ```
 

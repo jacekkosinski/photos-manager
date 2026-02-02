@@ -8,7 +8,7 @@ code in this repository.
 Photos Manager CLI is a Python 3.12+ toolkit for managing photo archives. It
 provides four main utilities:
 
-1. **mkjson** - Scans directories and generates JSON metadata files containing
+1. **index** - Scans directories and generates JSON metadata files containing
    checksums (SHA1, MD5), file sizes, and timestamps for all files
 1. **mkversion** - Aggregates multiple JSON metadata files to generate version
    information with total size, file count, and integrity hashes
@@ -44,7 +44,7 @@ The project has comprehensive test coverage with 120 tests (85.46% coverage).
 poetry run pytest
 
 # Run specific test file
-poetry run pytest tests/test_mkjson.py
+poetry run pytest tests/test_index.py
 poetry run pytest tests/test_verify.py
 
 # Run with verbose output
@@ -60,7 +60,7 @@ poetry run pytest -k "TestMain"
 **Current Test Statistics:**
 
 - Total: 120 tests
-- mkjson: 32 tests (95.38% coverage)
+- index: 32 tests (95.38% coverage)
 - mkversion: 19 tests (96.97% coverage)
 - setmtime: 26 tests (84.08% coverage)
 - verify: 43 tests (80.15% coverage)
@@ -89,14 +89,14 @@ make check-all
 
 ```bash
 # Using Poetry
-poetry run mkjson /path/to/photos
+poetry run index /path/to/photos
 poetry run mkversion /path/to/archive
 poetry run setmtime /path/to/photos.json
 poetry run verify /path/to/archive
 
 # Or after activating virtual environment
 poetry shell
-mkjson /path/to/photos
+index /path/to/photos
 mkversion /path/to/archive
 setmtime /path/to/photos.json --dry-run
 verify /path/to/archive --all
@@ -106,7 +106,7 @@ verify /path/to/archive --all
 
 ### Core Utilities
 
-All four utilities (`mkjson.py`, `mkversion.py`, `setmtime.py`, and `verify.py`)
+All four utilities (`index.py`, `mkversion.py`, `setmtime.py`, and `verify.py`)
 are standalone scripts that follow a unified implementation style:
 
 - Fully type-annotated with strict mypy compliance
@@ -115,7 +115,7 @@ are standalone scripts that follow a unified implementation style:
 - No external libraries for core functionality (only stdlib)
 - Designed to be called as CLI tools or imported as modules
 
-### mkjson.py
+### index.py
 
 **Purpose**: Generate metadata JSON files by scanning directory trees
 
@@ -184,7 +184,7 @@ hashes
   JSON and directory timestamps
 - `main()` - CLI entry point with dry-run support
 
-**Expected input**: JSON files created by mkjson with 'path' and 'date' fields
+**Expected input**: JSON files created by index with 'path' and 'date' fields
 
 **Key features**:
 
@@ -257,14 +257,14 @@ hashes
 ```
 photos_manager/
 ├── __init__.py
-├── mkjson.py           # Directory scanner and metadata generator
+├── index.py           # Directory scanner and metadata generator
 ├── mkversion.py        # Version aggregator for JSON files
 ├── setmtime.py         # Timestamp updater based on metadata
 └── verify.py           # Archive integrity verifier
 
 tests/                  # 120 tests total, 85.46% coverage
 ├── __init__.py
-├── test_mkjson.py      # Tests for mkjson (32 tests, 95.38% coverage)
+├── test_index.py      # Tests for index (32 tests, 95.38% coverage)
 ├── test_mkversion.py   # Tests for mkversion (19 tests, 96.97% coverage)
 ├── test_setmtime.py    # Tests for setmtime (26 tests, 84.08% coverage)
 └── test_verify.py      # Tests for verify (43 tests, 80.15% coverage)
@@ -297,7 +297,7 @@ To run manually: `pre-commit run --all-files`
 
 - Tests use pytest with comprehensive coverage (120 tests total, 85.46%
   coverage)
-- Each module has dedicated test file: `test_mkjson.py`, `test_mkversion.py`,
+- Each module has dedicated test file: `test_index.py`, `test_mkversion.py`,
   `test_setmtime.py`, `test_verify.py`
 - Test structure includes:
   - Unit tests for individual functions
@@ -309,7 +309,7 @@ To run manually: `pre-commit run --all-files`
 
 **Test Coverage by Module:**
 
-- mkjson.py: 95.38% (32 tests)
+- index.py: 95.38% (32 tests)
 - mkversion.py: 96.97% (19 tests including 7 main() integration tests)
 - setmtime.py: 84.08% (26 tests including 8 main() integration tests)
 - verify.py: 80.15% (43 tests including 11 main() integration tests)
@@ -320,7 +320,7 @@ To run manually: `pre-commit run --all-files`
 
 1. Create `photos_manager/new_tool.py` with `main()` function
 1. Add CLI entry point in `pyproject.toml` under `[project.scripts]`
-1. Follow existing patterns from mkjson.py or mkversion.py:
+1. Follow existing patterns from index.py or mkversion.py:
    - Use argparse for argument parsing
    - Return `os.EX_OK` on success
    - Raise `SystemExit` with error messages on failure
@@ -331,7 +331,7 @@ To run manually: `pre-commit run --all-files`
 
 ### Working with file metadata
 
-The JSON format produced by mkjson contains:
+The JSON format produced by index contains:
 
 - `path`: Absolute file path (string)
 - `sha1`: SHA1 checksum (hex string)

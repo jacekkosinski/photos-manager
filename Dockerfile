@@ -105,5 +105,5 @@ CMD ["--help"]
 #   docker build --platform=linux/amd64 -t photos-manager .
 #
 # Run binary in container:
-#   docker run --rm photos-manager mkjson --help
+#   docker run --rm photos-manager index --help
 # ==============================================================================

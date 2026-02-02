@@ -60,7 +60,7 @@ photos <command> [options]
 
 **Available commands:**
 
-- `mkjson` - Generate JSON file with file metadata
+- `index` - Generate JSON file with file metadata
 - `mkversion` - Generate archive version information
 - `setmtime` - Update file timestamps based on metadata
 - `verify` - Verify archive integrity
@@ -72,29 +72,29 @@ photos <command> [options]
 photos --help
 
 # Get help for specific command
-photos mkjson --help
+photos index --help
 photos mkversion --help
 photos setmtime --help
 photos verify --help
 ```
 
-### mkjson - Generate File Metadata
+### index - Generate File Metadata
 
 Generate a JSON file containing metadata (checksums, sizes, timestamps) for all
 files in a directory.
 
 ```bash
 # Basic usage - scan directory and create JSON
-photos mkjson /path/to/photos
+photos index /path/to/photos
 
 # Merge with existing JSON file
-photos mkjson /path/to/new-photos --merge existing.json
+photos index /path/to/new-photos --merge existing.json
 
 # Sort by numeric patterns in filenames
-photos mkjson /path/to/photos --sort-by-number
+photos index /path/to/photos --sort-by-number
 
 # Specify timezone for timestamps
-photos mkjson /path/to/photos --time-zone Europe/Warsaw
+photos index /path/to/photos --time-zone Europe/Warsaw
 ```
 
 **Output format:**
@@ -113,7 +113,7 @@ photos mkjson /path/to/photos --time-zone Europe/Warsaw
 
 ### mkversion - Generate Archive Version Info
 
-Generate version metadata from a collection of JSON files (created by mkjson).
+Generate version metadata from a collection of JSON files (created by index).
 
 ```bash
 # Basic usage - output to stdout
@@ -148,7 +148,7 @@ photos mkversion /path/to/archive -o .version.json
 ### setmtime - Update File Timestamps
 
 Update file and directory modification timestamps based on JSON metadata
-(created by mkjson).
+(created by index).
 
 ```bash
 # Preview changes without applying them
@@ -223,7 +223,7 @@ photos verify /path/to/archive --all --check-timestamps --tolerance 2
 
 ```bash
 # Step 1: Scan photos directory and generate metadata
-photos mkjson /photos/2024 --time-zone Europe/Warsaw
+photos index /photos/2024 --time-zone Europe/Warsaw
 
 # Step 2: Generate version info from all JSON files
 photos mkversion /photos --output /photos/.version.json
@@ -233,7 +233,7 @@ photos mkversion /photos --output /photos/.version.json
 
 ```bash
 # Scan new photos and merge with existing metadata
-photos mkjson /photos/2025 --merge /photos/2024.json
+photos index /photos/2025 --merge /photos/2024.json
 
 # Update version info
 photos mkversion /photos --output /photos/.version.json
@@ -249,7 +249,7 @@ photos verify /photos/archive
 photos verify /photos/archive --all --check-timestamps
 
 # After the verification, you can also regenerate metadata to compare
-photos mkjson /photos/backup --output current.json
+photos index /photos/backup --output current.json
 diff original.json current.json
 ```
 
@@ -290,13 +290,13 @@ architecture details and development patterns.
 photos-manager-cli/
 ├── photos_manager/
 │   ├── __init__.py          # Package initialization
-│   ├── mkjson.py           # Generate file metadata JSON
+│   ├── index.py           # Generate file metadata JSON
 │   ├── mkversion.py        # Generate archive version info
 │   ├── setmtime.py         # Update file timestamps from metadata
 │   └── verify.py           # Verify archive integrity
 ├── tests/
 │   ├── __init__.py
-│   ├── test_mkjson.py      # Tests for mkjson (32 tests)
+│   ├── test_index.py      # Tests for index (32 tests)
 │   ├── test_mkversion.py   # Tests for mkversion (19 tests)
 │   ├── test_setmtime.py    # Tests for setmtime (26 tests)
 │   └── test_verify.py      # Tests for verify (43 tests)
@@ -319,14 +319,14 @@ command:
 
 ```bash
 # Using Poetry
-poetry run photos mkjson /path/to/photos
+poetry run photos index /path/to/photos
 poetry run photos mkversion /path/to/archive
 poetry run photos setmtime /path/to/photos.json
 poetry run photos verify /path/to/archive
 
 # Or after activating the virtual environment
 poetry shell
-photos mkjson /path/to/photos
+photos index /path/to/photos
 photos mkversion /path/to/archive
 photos setmtime /path/to/photos.json
 photos verify /path/to/archive --all
@@ -337,7 +337,7 @@ photos verify /path/to/archive --all
 For backward compatibility, individual commands are still available:
 
 ```bash
-mkjson /path/to/photos
+index /path/to/photos
 mkversion /path/to/archive
 setmtime /path/to/photos.json
 verify /path/to/archive --all
@@ -354,7 +354,7 @@ require Python:
 
 # The binary will be created in dist/photos
 ./dist/photos --help
-./dist/photos mkjson /path/to/photos
+./dist/photos index /path/to/photos
 ```
 
 See [BUILD.md](BUILD.md) for detailed build instructions and deployment guide.
@@ -402,7 +402,7 @@ poetry run pytest
 poetry run pytest --cov
 
 # Run specific test file
-poetry run pytest tests/test_mkjson.py
+poetry run pytest tests/test_index.py
 
 # Run with verbose output
 poetry run pytest -v
@@ -411,14 +411,14 @@ poetry run pytest -v
 **Test Coverage:**
 
 - Overall: 85.46%
-- mkjson.py: 95.38%
+- index.py: 95.38%
 - mkversion.py: 96.97%
 - setmtime.py: 84.08%
 - verify.py: 80.15%
 
 **Test Suite:**
 
-- 32 tests for mkjson module
+- 32 tests for index module
 - 19 tests for mkversion module (including 7 main() integration tests)
 - 26 tests for setmtime module (including 8 main() integration tests)
 - 43 tests for verify module (including 11 main() integration tests)
