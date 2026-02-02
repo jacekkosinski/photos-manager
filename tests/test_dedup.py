@@ -346,6 +346,58 @@ class TestFormatSize:
         assert dedup.format_size(0) == "0"
 
 
+class TestListDisplay:
+    """Tests for list display functions."""
+
+    def test_display_list_duplicates(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying duplicates in list format."""
+        duplicates = [
+            (
+                {"path": "/scan/file1.txt", "size": 100, "sha1": "abc", "md5": "def"},
+                {"path": "/archive/file1.txt", "size": 100, "sha1": "abc", "md5": "def"},
+            ),
+            (
+                {"path": "/scan/file2.txt", "size": 200, "sha1": "ghi", "md5": "jkl"},
+                {"path": "/archive/file2.txt", "size": 200, "sha1": "ghi", "md5": "jkl"},
+            ),
+        ]
+
+        dedup.display_list_duplicates(duplicates)
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert len(lines) == 2
+        assert lines[0] == "/scan/file1.txt"
+        assert lines[1] == "/scan/file2.txt"
+
+    def test_display_list_duplicates_empty(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying empty duplicates list in list format."""
+        dedup.display_list_duplicates([])
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_display_list_missing(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying missing files in list format."""
+        missing = [
+            {"path": "/scan/new1.txt", "size": 100, "sha1": "xyz", "md5": "uvw"},
+            {"path": "/scan/new2.txt", "size": 200, "sha1": "mno", "md5": "pqr"},
+        ]
+
+        dedup.display_list_missing(missing)
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert len(lines) == 2
+        assert lines[0] == "/scan/new1.txt"
+        assert lines[1] == "/scan/new2.txt"
+
+    def test_display_list_missing_empty(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying empty missing list in list format."""
+        dedup.display_list_missing([])
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+
 class TestDisplayFunctions:
     """Tests for display functions."""
 
@@ -524,6 +576,7 @@ class TestMain:
             check_filenames=False,
             check_timestamps=False,
             tolerance=1,
+            list=False,
         )
 
         result = dedup.run(args)
@@ -567,6 +620,7 @@ class TestMain:
             check_filenames=False,
             check_timestamps=False,
             tolerance=1,
+            list=False,
         )
 
         result = dedup.run(args)
@@ -595,6 +649,7 @@ class TestMain:
             check_filenames=False,
             check_timestamps=False,
             tolerance=1,
+            list=False,
         )
 
         result = dedup.run(args)
@@ -637,6 +692,7 @@ class TestMain:
             check_filenames=True,
             check_timestamps=False,
             tolerance=1,
+            list=False,
         )
 
         result = dedup.run(args)
@@ -682,6 +738,7 @@ class TestMain:
             check_filenames=False,
             check_timestamps=True,
             tolerance=1,
+            list=False,
         )
 
         result = dedup.run(args)
@@ -703,6 +760,7 @@ class TestMain:
             check_filenames=False,
             check_timestamps=False,
             tolerance=1,
+            list=False,
         )
 
         with pytest.raises(SystemExit, match="not found"):
@@ -721,6 +779,7 @@ class TestMain:
             check_filenames=False,
             check_timestamps=False,
             tolerance=1,
+            list=False,
         )
 
         with pytest.raises(SystemExit, match="not found"):
@@ -741,6 +800,7 @@ class TestMain:
             check_filenames=False,
             check_timestamps=False,
             tolerance=1,
+            list=False,
         )
 
         with pytest.raises(SystemExit, match="Not a directory"):
@@ -780,10 +840,141 @@ class TestMain:
             check_filenames=True,
             check_timestamps=True,
             tolerance=5,
+            list=False,
         )
 
         result = dedup.run(args)
         assert result == os.EX_OK
+
+    def test_run_list_mode_duplicates(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test run with --list flag showing duplicates."""
+        # Create archive
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_file = archive_dir / "file.txt"
+        archive_file.write_text("content")
+
+        json_file = tmp_path / "archive.json"
+        json_data = [
+            {
+                "path": str(archive_file.resolve()),
+                "size": 7,
+                "sha1": "040f06fd774092478d450774f5ba30c5da78acc8",
+                "md5": "9a0364b9e99bb480dd25e1f0284c8555",
+                "date": datetime.now(UTC).isoformat(),
+            }
+        ]
+        json_file.write_text(json.dumps(json_data))
+
+        # Create scan directory
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        scan_file = scan_dir / "file.txt"
+        scan_file.write_text("content")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=True,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        # Should only have one line with the file path
+        lines = captured.out.strip().split("\n")
+        assert len(lines) == 1
+        assert str(scan_file.resolve()) in lines[0]
+        # Should not have progress messages or summary
+        assert "Loading" not in captured.out
+        assert "Summary" not in captured.out
+
+    def test_run_list_mode_missing(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test run with --list flag showing missing files."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        scan_file = scan_dir / "new.txt"
+        scan_file.write_text("content")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=False,
+            show_missing=True,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=True,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert len(lines) == 1
+        assert str(scan_file.resolve()) in lines[0]
+        assert "Loading" not in captured.out
+        assert "Summary" not in captured.out
+
+    def test_run_list_mode_both(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test run with --list flag showing both duplicates and missing."""
+        # Create archive
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_file = archive_dir / "file1.txt"
+        archive_file.write_text("content1")
+
+        json_file = tmp_path / "archive.json"
+        json_data = [
+            {
+                "path": str(archive_file.resolve()),
+                "size": 8,
+                "sha1": "6a0a8373d5853c7b2988574c966819f22bdc5cab",
+                "md5": "9b45b8b7a49a7b8e7f9e19f7ff229b75",
+                "date": datetime.now(UTC).isoformat(),
+            }
+        ]
+        json_file.write_text(json.dumps(json_data))
+
+        # Create scan directory with duplicate and new file
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        dup_file = scan_dir / "file1.txt"
+        dup_file.write_text("content1")
+        new_file = scan_dir / "file2.txt"
+        new_file.write_text("content2")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=True,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=True,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert len(lines) == 2
+        # Both files should be in output
+        output = captured.out
+        assert str(dup_file.resolve()) in output
+        assert str(new_file.resolve()) in output
 
     def test_main_entry_point(self, tmp_path: Path, monkeypatch: "MonkeyPatch") -> None:
         """Test main() entry point."""

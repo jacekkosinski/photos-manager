@@ -328,6 +328,28 @@ def display_missing(missing: list[dict[str, str | int]]) -> None:
         print()
 
 
+def display_list_duplicates(
+    duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
+) -> None:
+    """Display duplicate file paths in list format (one per line).
+
+    Args:
+        duplicates: List of (scanned_entry, archive_entry) tuples
+    """
+    for scanned, _ in duplicates:
+        print(scanned["path"])
+
+
+def display_list_missing(missing: list[dict[str, str | int]]) -> None:
+    """Display missing file paths in list format (one per line).
+
+    Args:
+        missing: List of scanned file entries not in archive
+    """
+    for entry in missing:
+        print(entry["path"])
+
+
 def display_summary(
     scanned_count: int,
     duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
@@ -403,6 +425,11 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         default=1,
         help="Timestamp tolerance in seconds (default: 1)",
     )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="Output one file path per line (no details, no summary)",
+    )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -432,38 +459,53 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit(f"Error: Not a directory: {args.directory}")
 
     # Load archive metadata
-    print(f"Loading archive metadata from {args.json_file}...")
+    if not args.list:
+        print(f"Loading archive metadata from {args.json_file}...")
     archive_data = load_json(args.json_file)
-    print(f"Loaded {len(archive_data)} files from archive")
+    if not args.list:
+        print(f"Loaded {len(archive_data)} files from archive")
 
     # Build indexes for efficient lookup
     size_index, checksum_index = build_archive_index(archive_data)
 
     # Scan directory
-    print(f"\nScanning directory {args.directory}...")
+    if not args.list:
+        print(f"\nScanning directory {args.directory}...")
     scanned_files = scan_directory(args.directory)
-    print(f"Scanned {len(scanned_files)} files")
+    if not args.list:
+        print(f"Scanned {len(scanned_files)} files")
 
     # Find duplicates and missing
-    print("\nComparing files...")
+    if not args.list:
+        print("\nComparing files...")
     duplicates, missing = find_duplicates(scanned_files, size_index, checksum_index)
 
     # Display results based on flags
-    filename_warnings = 0
-    timestamp_warnings = 0
+    if args.list:
+        # List mode: one file per line, no details, no summary
+        if args.show_duplicates:
+            display_list_duplicates(duplicates)
+        if args.show_missing:
+            display_list_missing(missing)
+    else:
+        # Normal mode: detailed output with summary
+        filename_warnings = 0
+        timestamp_warnings = 0
 
-    if args.show_duplicates:
-        fw, tw = display_duplicates(
-            duplicates, args.check_filenames, args.check_timestamps, args.tolerance
+        if args.show_duplicates:
+            fw, tw = display_duplicates(
+                duplicates, args.check_filenames, args.check_timestamps, args.tolerance
+            )
+            filename_warnings += fw
+            timestamp_warnings += tw
+
+        if args.show_missing:
+            display_missing(missing)
+
+        # Display summary
+        display_summary(
+            len(scanned_files), duplicates, missing, filename_warnings, timestamp_warnings
         )
-        filename_warnings += fw
-        timestamp_warnings += tw
-
-    if args.show_missing:
-        display_missing(missing)
-
-    # Always display summary
-    display_summary(len(scanned_files), duplicates, missing, filename_warnings, timestamp_warnings)
 
     return os.EX_OK
 
