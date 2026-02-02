@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -194,6 +195,132 @@ def find_duplicates(
             missing.append(scanned)
 
     return duplicates, missing
+
+
+def group_files_by_directory(
+    files: list[dict[str, str | int]],
+) -> dict[str, list[dict[str, str | int]]]:
+    """Group files by their parent directory.
+
+    Args:
+        files: List of file metadata dictionaries
+
+    Returns:
+        Dictionary mapping parent directory paths to lists of file entries
+    """
+    groups: dict[str, list[dict[str, str | int]]] = {}
+    for file_entry in files:
+        parent_dir = str(Path(str(file_entry["path"])).parent)
+        if parent_dir not in groups:
+            groups[parent_dir] = []
+        groups[parent_dir].append(file_entry)
+    return groups
+
+
+def assign_directory_numbers(
+    file_groups: dict[str, list[dict[str, str | int]]], start: int = 1
+) -> dict[str, str]:
+    """Assign sequential directory numbers to each source directory.
+
+    Args:
+        file_groups: Dictionary mapping source directories to file lists
+        start: Starting number for directory numbering (default: 1)
+
+    Returns:
+        Dictionary mapping source directory paths to numbered subdirectory names (e.g., "dir00001")
+    """
+    dir_mapping: dict[str, str] = {}
+    for idx, source_dir in enumerate(sorted(file_groups.keys()), start=start):
+        dir_mapping[source_dir] = f"dir{idx:05d}"
+    return dir_mapping
+
+
+def generate_move_commands(
+    files: list[dict[str, str | int]], target_dir: str, dir_mapping: dict[str, str]
+) -> list[str]:
+    """Generate mv -iv commands for moving files to target directory.
+
+    Args:
+        files: List of file metadata dictionaries
+        target_dir: Target directory path
+        dir_mapping: Mapping of source directories to numbered subdirectories
+
+    Returns:
+        List of shell commands (mkdir and mv)
+    """
+    commands: list[str] = []
+    created_dirs: set[str] = set()
+
+    # Group files by source directory
+    file_groups = group_files_by_directory(files)
+
+    # Generate commands for each source directory
+    for source_dir in sorted(file_groups.keys()):
+        target_subdir = dir_mapping[source_dir]
+        target_path = Path(target_dir) / target_subdir
+
+        # Add mkdir command if not already created
+        if target_subdir not in created_dirs:
+            commands.append(f"mkdir -p {shlex.quote(str(target_path))}")
+            created_dirs.add(target_subdir)
+
+        # Add mv commands for each file
+        for file_entry in file_groups[source_dir]:
+            source_path = str(file_entry["path"])
+            filename = Path(source_path).name
+            target_file = target_path / filename
+            commands.append(f"mv -iv {shlex.quote(source_path)} {shlex.quote(str(target_file))}")
+
+    return commands
+
+
+def generate_copy_commands(
+    files: list[dict[str, str | int]], target_dir: str, dir_mapping: dict[str, str]
+) -> list[str]:
+    """Generate cp -pv commands for copying files to target directory.
+
+    Args:
+        files: List of file metadata dictionaries
+        target_dir: Target directory path
+        dir_mapping: Mapping of source directories to numbered subdirectories
+
+    Returns:
+        List of shell commands (mkdir and cp)
+    """
+    commands: list[str] = []
+    created_dirs: set[str] = set()
+
+    # Group files by source directory
+    file_groups = group_files_by_directory(files)
+
+    # Generate commands for each source directory
+    for source_dir in sorted(file_groups.keys()):
+        target_subdir = dir_mapping[source_dir]
+        target_path = Path(target_dir) / target_subdir
+
+        # Add mkdir command if not already created
+        if target_subdir not in created_dirs:
+            commands.append(f"mkdir -p {shlex.quote(str(target_path))}")
+            created_dirs.add(target_subdir)
+
+        # Add cp commands for each file
+        for file_entry in file_groups[source_dir]:
+            source_path = str(file_entry["path"])
+            filename = Path(source_path).name
+            target_file = target_path / filename
+            commands.append(f"cp -pv {shlex.quote(source_path)} {shlex.quote(str(target_file))}")
+
+    return commands
+
+
+def display_commands(commands: list[str]) -> None:
+    """Print commands one per line.
+
+    Args:
+        commands: List of shell commands to print
+    """
+    for cmd in commands:
+        print(cmd)
 
 
 def compare_filenames(scanned_path: str, archive_path: str) -> tuple[bool, str | None]:
@@ -430,6 +557,151 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Output one file path per line (no details, no summary)",
     )
+    parser.add_argument(
+        "--move",
+        type=str,
+        metavar="TARGET_DIR",
+        help="Generate mv commands to move files to target directory structure",
+    )
+    parser.add_argument(
+        "--copy",
+        type=str,
+        metavar="TARGET_DIR",
+        help="Generate cp commands to copy files to target directory structure",
+    )
+    parser.add_argument(
+        "-s",
+        "--start",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Starting number for target directory numbering (default: 1)",
+    )
+
+
+def validate_args(args: argparse.Namespace) -> bool:
+    """Validate command-line arguments.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        True if validation passes, False if user error (not exception)
+
+    Raises:
+        SystemExit: On validation errors
+    """
+    # Check if at least one display flag is specified
+    if not args.show_duplicates and not args.show_missing:
+        print("Error: At least one of -d/--show-duplicates or -m/--show-missing is required\n")
+        print("Use -h or --help for usage information")
+        return False
+
+    # Validate mutually exclusive options
+    if args.move and args.copy:
+        raise SystemExit("Error: --move and --copy are mutually exclusive")
+    if (args.move or args.copy) and args.list:
+        raise SystemExit("Error: --move/--copy cannot be used with --list")
+    if args.move and not Path(args.move).is_dir():
+        raise SystemExit(f"Error: Target directory does not exist: {args.move}")
+    if args.copy and not Path(args.copy).is_dir():
+        raise SystemExit(f"Error: Target directory does not exist: {args.copy}")
+
+    # Validate inputs
+    if not Path(args.json_file).exists():
+        raise SystemExit(f"Error: JSON file not found: {args.json_file}")
+    if not Path(args.directory).exists():
+        raise SystemExit(f"Error: Directory not found: {args.directory}")
+    if not Path(args.directory).is_dir():
+        raise SystemExit(f"Error: Not a directory: {args.directory}")
+
+    return True
+
+
+def process_command_mode(
+    args: argparse.Namespace,
+    duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
+    missing: list[dict[str, str | int]],
+) -> None:
+    """Process command generation mode (--move or --copy).
+
+    Args:
+        args: Parsed command-line arguments
+        duplicates: List of duplicate file pairs
+        missing: List of missing files
+    """
+    files_to_process: list[dict[str, str | int]] = []
+    if args.show_duplicates:
+        files_to_process.extend([scanned for scanned, _ in duplicates])
+    if args.show_missing:
+        files_to_process.extend(missing)
+
+    if not files_to_process:
+        return
+
+    # Group files and assign directory numbers
+    file_groups = group_files_by_directory(files_to_process)
+    dir_mapping = assign_directory_numbers(file_groups, start=args.start)
+
+    # Generate commands
+    target_dir = args.move or args.copy
+    if args.move:
+        commands = generate_move_commands(files_to_process, target_dir, dir_mapping)
+    else:
+        commands = generate_copy_commands(files_to_process, target_dir, dir_mapping)
+
+    # Print umask first, then commands
+    print("umask 022")
+    display_commands(commands)
+
+
+def process_list_mode(
+    args: argparse.Namespace,
+    duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
+    missing: list[dict[str, str | int]],
+) -> None:
+    """Process list mode (--list).
+
+    Args:
+        args: Parsed command-line arguments
+        duplicates: List of duplicate file pairs
+        missing: List of missing files
+    """
+    if args.show_duplicates:
+        display_list_duplicates(duplicates)
+    if args.show_missing:
+        display_list_missing(missing)
+
+
+def process_normal_mode(
+    args: argparse.Namespace,
+    scanned_files: list[dict[str, str | int]],
+    duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
+    missing: list[dict[str, str | int]],
+) -> None:
+    """Process normal display mode (detailed output with summary).
+
+    Args:
+        args: Parsed command-line arguments
+        scanned_files: List of scanned files
+        duplicates: List of duplicate file pairs
+        missing: List of missing files
+    """
+    filename_warnings = 0
+    timestamp_warnings = 0
+
+    if args.show_duplicates:
+        fw, tw = display_duplicates(
+            duplicates, args.check_filenames, args.check_timestamps, args.tolerance
+        )
+        filename_warnings += fw
+        timestamp_warnings += tw
+
+    if args.show_missing:
+        display_missing(missing)
+
+    # Display summary
+    display_summary(len(scanned_files), duplicates, missing, filename_warnings, timestamp_warnings)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -444,68 +716,42 @@ def run(args: argparse.Namespace) -> int:
     Raises:
         SystemExit: On validation or runtime errors
     """
-    # Check if at least one display flag is specified
-    if not args.show_duplicates and not args.show_missing:
-        print("Error: At least one of -d/--show-duplicates or -m/--show-missing is required\n")
-        print("Use -h or --help for usage information")
+    # Validate arguments
+    if not validate_args(args):
         return 1
 
-    # Validate inputs
-    if not Path(args.json_file).exists():
-        raise SystemExit(f"Error: JSON file not found: {args.json_file}")
-    if not Path(args.directory).exists():
-        raise SystemExit(f"Error: Directory not found: {args.directory}")
-    if not Path(args.directory).is_dir():
-        raise SystemExit(f"Error: Not a directory: {args.directory}")
+    # Determine if we should suppress progress messages
+    suppress_progress = args.list or args.move or args.copy
 
     # Load archive metadata
-    if not args.list:
+    if not suppress_progress:
         print(f"Loading archive metadata from {args.json_file}...")
     archive_data = load_json(args.json_file)
-    if not args.list:
+    if not suppress_progress:
         print(f"Loaded {len(archive_data)} files from archive")
 
     # Build indexes for efficient lookup
     size_index, checksum_index = build_archive_index(archive_data)
 
     # Scan directory
-    if not args.list:
+    if not suppress_progress:
         print(f"\nScanning directory {args.directory}...")
     scanned_files = scan_directory(args.directory)
-    if not args.list:
+    if not suppress_progress:
         print(f"Scanned {len(scanned_files)} files")
 
     # Find duplicates and missing
-    if not args.list:
+    if not suppress_progress:
         print("\nComparing files...")
     duplicates, missing = find_duplicates(scanned_files, size_index, checksum_index)
 
     # Display results based on flags
-    if args.list:
-        # List mode: one file per line, no details, no summary
-        if args.show_duplicates:
-            display_list_duplicates(duplicates)
-        if args.show_missing:
-            display_list_missing(missing)
+    if args.move or args.copy:
+        process_command_mode(args, duplicates, missing)
+    elif args.list:
+        process_list_mode(args, duplicates, missing)
     else:
-        # Normal mode: detailed output with summary
-        filename_warnings = 0
-        timestamp_warnings = 0
-
-        if args.show_duplicates:
-            fw, tw = display_duplicates(
-                duplicates, args.check_filenames, args.check_timestamps, args.tolerance
-            )
-            filename_warnings += fw
-            timestamp_warnings += tw
-
-        if args.show_missing:
-            display_missing(missing)
-
-        # Display summary
-        display_summary(
-            len(scanned_files), duplicates, missing, filename_warnings, timestamp_warnings
-        )
+        process_normal_mode(args, scanned_files, duplicates, missing)
 
     return os.EX_OK
 

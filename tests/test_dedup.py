@@ -346,6 +346,219 @@ class TestFormatSize:
         assert dedup.format_size(0) == "0"
 
 
+class TestGroupFiles:
+    """Tests for group_files_by_directory function."""
+
+    def test_group_files_single_directory(self) -> None:
+        """Test grouping files from single directory."""
+        files = [
+            {"path": "/scan/dir1/file1.txt", "size": 100},
+            {"path": "/scan/dir1/file2.txt", "size": 200},
+        ]
+
+        groups = dedup.group_files_by_directory(files)
+
+        assert len(groups) == 1
+        assert "/scan/dir1" in groups
+        assert len(groups["/scan/dir1"]) == 2
+
+    def test_group_files_multiple_directories(self) -> None:
+        """Test grouping files from multiple directories."""
+        files = [
+            {"path": "/scan/dir1/file1.txt", "size": 100},
+            {"path": "/scan/dir2/file2.txt", "size": 200},
+            {"path": "/scan/dir3/file3.txt", "size": 300},
+        ]
+
+        groups = dedup.group_files_by_directory(files)
+
+        assert len(groups) == 3
+        assert "/scan/dir1" in groups
+        assert "/scan/dir2" in groups
+        assert "/scan/dir3" in groups
+
+    def test_group_files_empty(self) -> None:
+        """Test grouping empty list of files."""
+        groups = dedup.group_files_by_directory([])
+        assert groups == {}
+
+    def test_group_files_nested_paths(self) -> None:
+        """Test grouping files from nested directory structures."""
+        files = [
+            {"path": "/scan/parent/child1/file1.txt", "size": 100},
+            {"path": "/scan/parent/child2/file2.txt", "size": 200},
+        ]
+
+        groups = dedup.group_files_by_directory(files)
+
+        assert len(groups) == 2
+        assert "/scan/parent/child1" in groups
+        assert "/scan/parent/child2" in groups
+
+
+class TestAssignDirectoryNumbers:
+    """Tests for assign_directory_numbers function."""
+
+    def test_assign_numbers_single(self) -> None:
+        """Test assigning number to single directory."""
+        file_groups = {"/scan/dir1": []}
+
+        mapping = dedup.assign_directory_numbers(file_groups)
+
+        assert mapping["/scan/dir1"] == "dir00001"
+
+    def test_assign_numbers_multiple(self) -> None:
+        """Test assigning numbers to multiple directories."""
+        file_groups = {
+            "/scan/dir1": [],
+            "/scan/dir2": [],
+            "/scan/dir3": [],
+        }
+
+        mapping = dedup.assign_directory_numbers(file_groups)
+
+        assert len(mapping) == 3
+        # Should be sorted alphabetically
+        assert mapping["/scan/dir1"] == "dir00001"
+        assert mapping["/scan/dir2"] == "dir00002"
+        assert mapping["/scan/dir3"] == "dir00003"
+
+    def test_assign_numbers_sorted(self) -> None:
+        """Test directories are sorted alphabetically before numbering."""
+        file_groups = {
+            "/scan/zebra": [],
+            "/scan/alpha": [],
+            "/scan/beta": [],
+        }
+
+        mapping = dedup.assign_directory_numbers(file_groups)
+
+        assert mapping["/scan/alpha"] == "dir00001"
+        assert mapping["/scan/beta"] == "dir00002"
+        assert mapping["/scan/zebra"] == "dir00003"
+
+    def test_assign_numbers_custom_start(self) -> None:
+        """Test starting from custom number."""
+        file_groups = {
+            "/scan/dir1": [],
+            "/scan/dir2": [],
+        }
+
+        mapping = dedup.assign_directory_numbers(file_groups, start=10)
+
+        assert mapping["/scan/dir1"] == "dir00010"
+        assert mapping["/scan/dir2"] == "dir00011"
+
+
+class TestGenerateCommands:
+    """Tests for command generation functions."""
+
+    def test_generate_move_commands(self, tmp_path: Path) -> None:
+        """Test generating mv -iv commands."""
+        files = [
+            {"path": "/scan/dir1/file1.txt", "size": 100},
+            {"path": "/scan/dir1/file2.txt", "size": 200},
+        ]
+        target_dir = str(tmp_path / "target")
+        dir_mapping = {"/scan/dir1": "dir00001"}
+
+        commands = dedup.generate_move_commands(files, target_dir, dir_mapping)
+
+        assert len(commands) == 3  # 1 mkdir + 2 mv
+        assert commands[0].startswith("mkdir -p")
+        assert "dir00001" in commands[0]
+        assert commands[1].startswith("mv -iv")
+        assert "file1.txt" in commands[1]
+        assert commands[2].startswith("mv -iv")
+        assert "file2.txt" in commands[2]
+
+    def test_generate_copy_commands(self, tmp_path: Path) -> None:
+        """Test generating cp -pv commands."""
+        files = [
+            {"path": "/scan/dir1/file1.txt", "size": 100},
+        ]
+        target_dir = str(tmp_path / "target")
+        dir_mapping = {"/scan/dir1": "dir00001"}
+
+        commands = dedup.generate_copy_commands(files, target_dir, dir_mapping)
+
+        assert len(commands) == 2  # 1 mkdir + 1 cp
+        assert commands[0].startswith("mkdir -p")
+        assert commands[1].startswith("cp -pv")
+        assert "file1.txt" in commands[1]
+
+    def test_generate_commands_with_spaces(self, tmp_path: Path) -> None:
+        """Test path quoting works with spaces."""
+        files = [
+            {"path": "/scan/my photos/photo 1.jpg", "size": 100},
+        ]
+        target_dir = str(tmp_path / "my target")
+        dir_mapping = {"/scan/my photos": "dir00001"}
+
+        commands = dedup.generate_move_commands(files, target_dir, dir_mapping)
+
+        # Verify paths are quoted
+        assert "'" in commands[0] or '"' in commands[0]
+        assert "'" in commands[1] or '"' in commands[1]
+        assert "photo 1.jpg" in commands[1]
+
+    def test_generate_commands_mkdir(self, tmp_path: Path) -> None:
+        """Test mkdir -p commands included for each directory."""
+        files = [
+            {"path": "/scan/dir1/file1.txt", "size": 100},
+            {"path": "/scan/dir2/file2.txt", "size": 200},
+        ]
+        target_dir = str(tmp_path / "target")
+        dir_mapping = {"/scan/dir1": "dir00001", "/scan/dir2": "dir00002"}
+
+        commands = dedup.generate_move_commands(files, target_dir, dir_mapping)
+
+        mkdir_commands = [cmd for cmd in commands if cmd.startswith("mkdir")]
+        assert len(mkdir_commands) == 2
+        assert "dir00001" in mkdir_commands[0]
+        assert "dir00002" in mkdir_commands[1]
+
+    def test_generate_commands_special_chars(self, tmp_path: Path) -> None:
+        """Test special characters are properly escaped."""
+        files = [
+            {"path": "/scan/dir$/file'1.txt", "size": 100},
+        ]
+        target_dir = str(tmp_path / "target")
+        dir_mapping = {"/scan/dir$": "dir00001"}
+
+        commands = dedup.generate_move_commands(files, target_dir, dir_mapping)
+
+        # Should have proper quoting
+        assert len(commands) == 2
+        # Commands should be safe to execute (quotes handled)
+        assert "mv -iv" in commands[1]
+
+
+class TestDisplayCommands:
+    """Tests for display_commands function."""
+
+    def test_display_commands(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying commands."""
+        commands = [
+            "mkdir -p /target/dir00001",
+            "mv -iv /scan/file.txt /target/dir00001/file.txt",
+        ]
+
+        dedup.display_commands(commands)
+
+        captured = capsys.readouterr()
+        lines = captured.out.strip().split("\n")
+        assert len(lines) == 2
+        assert lines[0] == "mkdir -p /target/dir00001"
+        assert lines[1] == "mv -iv /scan/file.txt /target/dir00001/file.txt"
+
+    def test_display_commands_empty(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying empty command list."""
+        dedup.display_commands([])
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+
 class TestListDisplay:
     """Tests for list display functions."""
 
@@ -577,6 +790,9 @@ class TestMain:
             check_timestamps=False,
             tolerance=1,
             list=False,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         result = dedup.run(args)
@@ -621,6 +837,9 @@ class TestMain:
             check_timestamps=False,
             tolerance=1,
             list=False,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         result = dedup.run(args)
@@ -650,6 +869,9 @@ class TestMain:
             check_timestamps=False,
             tolerance=1,
             list=False,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         result = dedup.run(args)
@@ -693,6 +915,9 @@ class TestMain:
             check_timestamps=False,
             tolerance=1,
             list=False,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         result = dedup.run(args)
@@ -739,6 +964,9 @@ class TestMain:
             check_timestamps=True,
             tolerance=1,
             list=False,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         result = dedup.run(args)
@@ -761,6 +989,9 @@ class TestMain:
             check_timestamps=False,
             tolerance=1,
             list=False,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         with pytest.raises(SystemExit, match="not found"):
@@ -780,6 +1011,9 @@ class TestMain:
             check_timestamps=False,
             tolerance=1,
             list=False,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         with pytest.raises(SystemExit, match="not found"):
@@ -801,6 +1035,9 @@ class TestMain:
             check_timestamps=False,
             tolerance=1,
             list=False,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         with pytest.raises(SystemExit, match="Not a directory"):
@@ -841,6 +1078,9 @@ class TestMain:
             check_timestamps=True,
             tolerance=5,
             list=False,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         result = dedup.run(args)
@@ -881,6 +1121,9 @@ class TestMain:
             check_timestamps=False,
             tolerance=1,
             list=True,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         result = dedup.run(args)
@@ -914,6 +1157,9 @@ class TestMain:
             check_timestamps=False,
             tolerance=1,
             list=True,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         result = dedup.run(args)
@@ -963,6 +1209,9 @@ class TestMain:
             check_timestamps=False,
             tolerance=1,
             list=True,
+            move=None,
+            copy=None,
+            start=1,
         )
 
         result = dedup.run(args)
@@ -987,3 +1236,235 @@ class TestMain:
 
         result = dedup.main()
         assert result == os.EX_OK
+
+    def test_run_move_mode(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test run with --move flag."""
+        # Create empty archive
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        # Create scan directory with files
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        subdir = scan_dir / "photos2023"
+        subdir.mkdir()
+        (subdir / "file1.txt").write_text("content1")
+        (subdir / "file2.txt").write_text("content2")
+
+        # Create target directory
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=False,
+            show_missing=True,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=False,
+            move=str(target_dir),
+            copy=None,
+            start=1,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        assert "umask 022" in captured.out
+        assert "mkdir -p" in captured.out
+        assert "mv -iv" in captured.out
+        assert "dir00001" in captured.out
+
+    def test_run_copy_mode(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test run with --copy flag."""
+        # Create archive
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_file = archive_dir / "file.txt"
+        archive_file.write_text("content")
+
+        json_file = tmp_path / "archive.json"
+        json_data = [
+            {
+                "path": str(archive_file.resolve()),
+                "size": 7,
+                "sha1": "040f06fd774092478d450774f5ba30c5da78acc8",
+                "md5": "9a0364b9e99bb480dd25e1f0284c8555",
+                "date": datetime.now(UTC).isoformat(),
+            }
+        ]
+        json_file.write_text(json.dumps(json_data))
+
+        # Create scan directory with duplicate
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        (scan_dir / "file.txt").write_text("content")
+
+        # Create target directory
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=False,
+            move=None,
+            copy=str(target_dir),
+            start=1,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        assert "umask 022" in captured.out
+        assert "mkdir -p" in captured.out
+        assert "cp -pv" in captured.out
+        assert "dir00001" in captured.out
+
+    def test_run_move_copy_exclusive(self, tmp_path: Path) -> None:
+        """Test error when both --move and --copy specified."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=False,
+            move=str(target_dir),
+            copy=str(target_dir),
+            start=1,
+        )
+
+        with pytest.raises(SystemExit, match="mutually exclusive"):
+            dedup.run(args)
+
+    def test_run_move_list_exclusive(self, tmp_path: Path) -> None:
+        """Test error when --move and --list specified."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=True,
+            move=str(target_dir),
+            copy=None,
+            start=1,
+        )
+
+        with pytest.raises(SystemExit, match="cannot be used with --list"):
+            dedup.run(args)
+
+    def test_run_move_no_files(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test no output when no files match."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=False,
+            move=str(target_dir),
+            copy=None,
+            start=1,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        # No files to process, so no output
+        assert captured.out == ""
+
+    def test_run_move_target_not_exists(self, tmp_path: Path) -> None:
+        """Test error when target directory doesn't exist."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=False,
+            move="/nonexistent/target",
+            copy=None,
+            start=1,
+        )
+
+        with pytest.raises(SystemExit, match="does not exist"):
+            dedup.run(args)
+
+    def test_run_move_custom_start(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test --start option with custom number."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        (scan_dir / "file.txt").write_text("content")
+
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=False,
+            show_missing=True,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=False,
+            move=str(target_dir),
+            copy=None,
+            start=100,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        assert "dir00100" in captured.out
+        assert "dir00001" not in captured.out
