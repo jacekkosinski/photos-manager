@@ -1,0 +1,486 @@
+"""Find duplicate and missing files by comparing with archive metadata.
+
+This module provides functionality to compare files in a directory against
+archive metadata (JSON created by mkjson) to identify:
+- Duplicates: Files that exist in the archive
+- Missing: Files that do NOT exist in the archive
+
+The comparison uses file size as a first filter, then SHA-1 and MD5 checksums
+for exact matching. Optional filename and timestamp comparison can provide
+additional warnings when files differ in these attributes.
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+
+
+def load_json(file_path: str) -> list[dict[str, str | int]]:
+    """Load and parse JSON metadata file.
+
+    Args:
+        file_path: Path to the JSON file to load
+
+    Returns:
+        List of file metadata dictionaries
+
+    Raises:
+        SystemExit: If file doesn't exist or JSON is invalid
+    """
+    try:
+        with Path(file_path).open(encoding="utf-8") as f:
+            data = json.load(f)
+            if not isinstance(data, list):
+                raise SystemExit(f"Error: {file_path} does not contain a JSON array")
+            return data
+    except FileNotFoundError as e:
+        raise SystemExit(f"Error: JSON file not found: {file_path}") from e
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"Error: Invalid JSON in {file_path}: {e}") from e
+
+
+def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
+    """Calculate SHA-1 and MD5 checksums for a file.
+
+    Args:
+        file_path: Path to the file to hash
+
+    Returns:
+        Tuple of (sha1_hex, md5_hex), or (None, None) if error occurs
+    """
+    try:
+        sha1 = hashlib.sha1(usedforsecurity=False)
+        md5 = hashlib.md5(usedforsecurity=False)
+
+        with Path(file_path).open("rb") as f:
+            while chunk := f.read(65536):  # 64KB chunks
+                sha1.update(chunk)
+                md5.update(chunk)
+
+        return sha1.hexdigest(), md5.hexdigest()
+    except (OSError, PermissionError) as e:
+        print(f"Warning: Could not calculate checksums for {file_path}: {e}", file=sys.stderr)
+        return None, None
+
+
+def scan_directory(directory: str) -> list[dict[str, str | int]]:
+    """Scan directory recursively and collect file metadata.
+
+    Args:
+        directory: Path to directory to scan
+
+    Returns:
+        List of file metadata dictionaries with keys:
+        path (str), sha1 (str), md5 (str), date (str), size (int)
+    """
+    files: list[dict[str, str | int]] = []
+    dir_path = Path(directory)
+
+    if not dir_path.exists():
+        raise SystemExit(f"Error: Directory not found: {directory}")
+    if not dir_path.is_dir():
+        raise SystemExit(f"Error: Not a directory: {directory}")
+
+    for root, _, filenames in os.walk(directory):
+        for filename in filenames:
+            file_path = Path(root) / filename
+
+            try:
+                stat = file_path.stat()
+                size: int = stat.st_size
+                mtime = datetime.fromtimestamp(stat.st_mtime).astimezone()
+                date = mtime.isoformat()
+
+                sha1, md5 = calculate_checksums(str(file_path))
+                if sha1 is None or md5 is None:
+                    continue  # Skip files we couldn't hash
+
+                files.append(
+                    {
+                        "path": str(file_path.resolve()),
+                        "sha1": sha1,
+                        "md5": md5,
+                        "date": date,
+                        "size": size,
+                    }
+                )
+            except (OSError, PermissionError) as e:
+                print(f"Warning: Could not process {file_path}: {e}", file=sys.stderr)
+                continue
+
+    return files
+
+
+def build_archive_index(
+    archive_data: list[dict[str, str | int]],
+) -> tuple[dict[int, list[dict[str, str | int]]], dict[tuple[str, str], dict[str, str | int]]]:
+    """Build indexes for efficient archive lookup.
+
+    Args:
+        archive_data: List of archive file metadata
+
+    Returns:
+        Tuple of (size_index, checksum_index):
+        - size_index: Maps file size to list of archive entries
+        - checksum_index: Maps (sha1, md5) tuple to archive entry
+    """
+    size_index: dict[int, list[dict[str, str | int]]] = {}
+    checksum_index: dict[tuple[str, str], dict[str, str | int]] = {}
+
+    for entry in archive_data:
+        # Build size index
+        size = entry["size"]
+        if not isinstance(size, int):
+            continue
+        if size not in size_index:
+            size_index[size] = []
+        size_index[size].append(entry)
+
+        # Build checksum index
+        sha1 = entry.get("sha1")
+        md5 = entry.get("md5")
+        if isinstance(sha1, str) and isinstance(md5, str):
+            checksum_index[(sha1, md5)] = entry
+
+    return size_index, checksum_index
+
+
+def find_duplicates(
+    scanned_files: list[dict[str, str | int]],
+    size_index: dict[int, list[dict[str, str | int]]],
+    checksum_index: dict[tuple[str, str], dict[str, str | int]],
+) -> tuple[list[tuple[dict[str, str | int], dict[str, str | int]]], list[dict[str, str | int]]]:
+    """Find duplicates and missing files by comparing scanned files with archive.
+
+    Args:
+        scanned_files: List of scanned file metadata
+        size_index: Size-based index of archive
+        checksum_index: Checksum-based index of archive
+
+    Returns:
+        Tuple of (duplicates, missing):
+        - duplicates: List of (scanned_entry, archive_entry) tuples
+        - missing: List of scanned entries not in archive
+    """
+    duplicates = []
+    missing = []
+
+    for scanned in scanned_files:
+        size = scanned["size"]
+        if not isinstance(size, int):
+            continue
+
+        # First check: size match
+        if size not in size_index:
+            missing.append(scanned)
+            continue
+
+        # Second check: checksum match
+        sha1 = scanned.get("sha1")
+        md5 = scanned.get("md5")
+        if not isinstance(sha1, str) or not isinstance(md5, str):
+            missing.append(scanned)
+            continue
+
+        checksum_key = (sha1, md5)
+        if checksum_key in checksum_index:
+            archive_entry = checksum_index[checksum_key]
+            duplicates.append((scanned, archive_entry))
+        else:
+            missing.append(scanned)
+
+    return duplicates, missing
+
+
+def compare_filenames(scanned_path: str, archive_path: str) -> tuple[bool, str | None]:
+    """Compare filenames (basename only) between scanned and archive files.
+
+    Args:
+        scanned_path: Path of scanned file
+        archive_path: Path of archive file
+
+    Returns:
+        Tuple of (is_same, warning_message):
+        - is_same: True if basenames match
+        - warning_message: Description if different, None if same
+    """
+    scanned_name = Path(scanned_path).name
+    archive_name = Path(archive_path).name
+
+    if scanned_name == archive_name:
+        return True, None
+
+    return False, f"Filename differs - scanned: '{scanned_name}', archive: '{archive_name}'"
+
+
+def compare_timestamps(
+    scanned_date: str, archive_date: str, tolerance: int
+) -> tuple[bool, str | None]:
+    """Compare timestamps between scanned and archive files.
+
+    Args:
+        scanned_date: ISO 8601 timestamp of scanned file
+        archive_date: ISO 8601 timestamp of archive file
+        tolerance: Allowed difference in seconds
+
+    Returns:
+        Tuple of (is_within_tolerance, difference_message):
+        - is_within_tolerance: True if within tolerance
+        - difference_message: Description of difference, None if within tolerance
+    """
+    try:
+        scanned_dt = datetime.fromisoformat(scanned_date)
+        archive_dt = datetime.fromisoformat(archive_date)
+
+        diff_seconds = abs((scanned_dt - archive_dt).total_seconds())
+
+        if diff_seconds <= tolerance:
+            return True, None
+
+        return False, f"Timestamp differs by {int(diff_seconds)} seconds"
+    except (ValueError, TypeError) as e:
+        return False, f"Could not parse timestamps: {e}"
+
+
+def format_size(size: int) -> str:
+    """Format file size with thousands separators.
+
+    Args:
+        size: Size in bytes
+
+    Returns:
+        Formatted size string
+    """
+    return f"{size:,}"
+
+
+def display_duplicates(
+    duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
+    check_filenames: bool,
+    check_timestamps: bool,
+    tolerance: int,
+) -> tuple[int, int]:
+    """Display duplicate files with optional warnings.
+
+    Args:
+        duplicates: List of (scanned_entry, archive_entry) tuples
+        check_filenames: Whether to check and warn about filename differences
+        check_timestamps: Whether to check and warn about timestamp differences
+        tolerance: Timestamp tolerance in seconds
+
+    Returns:
+        Tuple of (filename_warnings, timestamp_warnings) counts
+    """
+    if not duplicates:
+        return 0, 0
+
+    print("\nDuplicates (files found in archive):\n")
+
+    filename_warnings = 0
+    timestamp_warnings = 0
+
+    for idx, (scanned, archive) in enumerate(duplicates, 1):
+        print(f"  [{idx}/{len(duplicates)}] {scanned['path']}")
+        print(f"         Size: {format_size(int(scanned['size']))} bytes")
+        print(f"         SHA-1: {scanned['sha1']}")
+        print(f"         MD5: {scanned['md5']}")
+        print(f"         Archive: {archive['path']}")
+
+        if check_filenames:
+            is_same, warning = compare_filenames(str(scanned["path"]), str(archive["path"]))
+            if not is_same and warning:
+                print(f"         Warning: {warning}")
+                filename_warnings += 1
+
+        if check_timestamps:
+            is_within, diff = compare_timestamps(
+                str(scanned["date"]), str(archive["date"]), tolerance
+            )
+            if not is_within and diff:
+                print(f"         Warning: {diff}")
+                timestamp_warnings += 1
+
+        print()
+
+    return filename_warnings, timestamp_warnings
+
+
+def display_missing(missing: list[dict[str, str | int]]) -> None:
+    """Display files missing from archive.
+
+    Args:
+        missing: List of scanned file entries not in archive
+    """
+    if not missing:
+        return
+
+    print("\nMissing from archive (files NOT in archive):\n")
+
+    for idx, entry in enumerate(missing, 1):
+        print(f"  [{idx}/{len(missing)}] {entry['path']}")
+        print(f"        Size: {format_size(int(entry['size']))} bytes")
+        print(f"        SHA-1: {entry['sha1']}")
+        print(f"        MD5: {entry['md5']}")
+        print()
+
+
+def display_summary(
+    scanned_count: int,
+    duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
+    missing: list[dict[str, str | int]],
+    filename_warnings: int,
+    timestamp_warnings: int,
+) -> None:
+    """Display summary statistics.
+
+    Args:
+        scanned_count: Total number of files scanned
+        duplicates: List of duplicate entries
+        missing: List of missing entries
+        filename_warnings: Number of filename warnings
+        timestamp_warnings: Number of timestamp warnings
+    """
+    dup_size = sum(int(scanned["size"]) for scanned, _ in duplicates)
+    miss_size = sum(int(entry["size"]) for entry in missing)
+
+    print("=" * 64)
+    print("Summary:")
+    print(f"  Files scanned: {scanned_count}")
+    print(f"  Duplicates found: {len(duplicates)} (total size: {format_size(dup_size)} bytes)")
+    print(f"  Missing from archive: {len(missing)} (total size: {format_size(miss_size)} bytes)")
+    if filename_warnings > 0:
+        print(f"  Filename warnings: {filename_warnings}")
+    if timestamp_warnings > 0:
+        print(f"  Timestamp warnings: {timestamp_warnings}")
+    print("=" * 64)
+
+
+def setup_parser(parser: argparse.ArgumentParser) -> None:
+    """Configure argument parser for dedup command.
+
+    Args:
+        parser: ArgumentParser to configure
+    """
+    parser.add_argument(
+        "json_file",
+        help="Archive JSON metadata file (created by mkjson)",
+    )
+    parser.add_argument(
+        "directory",
+        help="Directory to scan for duplicates and missing files",
+    )
+    parser.add_argument(
+        "-d",
+        "--show-duplicates",
+        action="store_true",
+        help="Display files found in archive (duplicates)",
+    )
+    parser.add_argument(
+        "-m",
+        "--show-missing",
+        action="store_true",
+        help="Display files NOT found in archive (missing)",
+    )
+    parser.add_argument(
+        "-f",
+        "--check-filenames",
+        action="store_true",
+        help="Compare filenames and warn if different (basename only)",
+    )
+    parser.add_argument(
+        "-t",
+        "--check-timestamps",
+        action="store_true",
+        help="Compare timestamps and warn if different",
+    )
+    parser.add_argument(
+        "--tolerance",
+        type=int,
+        default=1,
+        help="Timestamp tolerance in seconds (default: 1)",
+    )
+
+
+def run(args: argparse.Namespace) -> int:
+    """Execute dedup command.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        Exit code (os.EX_OK on success)
+
+    Raises:
+        SystemExit: On validation or runtime errors
+    """
+    # Check if at least one display flag is specified
+    if not args.show_duplicates and not args.show_missing:
+        print("Error: At least one of -d/--show-duplicates or -m/--show-missing is required\n")
+        print("Use -h or --help for usage information")
+        return 1
+
+    # Validate inputs
+    if not Path(args.json_file).exists():
+        raise SystemExit(f"Error: JSON file not found: {args.json_file}")
+    if not Path(args.directory).exists():
+        raise SystemExit(f"Error: Directory not found: {args.directory}")
+    if not Path(args.directory).is_dir():
+        raise SystemExit(f"Error: Not a directory: {args.directory}")
+
+    # Load archive metadata
+    print(f"Loading archive metadata from {args.json_file}...")
+    archive_data = load_json(args.json_file)
+    print(f"Loaded {len(archive_data)} files from archive")
+
+    # Build indexes for efficient lookup
+    size_index, checksum_index = build_archive_index(archive_data)
+
+    # Scan directory
+    print(f"\nScanning directory {args.directory}...")
+    scanned_files = scan_directory(args.directory)
+    print(f"Scanned {len(scanned_files)} files")
+
+    # Find duplicates and missing
+    print("\nComparing files...")
+    duplicates, missing = find_duplicates(scanned_files, size_index, checksum_index)
+
+    # Display results based on flags
+    filename_warnings = 0
+    timestamp_warnings = 0
+
+    if args.show_duplicates:
+        fw, tw = display_duplicates(
+            duplicates, args.check_filenames, args.check_timestamps, args.tolerance
+        )
+        filename_warnings += fw
+        timestamp_warnings += tw
+
+    if args.show_missing:
+        display_missing(missing)
+
+    # Always display summary
+    display_summary(len(scanned_files), duplicates, missing, filename_warnings, timestamp_warnings)
+
+    return os.EX_OK
+
+
+def main() -> int:
+    """CLI entry point for dedup command.
+
+    Returns:
+        Exit code
+    """
+    parser = argparse.ArgumentParser(
+        description="Find duplicate and missing files by comparing with archive"
+    )
+    setup_parser(parser)
+    args = parser.parse_args()
+    return run(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

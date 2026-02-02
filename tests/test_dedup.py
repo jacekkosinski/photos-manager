@@ -1,0 +1,798 @@
+"""Tests for dedup module."""
+
+import argparse
+import json
+import os
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import TYPE_CHECKING
+from unittest.mock import patch
+
+import pytest
+
+from photos_manager import dedup
+
+if TYPE_CHECKING:
+    from _pytest.capture import CaptureFixture
+    from _pytest.monkeypatch import MonkeyPatch
+
+
+class TestLoadJson:
+    """Tests for load_json function."""
+
+    def test_load_valid_json(self, tmp_path: Path) -> None:
+        """Test loading valid JSON file."""
+        json_file = tmp_path / "test.json"
+        test_data = [{"path": "/test.txt", "size": 100}]
+        json_file.write_text(json.dumps(test_data))
+
+        result = dedup.load_json(str(json_file))
+        assert result == test_data
+
+    def test_load_nonexistent_file(self) -> None:
+        """Test loading nonexistent file raises SystemExit."""
+        with pytest.raises(SystemExit, match="not found"):
+            dedup.load_json("/nonexistent/file.json")
+
+    def test_load_invalid_json(self, tmp_path: Path) -> None:
+        """Test loading invalid JSON raises SystemExit."""
+        json_file = tmp_path / "invalid.json"
+        json_file.write_text("{invalid json")
+
+        with pytest.raises(SystemExit, match="Invalid JSON"):
+            dedup.load_json(str(json_file))
+
+    def test_load_non_array_json(self, tmp_path: Path) -> None:
+        """Test loading JSON that's not an array raises SystemExit."""
+        json_file = tmp_path / "object.json"
+        json_file.write_text('{"key": "value"}')
+
+        with pytest.raises(SystemExit, match="does not contain a JSON array"):
+            dedup.load_json(str(json_file))
+
+
+class TestCalculateChecksums:
+    """Tests for calculate_checksums function."""
+
+    def test_calculate_checksums_success(self, tmp_path: Path) -> None:
+        """Test successful checksum calculation."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("test content")
+
+        sha1, md5 = dedup.calculate_checksums(str(test_file))
+        assert sha1 == "1eebdf4fdc9fc7bf283031b93f9aef3338de9052"
+        assert md5 == "9473fdd0d880a43c21b7778d34872157"
+
+    def test_calculate_checksums_large_file(self, tmp_path: Path) -> None:
+        """Test checksum calculation for file larger than buffer size."""
+        test_file = tmp_path / "large.bin"
+        # Create file larger than 64KB buffer
+        test_file.write_bytes(b"x" * 100000)
+
+        sha1, md5 = dedup.calculate_checksums(str(test_file))
+        assert sha1 is not None
+        assert md5 is not None
+        assert len(sha1) == 40
+        assert len(md5) == 32
+
+    def test_calculate_checksums_nonexistent_file(self) -> None:
+        """Test checksum calculation for nonexistent file returns None."""
+        sha1, md5 = dedup.calculate_checksums("/nonexistent/file.txt")
+        assert sha1 is None
+        assert md5 is None
+
+    def test_calculate_checksums_permission_error(self, tmp_path: Path) -> None:
+        """Test checksum calculation handles permission errors."""
+        test_file = tmp_path / "noperm.txt"
+        test_file.write_text("test")
+
+        with patch("pathlib.Path.open", side_effect=PermissionError("Access denied")):
+            sha1, md5 = dedup.calculate_checksums(str(test_file))
+            assert sha1 is None
+            assert md5 is None
+
+
+class TestScanDirectory:
+    """Tests for scan_directory function."""
+
+    def test_scan_single_file(self, tmp_path: Path) -> None:
+        """Test scanning directory with single file."""
+        test_file = tmp_path / "file.txt"
+        test_file.write_text("content")
+
+        result = dedup.scan_directory(str(tmp_path))
+
+        assert len(result) == 1
+        assert result[0]["path"] == str(test_file.resolve())
+        assert result[0]["size"] == 7
+        assert result[0]["sha1"] is not None
+        assert result[0]["md5"] is not None
+        assert "date" in result[0]
+
+    def test_scan_multiple_files(self, tmp_path: Path) -> None:
+        """Test scanning directory with multiple files."""
+        (tmp_path / "file1.txt").write_text("content1")
+        (tmp_path / "file2.txt").write_text("content2")
+
+        result = dedup.scan_directory(str(tmp_path))
+
+        assert len(result) == 2
+        paths = {entry["path"] for entry in result}
+        assert str((tmp_path / "file1.txt").resolve()) in paths
+        assert str((tmp_path / "file2.txt").resolve()) in paths
+
+    def test_scan_recursive(self, tmp_path: Path) -> None:
+        """Test scanning directory recursively."""
+        (tmp_path / "file1.txt").write_text("content1")
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "file2.txt").write_text("content2")
+
+        result = dedup.scan_directory(str(tmp_path))
+
+        assert len(result) == 2
+        paths = {entry["path"] for entry in result}
+        assert str((tmp_path / "file1.txt").resolve()) in paths
+        assert str((subdir / "file2.txt").resolve()) in paths
+
+    def test_scan_empty_directory(self, tmp_path: Path) -> None:
+        """Test scanning empty directory."""
+        result = dedup.scan_directory(str(tmp_path))
+        assert result == []
+
+    def test_scan_nonexistent_directory(self) -> None:
+        """Test scanning nonexistent directory raises SystemExit."""
+        with pytest.raises(SystemExit, match="not found"):
+            dedup.scan_directory("/nonexistent/dir")
+
+    def test_scan_not_directory(self, tmp_path: Path) -> None:
+        """Test scanning a file (not directory) raises SystemExit."""
+        test_file = tmp_path / "file.txt"
+        test_file.write_text("content")
+
+        with pytest.raises(SystemExit, match="Not a directory"):
+            dedup.scan_directory(str(test_file))
+
+
+class TestBuildArchiveIndex:
+    """Tests for build_archive_index function."""
+
+    def test_build_index_basic(self) -> None:
+        """Test building indexes from archive data."""
+        archive_data = [
+            {"path": "/file1.txt", "size": 100, "sha1": "abc", "md5": "def"},
+            {"path": "/file2.txt", "size": 200, "sha1": "ghi", "md5": "jkl"},
+        ]
+
+        size_index, checksum_index = dedup.build_archive_index(archive_data)
+
+        assert 100 in size_index
+        assert 200 in size_index
+        assert len(size_index[100]) == 1
+        assert ("abc", "def") in checksum_index
+        assert ("ghi", "jkl") in checksum_index
+
+    def test_build_index_multiple_same_size(self) -> None:
+        """Test building index with multiple files of same size."""
+        archive_data = [
+            {"path": "/file1.txt", "size": 100, "sha1": "abc", "md5": "def"},
+            {"path": "/file2.txt", "size": 100, "sha1": "ghi", "md5": "jkl"},
+        ]
+
+        size_index, _ = dedup.build_archive_index(archive_data)
+
+        assert len(size_index[100]) == 2
+
+    def test_build_index_empty(self) -> None:
+        """Test building index from empty archive."""
+        size_index, checksum_index = dedup.build_archive_index([])
+
+        assert size_index == {}
+        assert checksum_index == {}
+
+    def test_build_index_missing_fields(self) -> None:
+        """Test building index handles entries with missing fields."""
+        archive_data = [
+            {"path": "/file1.txt", "size": "not_int", "sha1": "abc", "md5": "def"},
+            {"path": "/file2.txt", "size": 200},
+        ]
+
+        size_index, _ = dedup.build_archive_index(archive_data)
+
+        assert 100 not in size_index
+        assert 200 in size_index
+
+
+class TestFindDuplicates:
+    """Tests for find_duplicates function."""
+
+    def test_find_exact_match(self) -> None:
+        """Test finding exact duplicate."""
+        scanned = [{"path": "/scan/file.txt", "size": 100, "sha1": "abc", "md5": "def"}]
+        archive_data = [{"path": "/archive/file.txt", "size": 100, "sha1": "abc", "md5": "def"}]
+
+        size_index, checksum_index = dedup.build_archive_index(archive_data)
+        duplicates, missing = dedup.find_duplicates(scanned, size_index, checksum_index)
+
+        assert len(duplicates) == 1
+        assert len(missing) == 0
+        assert duplicates[0][0]["path"] == "/scan/file.txt"
+        assert duplicates[0][1]["path"] == "/archive/file.txt"
+
+    def test_find_missing(self) -> None:
+        """Test finding missing file."""
+        scanned = [{"path": "/scan/new.txt", "size": 100, "sha1": "xyz", "md5": "uvw"}]
+        archive_data = [{"path": "/archive/old.txt", "size": 200, "sha1": "abc", "md5": "def"}]
+
+        size_index, checksum_index = dedup.build_archive_index(archive_data)
+        duplicates, missing = dedup.find_duplicates(scanned, size_index, checksum_index)
+
+        assert len(duplicates) == 0
+        assert len(missing) == 1
+        assert missing[0]["path"] == "/scan/new.txt"
+
+    def test_find_size_match_checksum_mismatch(self) -> None:
+        """Test size matches but checksums don't."""
+        scanned = [{"path": "/scan/file.txt", "size": 100, "sha1": "xyz", "md5": "uvw"}]
+        archive_data = [{"path": "/archive/file.txt", "size": 100, "sha1": "abc", "md5": "def"}]
+
+        size_index, checksum_index = dedup.build_archive_index(archive_data)
+        duplicates, missing = dedup.find_duplicates(scanned, size_index, checksum_index)
+
+        assert len(duplicates) == 0
+        assert len(missing) == 1
+
+    def test_find_empty_scanned(self) -> None:
+        """Test with no scanned files."""
+        archive_data = [{"path": "/archive/file.txt", "size": 100, "sha1": "abc", "md5": "def"}]
+
+        size_index, checksum_index = dedup.build_archive_index(archive_data)
+        duplicates, missing = dedup.find_duplicates([], size_index, checksum_index)
+
+        assert len(duplicates) == 0
+        assert len(missing) == 0
+
+    def test_find_multiple_duplicates_and_missing(self) -> None:
+        """Test finding mix of duplicates and missing files."""
+        scanned = [
+            {"path": "/scan/dup1.txt", "size": 100, "sha1": "abc", "md5": "def"},
+            {"path": "/scan/dup2.txt", "size": 200, "sha1": "ghi", "md5": "jkl"},
+            {"path": "/scan/miss1.txt", "size": 300, "sha1": "xyz", "md5": "uvw"},
+        ]
+        archive_data = [
+            {"path": "/archive/dup1.txt", "size": 100, "sha1": "abc", "md5": "def"},
+            {"path": "/archive/dup2.txt", "size": 200, "sha1": "ghi", "md5": "jkl"},
+        ]
+
+        size_index, checksum_index = dedup.build_archive_index(archive_data)
+        duplicates, missing = dedup.find_duplicates(scanned, size_index, checksum_index)
+
+        assert len(duplicates) == 2
+        assert len(missing) == 1
+
+
+class TestCompareFilenames:
+    """Tests for compare_filenames function."""
+
+    def test_compare_identical_filenames(self) -> None:
+        """Test comparing identical filenames."""
+        is_same, warning = dedup.compare_filenames("/scan/file.txt", "/archive/file.txt")
+        assert is_same is True
+        assert warning is None
+
+    def test_compare_different_filenames(self) -> None:
+        """Test comparing different filenames."""
+        is_same, warning = dedup.compare_filenames("/scan/file1.txt", "/archive/file2.txt")
+        assert is_same is False
+        assert warning is not None
+        assert "file1.txt" in warning
+        assert "file2.txt" in warning
+
+    def test_compare_same_basename_different_paths(self) -> None:
+        """Test comparing files with same basename but different paths."""
+        is_same, warning = dedup.compare_filenames("/scan/dir1/file.txt", "/archive/dir2/file.txt")
+        assert is_same is True
+        assert warning is None
+
+
+class TestCompareTimestamps:
+    """Tests for compare_timestamps function."""
+
+    def test_compare_identical_timestamps(self) -> None:
+        """Test comparing identical timestamps."""
+        dt = datetime.now(UTC).isoformat()
+        is_within, diff = dedup.compare_timestamps(dt, dt, 1)
+        assert is_within is True
+        assert diff is None
+
+    def test_compare_within_tolerance(self) -> None:
+        """Test comparing timestamps within tolerance."""
+        dt1 = datetime.now(UTC)
+        dt2 = dt1 + timedelta(seconds=0.5)
+        is_within, diff = dedup.compare_timestamps(dt1.isoformat(), dt2.isoformat(), 1)
+        assert is_within is True
+        assert diff is None
+
+    def test_compare_outside_tolerance(self) -> None:
+        """Test comparing timestamps outside tolerance."""
+        dt1 = datetime.now(UTC)
+        dt2 = dt1 + timedelta(seconds=10)
+        is_within, diff = dedup.compare_timestamps(dt1.isoformat(), dt2.isoformat(), 1)
+        assert is_within is False
+        assert diff is not None
+        assert "10 seconds" in diff
+
+    def test_compare_invalid_timestamps(self) -> None:
+        """Test comparing invalid timestamps."""
+        is_within, diff = dedup.compare_timestamps("invalid", "also_invalid", 1)
+        assert is_within is False
+        assert diff is not None
+        assert "Could not parse" in diff
+
+
+class TestFormatSize:
+    """Tests for format_size function."""
+
+    def test_format_small_size(self) -> None:
+        """Test formatting small size."""
+        assert dedup.format_size(123) == "123"
+
+    def test_format_large_size(self) -> None:
+        """Test formatting large size with thousands separators."""
+        assert dedup.format_size(1234567) == "1,234,567"
+
+    def test_format_zero(self) -> None:
+        """Test formatting zero."""
+        assert dedup.format_size(0) == "0"
+
+
+class TestDisplayFunctions:
+    """Tests for display functions."""
+
+    def test_display_duplicates_basic(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying duplicates without warnings."""
+        duplicates = [
+            (
+                {
+                    "path": "/scan/file.txt",
+                    "size": 100,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": "2024-01-01T12:00:00",
+                },
+                {
+                    "path": "/archive/file.txt",
+                    "size": 100,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": "2024-01-01T12:00:00",
+                },
+            )
+        ]
+
+        fw, tw = dedup.display_duplicates(duplicates, False, False, 1)
+
+        captured = capsys.readouterr()
+        assert "Duplicates" in captured.out
+        assert "/scan/file.txt" in captured.out
+        assert "/archive/file.txt" in captured.out
+        assert fw == 0
+        assert tw == 0
+
+    def test_display_duplicates_with_filename_warnings(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying duplicates with filename warnings."""
+        duplicates = [
+            (
+                {
+                    "path": "/scan/file1.txt",
+                    "size": 100,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": "2024-01-01T12:00:00",
+                },
+                {
+                    "path": "/archive/file2.txt",
+                    "size": 100,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": "2024-01-01T12:00:00",
+                },
+            )
+        ]
+
+        fw, tw = dedup.display_duplicates(duplicates, True, False, 1)
+
+        captured = capsys.readouterr()
+        assert "Filename differs" in captured.out
+        assert fw == 1
+        assert tw == 0
+
+    def test_display_duplicates_with_timestamp_warnings(
+        self, capsys: "CaptureFixture[str]"
+    ) -> None:
+        """Test displaying duplicates with timestamp warnings."""
+        dt1 = datetime.now(UTC)
+        dt2 = dt1 + timedelta(seconds=100)
+        duplicates = [
+            (
+                {
+                    "path": "/scan/file.txt",
+                    "size": 100,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": dt1.isoformat(),
+                },
+                {
+                    "path": "/archive/file.txt",
+                    "size": 100,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": dt2.isoformat(),
+                },
+            )
+        ]
+
+        fw, tw = dedup.display_duplicates(duplicates, False, True, 1)
+
+        captured = capsys.readouterr()
+        assert "Timestamp differs" in captured.out
+        assert fw == 0
+        assert tw == 1
+
+    def test_display_duplicates_empty(self) -> None:
+        """Test displaying empty duplicates list."""
+        fw, tw = dedup.display_duplicates([], False, False, 1)
+        assert fw == 0
+        assert tw == 0
+
+    def test_display_missing_basic(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying missing files."""
+        missing = [{"path": "/scan/new.txt", "size": 100, "sha1": "xyz", "md5": "uvw"}]
+
+        dedup.display_missing(missing)
+
+        captured = capsys.readouterr()
+        assert "Missing from archive" in captured.out
+        assert "/scan/new.txt" in captured.out
+
+    def test_display_missing_empty(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying empty missing list."""
+        dedup.display_missing([])
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+    def test_display_summary(self, capsys: "CaptureFixture[str]") -> None:
+        """Test displaying summary."""
+        duplicates = [
+            (
+                {"path": "/scan/file.txt", "size": 100, "sha1": "abc", "md5": "def"},
+                {"path": "/archive/file.txt", "size": 100, "sha1": "abc", "md5": "def"},
+            )
+        ]
+        missing = [{"path": "/scan/new.txt", "size": 200, "sha1": "xyz", "md5": "uvw"}]
+
+        dedup.display_summary(10, duplicates, missing, 1, 2)
+
+        captured = capsys.readouterr()
+        assert "Summary:" in captured.out
+        assert "Files scanned: 10" in captured.out
+        assert "Duplicates found: 1" in captured.out
+        assert "100 bytes" in captured.out
+        assert "Missing from archive: 1" in captured.out
+        assert "200 bytes" in captured.out
+        assert "Filename warnings: 1" in captured.out
+        assert "Timestamp warnings: 2" in captured.out
+
+
+class TestSetupParser:
+    """Tests for setup_parser function."""
+
+    def test_setup_parser(self) -> None:
+        """Test parser setup."""
+        parser = argparse.ArgumentParser()
+        dedup.setup_parser(parser)
+
+        # Test that parser accepts expected arguments
+        args = parser.parse_args(
+            ["archive.json", "/scan/dir", "-d", "-m", "-f", "-t", "--tolerance", "5"]
+        )
+
+        assert args.json_file == "archive.json"
+        assert args.directory == "/scan/dir"
+        assert args.show_duplicates is True
+        assert args.show_missing is True
+        assert args.check_filenames is True
+        assert args.check_timestamps is True
+        assert args.tolerance == 5
+
+
+class TestMain:
+    """Integration tests for main/run functions."""
+
+    def test_run_no_flags(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test run without -d or -m flags shows error."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=False,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+        )
+
+        result = dedup.run(args)
+        assert result == 1
+
+        captured = capsys.readouterr()
+        assert "At least one of" in captured.out
+
+    def test_run_show_duplicates(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test run with -d flag showing duplicates."""
+        # Create archive
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_file = archive_dir / "file.txt"
+        archive_file.write_text("content")
+
+        # Generate archive JSON
+        json_file = tmp_path / "archive.json"
+        json_data = [
+            {
+                "path": str(archive_file.resolve()),
+                "size": 7,
+                "sha1": "040f06fd774092478d450774f5ba30c5da78acc8",
+                "md5": "9a0364b9e99bb480dd25e1f0284c8555",
+                "date": datetime.now(UTC).isoformat(),
+            }
+        ]
+        json_file.write_text(json.dumps(json_data))
+
+        # Create scan directory with duplicate
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        scan_file = scan_dir / "file.txt"
+        scan_file.write_text("content")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        assert "Duplicates" in captured.out
+        assert "Summary:" in captured.out
+
+    def test_run_show_missing(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test run with -m flag showing missing files."""
+        # Create empty archive
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        # Create scan directory with file
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        (scan_dir / "new.txt").write_text("content")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=False,
+            show_missing=True,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        assert "Missing from archive" in captured.out
+
+    def test_run_with_filename_check(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test run with -f flag checking filenames."""
+        # Create archive with different filename
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_file = archive_dir / "original.txt"
+        archive_file.write_text("content")
+
+        json_file = tmp_path / "archive.json"
+        json_data = [
+            {
+                "path": str(archive_file.resolve()),
+                "size": 7,
+                "sha1": "040f06fd774092478d450774f5ba30c5da78acc8",
+                "md5": "9a0364b9e99bb480dd25e1f0284c8555",
+                "date": datetime.now(UTC).isoformat(),
+            }
+        ]
+        json_file.write_text(json.dumps(json_data))
+
+        # Create scan directory with different filename but same content
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        scan_file = scan_dir / "renamed.txt"
+        scan_file.write_text("content")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=True,
+            check_timestamps=False,
+            tolerance=1,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        assert "Filename differs" in captured.out
+        assert "Filename warnings: 1" in captured.out
+
+    def test_run_with_timestamp_check(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+        """Test run with -t flag checking timestamps."""
+        # Create archive
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_file = archive_dir / "file.txt"
+        archive_file.write_text("content")
+
+        # Use old timestamp in JSON
+        old_date = (datetime.now(UTC) - timedelta(days=100)).isoformat()
+        json_file = tmp_path / "archive.json"
+        json_data = [
+            {
+                "path": str(archive_file.resolve()),
+                "size": 7,
+                "sha1": "040f06fd774092478d450774f5ba30c5da78acc8",
+                "md5": "9a0364b9e99bb480dd25e1f0284c8555",
+                "date": old_date,
+            }
+        ]
+        json_file.write_text(json.dumps(json_data))
+
+        # Create scan directory with same content but current timestamp
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        scan_file = scan_dir / "file.txt"
+        scan_file.write_text("content")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=True,
+            tolerance=1,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        assert "Timestamp differs" in captured.out
+
+    def test_run_nonexistent_json(self, tmp_path: Path) -> None:
+        """Test run with nonexistent JSON file."""
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file="/nonexistent.json",
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+        )
+
+        with pytest.raises(SystemExit, match="not found"):
+            dedup.run(args)
+
+    def test_run_nonexistent_directory(self, tmp_path: Path) -> None:
+        """Test run with nonexistent directory."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory="/nonexistent/dir",
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+        )
+
+        with pytest.raises(SystemExit, match="not found"):
+            dedup.run(args)
+
+    def test_run_not_directory(self, tmp_path: Path) -> None:
+        """Test run with file instead of directory."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        not_dir = tmp_path / "file.txt"
+        not_dir.write_text("content")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(not_dir),
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+        )
+
+        with pytest.raises(SystemExit, match="Not a directory"):
+            dedup.run(args)
+
+    def test_run_all_flags(self, tmp_path: Path) -> None:
+        """Test run with all flags enabled."""
+        # Create archive
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_file = archive_dir / "file.txt"
+        archive_file.write_text("content")
+
+        json_file = tmp_path / "archive.json"
+        json_data = [
+            {
+                "path": str(archive_file.resolve()),
+                "size": 7,
+                "sha1": "040f06fd774092478d450774f5ba30c5da78acc8",
+                "md5": "9a0364b9e99bb480dd25e1f0284c8555",
+                "date": datetime.now(UTC).isoformat(),
+            }
+        ]
+        json_file.write_text(json.dumps(json_data))
+
+        # Create scan directory
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        (scan_dir / "file.txt").write_text("content")
+        (scan_dir / "new.txt").write_text("new content")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            directory=str(scan_dir),
+            show_duplicates=True,
+            show_missing=True,
+            check_filenames=True,
+            check_timestamps=True,
+            tolerance=5,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+    def test_main_entry_point(self, tmp_path: Path, monkeypatch: "MonkeyPatch") -> None:
+        """Test main() entry point."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+
+        monkeypatch.setattr("sys.argv", ["dedup", str(json_file), str(scan_dir), "-d"])
+
+        result = dedup.main()
+        assert result == os.EX_OK

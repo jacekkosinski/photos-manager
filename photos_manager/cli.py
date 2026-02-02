@@ -9,6 +9,7 @@ a unified interface to all photo management commands:
 - verify: Verify archive integrity
 - sync: Synchronize source and destination archives
 - prepare: Prepare directories for archiving (fix permissions, ownership, filenames)
+- dedup: Find duplicate and missing files by comparing with archive
 
 Usage:
     photos mkjson /path/to/directory
@@ -17,13 +18,14 @@ Usage:
     photos verify /path/to/archive
     photos sync /source/archive /dest/archive
     photos prepare /path/to/directory --dry-run
+    photos dedup archive.json /path/to/scan -d -m
 """
 
 import argparse
 import sys
 from typing import cast
 
-from photos_manager import __version__, mkjson, mkversion, prepare, setmtime, sync, verify
+from photos_manager import __version__, dedup, mkjson, mkversion, prepare, setmtime, sync, verify
 
 
 def main() -> int:
@@ -120,6 +122,15 @@ def main() -> int:
     )
     prepare.setup_parser(prepare_parser)
     prepare_parser.set_defaults(func=prepare.run)
+
+    # dedup subcommand
+    dedup_parser = subparsers.add_parser(
+        "dedup",
+        help="Find duplicate and missing files by comparing with archive",
+        description="Find files that exist in archive (duplicates) and files not in archive",
+    )
+    dedup.setup_parser(dedup_parser)
+    dedup_parser.set_defaults(func=dedup.run)
 
     # Parse arguments and execute
     args = parser.parse_args()
