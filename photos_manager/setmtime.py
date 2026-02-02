@@ -1,7 +1,7 @@
 """setmtime - Set file and directory timestamps based on JSON metadata.
 
 This script updates modification timestamps of files and directories to match
-the timestamps stored in JSON metadata files (created by mkjson). It can:
+the timestamps stored in JSON metadata files (created by index). It can:
 - Update file timestamps to match the 'date' field in JSON metadata
 - Update directory timestamps to match the newest file in each directory
 - Update JSON file timestamps to match the newest file it describes

@@ -1,4 +1,4 @@
-"""mkjson - Generate JSON file with file metadata from directory.
+"""index - Generate JSON file with file metadata from directory.
 
 This script recursively scans a directory and generates a JSON file containing
 metadata for each file found:
@@ -10,10 +10,10 @@ metadata for each file found:
 Supports merging with existing JSON files and provides multiple sorting options.
 
 Usage:
-    ./mkjson.py /path/to/directory
-    ./mkjson.py /path/to/directory --merge existing.json
-    ./mkjson.py /path/to/directory --sort-by-number
-    python -m photos_manager.mkjson /path/to/directory
+    ./index.py /path/to/directory
+    ./index.py /path/to/directory --merge existing.json
+    ./index.py /path/to/directory --sort-by-number
+    python -m photos_manager.index /path/to/directory
 """
 
 import argparse
@@ -145,12 +145,12 @@ def extract_numbers(path: str) -> tuple[int, int, str]:
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
-    """Configure argument parser for mkjson command.
+    """Configure argument parser for index command.
 
-    Adds all command-line arguments for the mkjson tool to the provided parser.
+    Adds all command-line arguments for the index tool to the provided parser.
 
     Args:
-        parser: ArgumentParser instance to configure with mkjson arguments.
+        parser: ArgumentParser instance to configure with index arguments.
     """
     parser.add_argument("directory", type=str, help="Path to the source directory")
     parser.add_argument(
@@ -175,7 +175,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    """Execute mkjson command with parsed arguments.
+    """Execute index command with parsed arguments.
 
     Scans the directory, optionally merges with existing JSON, validates
     for duplicates, sorts results, and writes output JSON file.

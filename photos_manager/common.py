@@ -1,7 +1,7 @@
 """Common utilities shared across photos_manager modules.
 
 This module provides shared functionality to eliminate code duplication
-across mkjson, verify, setmtime, mkversion, and dedup modules.
+across index, verify, setmtime, mkversion, and dedup modules.
 """
 
 import hashlib
@@ -51,7 +51,7 @@ def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
     """Calculate SHA1 and MD5 checksums for a file (lenient).
 
     Returns (None, None) on error with warning. Use for batch processing
-    where you want to continue on errors (mkjson, dedup).
+    where you want to continue on errors (index, dedup).
 
     Args:
         file_path: Path to the file to hash

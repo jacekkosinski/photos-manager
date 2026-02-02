@@ -1,7 +1,7 @@
 """Find duplicate and missing files by comparing with archive metadata.
 
 This module provides functionality to compare files in a directory against
-archive metadata (JSON created by mkjson) to identify:
+archive metadata (JSON created by index) to identify:
 - Duplicates: Files that exist in the archive
 - Missing: Files that do NOT exist in the archive
 
@@ -436,7 +436,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument(
         "json_file",
-        help="Archive JSON metadata file (created by mkjson)",
+        help="Archive JSON metadata file (created by index)",
     )
     parser.add_argument(
         "directory",
