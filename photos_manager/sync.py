@@ -27,11 +27,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from photos_manager.verify import (
-    find_json_files,
-    find_version_file,
-    load_json,
-)
+from photos_manager.common import find_json_files, load_json
+from photos_manager.verify import find_version_file
 
 # Type alias for file identity (sha1, md5, size)
 FileIdentity = tuple[str, str, int]

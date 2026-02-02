@@ -17,45 +17,12 @@ Usage:
 """
 
 import argparse
-import json
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
 
-
-def load_json(file_path: str) -> list[dict[str, str | int]]:
-    """Load JSON data from a file.
-
-    Reads a JSON file and parses it into a list of dictionaries containing
-    file metadata. This is a utility function for loading JSON files generated
-    by mkjson.
-
-    Args:
-        file_path: Path to the JSON file to load. Can be absolute or relative.
-
-    Returns:
-        List of dictionaries containing file information with keys matching
-        the mkjson output format (path, sha1, md5, date, size).
-
-    Raises:
-        SystemExit: If the file cannot be read or contains invalid JSON.
-
-    Examples:
-        >>> data = load_json("archive.json")
-        >>> data[0]['path']
-        '/path/to/photos/image.jpg'
-    """
-    try:
-        path = Path(file_path)
-        with path.open(encoding="utf-8") as json_file:
-            data: Any = json.load(json_file)
-            return cast("list[dict[str, str | int]]", data)
-    except FileNotFoundError as exception:
-        raise SystemExit(f"Error: JSON file '{file_path}' does not exist") from exception
-    except json.JSONDecodeError as exception:
-        raise SystemExit(f"Error: JSON file '{file_path}' contains invalid format") from exception
+from photos_manager.common import load_json
 
 
 def get_newest_files(

@@ -17,7 +17,6 @@ Usage:
 """
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -26,39 +25,9 @@ import time
 from collections import Counter, OrderedDict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-
-def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
-    """Calculate SHA-1 and MD5 checksums for a given file.
-
-    Args:
-        file_path: Path to the file to calculate checksums for.
-
-    Returns:
-        Tuple containing SHA-1 and MD5 checksums as hex strings.
-        Returns (None, None) if file cannot be read.
-
-    Warnings:
-        Files that cannot be accessed due to permission errors or OS errors
-        are skipped with a warning message printed to stdout. The function
-        returns (None, None) to allow processing to continue with other files.
-    """
-    sha1_hash = hashlib.sha1(usedforsecurity=False)
-    md5_hash = hashlib.md5(usedforsecurity=False)
-
-    try:
-        path = Path(file_path)
-        with path.open("rb") as f:
-            for byte_block in iter(lambda: f.read(65536), b""):
-                sha1_hash.update(byte_block)
-                md5_hash.update(byte_block)
-    except OSError as e:
-        print(f"Warning: Could not access {file_path}: {e}")
-        return None, None
-
-    return sha1_hash.hexdigest(), md5_hash.hexdigest()
+from photos_manager.common import calculate_checksums
 
 
 def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
@@ -173,39 +142,6 @@ def extract_numbers(path: str) -> tuple[int, int, str]:
     filename_number = int(match.group()) if match else 0
 
     return dir_number, filename_number, filename
-
-
-def load_json(file_path: str) -> list[dict[str, str | int]]:
-    """Load JSON data from a file.
-
-    Reads a JSON file and parses it into a list of dictionaries containing
-    file metadata. This is a utility function for loading previously generated
-    JSON files.
-
-    Args:
-        file_path: Path to the JSON file to load. Can be absolute or relative.
-
-    Returns:
-        List of dictionaries containing file information with keys matching
-        the output format (path, sha1, md5, date, size).
-
-    Raises:
-        SystemExit: If the file does not exist or contains invalid JSON.
-
-    Examples:
-        >>> data = load_json("archive.json")
-        >>> print(f"Loaded {len(data)} file entries")
-        Loaded 42 file entries
-    """
-    try:
-        path = Path(file_path)
-        with path.open(encoding="utf-8") as json_file:
-            data: Any = json.load(json_file)
-            return cast("list[dict[str, str | int]]", data)
-    except FileNotFoundError as exception:
-        raise SystemExit(f"Error: JSON file '{file_path}' does not exist") from exception
-    except json.JSONDecodeError as exception:
-        raise SystemExit(f"Error: JSON file '{file_path}' contains invalid format") from exception
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:

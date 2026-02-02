@@ -55,75 +55,11 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+from photos_manager.common import find_json_files_with_mtime as find_json_files
+
 # Constants
 VERSION_PREFIX = "photos"
 BYTES_PER_TB = 2**40
-
-
-def find_json_files(directory: str) -> list[tuple[float, str]]:
-    """Find all JSON files in a directory tree and return with modification times.
-
-    Recursively walks through the directory tree starting from the specified
-    directory and collects all files with .json extension. For each JSON file
-    found, retrieves its modification time and full path.
-
-    Files ending with 'version.json' are automatically excluded as they contain
-    version metadata rather than photo archive data.
-
-    The results are sorted by modification time in descending order (most
-    recently modified first).
-
-    Args:
-        directory: Path to the root directory to search for JSON files.
-            Can be an absolute or relative path string.
-
-    Returns:
-        A list of tuples, where each tuple contains:
-            - float: Modification time as Unix timestamp (seconds since epoch)
-            - str: Absolute path to the JSON file
-
-        The list is sorted by modification time in descending order.
-
-    Raises:
-        SystemExit: If no JSON files are found in the directory tree.
-
-    Warnings:
-        Files that cannot be accessed due to permission errors or OS errors
-        are skipped with a warning message printed to stdout. The function
-        continues processing other files.
-
-    Note:
-        Files matching the pattern '*version.json' are excluded:
-        - .version.json (generated version file)
-        - archive.version.json
-        - data_version.json
-        - etc.
-
-    Examples:
-        >>> files = find_json_files("/path/to/archive")
-        >>> files[0]
-        (1703945123.456789, '/path/to/archive/data/file1.json')
-        >>> # Most recently modified file is first
-        >>> # .version.json is automatically excluded
-        >>> len(files)
-        42
-    """
-    json_files = []
-    for root, _, files in os.walk(directory):
-        for file in files:
-            # Skip version.json files (they have different structure)
-            if file.endswith(".json") and not file.endswith("version.json"):
-                try:
-                    path = Path(root) / file
-                    mtime = path.stat().st_mtime
-                    json_files.append((mtime, str(path)))
-                except (OSError, PermissionError) as exception:
-                    print(f"Warning: Could not access {path}: {exception}")
-
-    if not json_files:
-        raise SystemExit("Error: No JSON files found in the directory")
-
-    return sorted(json_files, reverse=True)
 
 
 def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str, str]]:

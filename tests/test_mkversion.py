@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from photos_manager.mkversion import find_json_files, validate_and_process_json
+from photos_manager.common import find_json_files_with_mtime as find_json_files
+from photos_manager.mkversion import validate_and_process_json
 
 
 class TestFindJsonFiles:

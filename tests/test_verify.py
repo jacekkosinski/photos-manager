@@ -8,18 +8,22 @@ from typing import cast
 
 import pytest
 
+from photos_manager.common import (
+    calculate_checksums_strict as calculate_checksums,
+)
+from photos_manager.common import (
+    find_json_files,
+    load_json,
+)
 from photos_manager.verify import (
-    calculate_checksums,
     calculate_file_hash,
     collect_expected_files,
     collect_filesystem_files,
     find_duplicate_checksums,
     find_extra_files,
     find_invalid_dates,
-    find_json_files,
     find_version_file,
     find_zero_byte_files,
-    load_json,
     load_version_json,
     normalize_paths,
     validate_date_format,
@@ -62,7 +66,7 @@ class TestLoadJson:
         json_file = tmp_path / "invalid.json"
         json_file.write_text("not valid json")
 
-        with pytest.raises(SystemExit, match="invalid format"):
+        with pytest.raises(SystemExit, match="Invalid JSON"):
             load_json(str(json_file))
 
 
@@ -131,7 +135,7 @@ class TestFindJsonFiles:
 
     def test_raises_on_empty_directory(self, tmp_path: Path) -> None:
         """Test that SystemExit is raised when no JSON files found."""
-        with pytest.raises(SystemExit, match="No JSON metadata files found"):
+        with pytest.raises(SystemExit, match="No JSON files found"):
             find_json_files(str(tmp_path))
 
 

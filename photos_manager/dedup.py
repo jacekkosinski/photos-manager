@@ -11,61 +11,13 @@ additional warnings when files differ in these attributes.
 """
 
 import argparse
-import hashlib
-import json
 import os
 import shlex
 import sys
 from datetime import datetime
 from pathlib import Path
 
-
-def load_json(file_path: str) -> list[dict[str, str | int]]:
-    """Load and parse JSON metadata file.
-
-    Args:
-        file_path: Path to the JSON file to load
-
-    Returns:
-        List of file metadata dictionaries
-
-    Raises:
-        SystemExit: If file doesn't exist or JSON is invalid
-    """
-    try:
-        with Path(file_path).open(encoding="utf-8") as f:
-            data = json.load(f)
-            if not isinstance(data, list):
-                raise SystemExit(f"Error: {file_path} does not contain a JSON array")
-            return data
-    except FileNotFoundError as e:
-        raise SystemExit(f"Error: JSON file not found: {file_path}") from e
-    except json.JSONDecodeError as e:
-        raise SystemExit(f"Error: Invalid JSON in {file_path}: {e}") from e
-
-
-def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
-    """Calculate SHA-1 and MD5 checksums for a file.
-
-    Args:
-        file_path: Path to the file to hash
-
-    Returns:
-        Tuple of (sha1_hex, md5_hex), or (None, None) if error occurs
-    """
-    try:
-        sha1 = hashlib.sha1(usedforsecurity=False)
-        md5 = hashlib.md5(usedforsecurity=False)
-
-        with Path(file_path).open("rb") as f:
-            while chunk := f.read(65536):  # 64KB chunks
-                sha1.update(chunk)
-                md5.update(chunk)
-
-        return sha1.hexdigest(), md5.hexdigest()
-    except (OSError, PermissionError) as e:
-        print(f"Warning: Could not calculate checksums for {file_path}: {e}", file=sys.stderr)
-        return None, None
+from photos_manager.common import calculate_checksums, load_json
 
 
 def scan_directory(directory: str) -> list[dict[str, str | int]]:

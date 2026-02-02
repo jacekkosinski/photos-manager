@@ -9,9 +9,9 @@ from typing import Any, cast
 import pytest
 from _pytest.capture import CaptureFixture
 
+from photos_manager.common import load_json
 from photos_manager.setmtime import (
     get_newest_files,
-    load_json,
     set_dirs_timestamps,
     set_files_timestamps,
     set_json_timestamps,
@@ -44,7 +44,7 @@ class TestLoadJson:
         json_file = tmp_path / "invalid.json"
         json_file.write_text("not valid json{")
 
-        with pytest.raises(SystemExit, match="invalid format"):
+        with pytest.raises(SystemExit, match="Invalid JSON"):
             load_json(str(json_file))
 
 

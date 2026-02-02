@@ -5,12 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from photos_manager.mkjson import (
-    calculate_checksums,
-    extract_numbers,
-    get_file_info,
-    load_json,
-)
+from photos_manager.common import calculate_checksums, load_json
+from photos_manager.mkjson import extract_numbers, get_file_info
 
 
 class TestCalculateChecksums:
@@ -267,7 +263,7 @@ class TestLoadJson:
         with pytest.raises(SystemExit) as exc_info:
             load_json(str(json_file))
 
-        assert "invalid format" in str(exc_info.value)
+        assert "Invalid JSON" in str(exc_info.value)
 
     def test_loads_json_with_unicode(self, tmp_path: Path) -> None:
         """Test loading JSON with Unicode characters."""

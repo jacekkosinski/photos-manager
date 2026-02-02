@@ -37,38 +37,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
-
-def load_json(file_path: str) -> list[dict[str, str | int]]:
-    """Load JSON data from a file.
-
-    Reads a JSON file and parses it into a list of dictionaries containing
-    file metadata. This is a utility function for loading JSON files generated
-    by mkjson.
-
-    Args:
-        file_path: Path to the JSON file to load. Can be absolute or relative.
-
-    Returns:
-        List of dictionaries containing file information with keys matching
-        the mkjson output format (path, sha1, md5, date, size).
-
-    Raises:
-        SystemExit: If the file cannot be read or contains invalid JSON.
-
-    Examples:
-        >>> data = load_json("archive.json")
-        >>> data[0]['path']
-        '/path/to/photos/image.jpg'
-    """
-    try:
-        path = Path(file_path)
-        with path.open(encoding="utf-8") as json_file:
-            data: Any = json.load(json_file)
-            return cast("list[dict[str, str | int]]", data)
-    except FileNotFoundError as exception:
-        raise SystemExit(f"Error: JSON file '{file_path}' does not exist") from exception
-    except json.JSONDecodeError as exception:
-        raise SystemExit(f"Error: JSON file '{file_path}' contains invalid format") from exception
+from photos_manager.common import (
+    calculate_checksums_strict as calculate_checksums,
+)
+from photos_manager.common import (
+    find_json_files,
+    load_json,
+)
 
 
 def load_version_json(file_path: str) -> dict[str, Any]:
@@ -103,44 +78,6 @@ def load_version_json(file_path: str) -> dict[str, Any]:
         ) from exception
 
 
-def find_json_files(directory: str) -> list[str]:
-    """Find all JSON metadata files in a directory.
-
-    Recursively walks through the directory tree starting from the specified
-    directory and collects all files with .json extension, excluding files
-    ending with 'version.json'.
-
-    Args:
-        directory: Path to the root directory to search for JSON files.
-
-    Returns:
-        List of absolute paths to JSON metadata files, sorted by name.
-
-    Raises:
-        SystemExit: If no JSON files are found in the directory tree.
-
-    Examples:
-        >>> files = find_json_files("/path/to/archive")
-        >>> files[0]
-        '/path/to/archive/data/file1.json'
-    """
-    # Convert to absolute path with symlinks resolved to match normalize_paths behavior
-    base_path = Path(directory).resolve()
-
-    json_files = []
-    for root, _, files in os.walk(base_path):
-        for file in files:
-            # Skip version.json files (they have different structure)
-            if file.endswith(".json") and not file.endswith("version.json"):
-                path = Path(root) / file
-                json_files.append(str(path))
-
-    if not json_files:
-        raise SystemExit("Error: No JSON metadata files found in the directory")
-
-    return sorted(json_files)
-
-
 def find_version_file(directory: str) -> str | None:
     """Find version JSON file in directory.
 
@@ -163,37 +100,6 @@ def find_version_file(directory: str) -> str | None:
     if version_path.exists():
         return str(version_path)
     return None
-
-
-def calculate_checksums(file_path: str) -> tuple[str, str]:
-    """Calculate SHA-1 and MD5 checksums for a given file.
-
-    Args:
-        file_path: Path to the file to calculate checksums for.
-
-    Returns:
-        Tuple containing SHA-1 and MD5 checksums as hex strings.
-
-    Raises:
-        OSError: If file cannot be read.
-
-    Examples:
-        >>> sha1, md5 = calculate_checksums("/path/to/file.jpg")
-        >>> len(sha1)
-        40
-        >>> len(md5)
-        32
-    """
-    sha1_hash = hashlib.sha1(usedforsecurity=False)
-    md5_hash = hashlib.md5(usedforsecurity=False)
-
-    path = Path(file_path)
-    with path.open("rb") as f:
-        for byte_block in iter(lambda: f.read(65536), b""):
-            sha1_hash.update(byte_block)
-            md5_hash.update(byte_block)
-
-    return sha1_hash.hexdigest(), md5_hash.hexdigest()
 
 
 def calculate_file_hash(file_path: str) -> str:
