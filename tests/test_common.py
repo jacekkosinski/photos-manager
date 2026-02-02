@@ -110,7 +110,7 @@ class TestCalculateChecksums:
 
         assert sha1 is not None
         assert md5 is not None
-        assert len(sha1) == 40  # SHA-1 hex length
+        assert len(sha1) == 40  # SHA1 hex length
         assert len(md5) == 32  # MD5 hex length
 
     def test_nonexistent_file_returns_none(self, tmp_path: Path) -> None:

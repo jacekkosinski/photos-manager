@@ -5,7 +5,7 @@ archive metadata (JSON created by mkjson) to identify:
 - Duplicates: Files that exist in the archive
 - Missing: Files that do NOT exist in the archive
 
-The comparison uses file size as a first filter, then SHA-1 and MD5 checksums
+The comparison uses file size as a first filter, then SHA1 and MD5 checksums
 for exact matching. Optional filename and timestamp comparison can provide
 additional warnings when files differ in these attributes.
 """
@@ -365,7 +365,7 @@ def display_duplicates(
     for idx, (scanned, archive) in enumerate(duplicates, 1):
         print(f"  [{idx}/{len(duplicates)}] {scanned['path']}")
         print(f"         Size: {format_size(int(scanned['size']))} bytes")
-        print(f"         SHA-1: {scanned['sha1']}")
+        print(f"         SHA1: {scanned['sha1']}")
         print(f"         MD5: {scanned['md5']}")
         print(f"         Archive: {archive['path']}")
 
@@ -402,7 +402,7 @@ def display_missing(missing: list[dict[str, str | int]]) -> None:
     for idx, entry in enumerate(missing, 1):
         print(f"  [{idx}/{len(missing)}] {entry['path']}")
         print(f"        Size: {format_size(int(entry['size']))} bytes")
-        print(f"        SHA-1: {entry['sha1']}")
+        print(f"        SHA1: {entry['sha1']}")
         print(f"        MD5: {entry['md5']}")
         print()
 

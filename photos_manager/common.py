@@ -48,7 +48,7 @@ def load_json(file_path: str) -> list[dict[str, str | int]]:
 
 
 def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
-    """Calculate SHA-1 and MD5 checksums for a file (lenient).
+    """Calculate SHA1 and MD5 checksums for a file (lenient).
 
     Returns (None, None) on error with warning. Use for batch processing
     where you want to continue on errors (mkjson, dedup).
@@ -78,7 +78,7 @@ def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
 
 
 def calculate_checksums_strict(file_path: str) -> tuple[str, str]:
-    """Calculate SHA-1 and MD5 checksums for a file (strict).
+    """Calculate SHA1 and MD5 checksums for a file (strict).
 
     Raises OSError on error. Use for validation where failures must
     be reported (verify).

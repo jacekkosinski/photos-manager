@@ -3,7 +3,7 @@
 This script recursively scans a directory and generates a JSON file containing
 metadata for each file found:
 - Path to the file
-- SHA-1 and MD5 checksums
+- SHA1 and MD5 checksums
 - File size in bytes
 - Modification timestamp with timezone
 
@@ -35,7 +35,7 @@ def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
 
     Recursively walks through the directory tree starting from the specified
     directory and collects metadata for each file found. For each file,
-    calculates SHA-1 and MD5 checksums, retrieves file size and modification
+    calculates SHA1 and MD5 checksums, retrieves file size and modification
     time with timezone information.
 
     Args:
@@ -48,7 +48,7 @@ def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
         A list of dictionaries, where each dictionary contains file metadata
         with the following keys:
             - path (str): Absolute path to the file
-            - sha1 (str): SHA-1 checksum as hex string
+            - sha1 (str): SHA1 checksum as hex string
             - md5 (str): MD5 checksum as hex string
             - date (str): Modification time in ISO 8601 format with timezone
             - size (int): File size in bytes
@@ -201,7 +201,7 @@ def run(args: argparse.Namespace) -> int:
         SystemExit: If any of the following errors occur:
             - Source directory does not exist or is not a directory
             - Merge file cannot be read or contains invalid JSON
-            - Duplicate paths, SHA-1, or MD5 hashes detected
+            - Duplicate paths, SHA1, or MD5 hashes detected
             - Output file cannot be written
 
     Examples:

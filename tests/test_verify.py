@@ -262,7 +262,7 @@ class TestVerifyFileEntry:
         assert any("Size mismatch" in err for err in errors)
 
     def test_detects_sha1_mismatch(self, tmp_path: Path) -> None:
-        """Test that SHA-1 mismatch is detected."""
+        """Test that SHA1 mismatch is detected."""
         test_file = tmp_path / "test.txt"
         test_file.write_text("content")
 
@@ -279,7 +279,7 @@ class TestVerifyFileEntry:
         success, errors = verify_file_entry(entry, verify_checksums=True)
 
         assert success is False
-        assert any("SHA-1 mismatch" in err for err in errors)
+        assert any("SHA1 mismatch" in err for err in errors)
         assert any("MD5 mismatch" in err for err in errors)
 
     def test_skips_checksum_verification_by_default(self, tmp_path: Path) -> None:

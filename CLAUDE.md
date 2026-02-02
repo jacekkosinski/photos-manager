@@ -9,7 +9,7 @@ Photos Manager CLI is a Python 3.12+ toolkit for managing photo archives. It
 provides four main utilities:
 
 1. **mkjson** - Scans directories and generates JSON metadata files containing
-   checksums (SHA-1, MD5), file sizes, and timestamps for all files
+   checksums (SHA1, MD5), file sizes, and timestamps for all files
 1. **mkversion** - Aggregates multiple JSON metadata files to generate version
    information with total size, file count, and integrity hashes
 1. **setmtime** - Updates file and directory modification timestamps based on
@@ -121,7 +121,7 @@ are standalone scripts that follow a unified implementation style:
 
 **Key functions**:
 
-- `calculate_checksums(file_path)` - Computes SHA-1 and MD5 checksums using 64KB
+- `calculate_checksums(file_path)` - Computes SHA1 and MD5 checksums using 64KB
   chunks
 - `get_file_info(directory, time_zone)` - Recursively scans directory and
   collects file metadata
@@ -137,7 +137,7 @@ are standalone scripts that follow a unified implementation style:
 - Three sorting modes: by date (default), numeric patterns, or directory
   structure
 - Merge capability to combine with existing JSON files
-- Duplicate detection for paths, SHA-1, and MD5 hashes
+- Duplicate detection for paths, SHA1, and MD5 hashes
 - Custom field ordering in output (path, sha1, md5, date, size)
 
 ### mkversion.py
@@ -164,7 +164,7 @@ hashes
 
 - Automatically excludes files ending with `version.json` from processing
 - Validates that all JSON files contain arrays of objects with required fields
-- Calculates SHA-1 hash of each JSON file for integrity verification
+- Calculates SHA1 hash of each JSON file for integrity verification
 - Tracks last modification time across all JSON files
 - Can output to file or stdout
 
@@ -222,7 +222,7 @@ hashes
   matches newest entry
 - `verify_version_file(version_file, json_files, all_data)` - Verifies version
   file integrity
-- `calculate_checksums(file_path)` - Computes SHA-1 and MD5 for verification
+- `calculate_checksums(file_path)` - Computes SHA1 and MD5 for verification
 - `main()` - CLI entry point that orchestrates all verification checks
 
 **Expected input**: Directory containing JSON metadata files and optionally
@@ -233,7 +233,7 @@ hashes
 - **Basic** (default): File existence and size verification
 - **With --check-timestamps**: Adds mtime verification for files, directories,
   and JSON files
-- **With --all**: Adds SHA-1 and MD5 checksum verification (time-consuming)
+- **With --all**: Adds SHA1 and MD5 checksum verification (time-consuming)
 - **With --tolerance N**: Allows N seconds tolerance for timestamp comparisons
 
 **Key features**:
@@ -334,7 +334,7 @@ To run manually: `pre-commit run --all-files`
 The JSON format produced by mkjson contains:
 
 - `path`: Absolute file path (string)
-- `sha1`: SHA-1 checksum (hex string)
+- `sha1`: SHA1 checksum (hex string)
 - `md5`: MD5 checksum (hex string)
 - `date`: ISO 8601 timestamp with timezone (string)
 - `size`: File size in bytes (integer)

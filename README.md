@@ -14,7 +14,7 @@ management.
 - 📚 Google-style docstrings with interrogate validation
 - 🔧 Pre-commit hooks for code quality
 - 🎯 Linting and formatting with Ruff
-- 🔐 SHA-1 and MD5 checksum generation
+- 🔐 SHA1 and MD5 checksum generation
 - 📦 JSON-based metadata tracking
 - 🌍 Timezone-aware timestamps
 
@@ -201,7 +201,7 @@ photos verify /path/to/archive --all --check-timestamps --tolerance 2
 
 - **File existence**: All files listed in JSON metadata exist
 - **File sizes**: Actual file sizes match metadata
-- **Checksums** (with `--all`): SHA-1 and MD5 hashes match metadata
+- **Checksums** (with `--all`): SHA1 and MD5 hashes match metadata
   (time-consuming)
 - **Timestamps** (with `--check-timestamps`): File mtimes match metadata
 - **Directory timestamps** (with `--check-timestamps`): Directory mtimes match

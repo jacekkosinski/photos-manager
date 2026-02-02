@@ -7,7 +7,7 @@ This script verifies the integrity of photo archives by checking:
 - Directory timestamps match newest file
 - JSON file timestamps match newest entry
 - Archive directory timestamp matches newest JSON file (with --check-timestamps)
-- SHA-1 and MD5 checksums (with --all flag, time-consuming)
+- SHA1 and MD5 checksums (with --all flag, time-consuming)
 - Version file integrity (.version.json)
 - Extra files in filesystem not present in metadata (with --check-extra-files)
 - Extra JSON files not listed in .version.json (with --check-extra-files)
@@ -103,13 +103,13 @@ def find_version_file(directory: str) -> str | None:
 
 
 def calculate_file_hash(file_path: str) -> str:
-    """Calculate SHA-1 hash of entire file for version verification.
+    """Calculate SHA1 hash of entire file for version verification.
 
     Args:
         file_path: Path to the file to hash.
 
     Returns:
-        SHA-1 hash as hex string.
+        SHA1 hash as hex string.
 
     Raises:
         OSError: If file cannot be read.
@@ -170,7 +170,7 @@ def verify_file_entry(
     Args:
         entry: Dictionary containing file metadata with keys: path, sha1, md5,
             date, size.
-        verify_checksums: If True, calculate and verify SHA-1 and MD5 checksums
+        verify_checksums: If True, calculate and verify SHA1 and MD5 checksums
             (time-consuming). Defaults to False.
 
     Returns:
@@ -223,7 +223,7 @@ def verify_file_entry(
 
             if actual_sha1 != expected_sha1:
                 errors.append(
-                    f"SHA-1 mismatch for {file_path}: expected {expected_sha1}, got {actual_sha1}"
+                    f"SHA1 mismatch for {file_path}: expected {expected_sha1}, got {actual_sha1}"
                 )
 
             if actual_md5 != expected_md5:
@@ -1329,7 +1329,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "-a",
         "--all",
         action="store_true",
-        help="Verify SHA-1 and MD5 checksums (time-consuming)",
+        help="Verify SHA1 and MD5 checksums (time-consuming)",
     )
     parser.add_argument(
         "-t",
@@ -1380,7 +1380,7 @@ def run(args: argparse.Namespace) -> int:
     1. Verifies all files exist and are accessible
     2. Verifies file sizes match metadata
     3. Optionally verifies file timestamps (with check_timestamps flag)
-    4. Optionally verifies SHA-1 and MD5 checksums (with all flag, time-consuming)
+    4. Optionally verifies SHA1 and MD5 checksums (with all flag, time-consuming)
     5. Optionally verifies directory timestamps (with check_timestamps flag)
     6. Optionally verifies JSON file timestamps (with check_timestamps flag)
     7. Optionally verifies archive directory timestamp matches newest JSON file
@@ -1396,7 +1396,7 @@ def run(args: argparse.Namespace) -> int:
     Args:
         args: Parsed command-line arguments with fields:
             - directory: Path to archive directory containing JSON files
-            - all: Whether to verify SHA-1 and MD5 checksums (time-consuming)
+            - all: Whether to verify SHA1 and MD5 checksums (time-consuming)
             - check_timestamps: Whether to verify file and directory timestamps
             - tolerance: Timestamp tolerance in seconds
             - check_extra_files: Whether to check for extra files not in metadata
