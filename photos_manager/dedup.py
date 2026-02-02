@@ -14,8 +14,10 @@ import argparse
 import os
 import shlex
 import sys
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from photos_manager.common import calculate_checksums, load_json
 
@@ -187,21 +189,32 @@ def assign_directory_numbers(
     return dir_mapping
 
 
-def generate_move_commands(
-    files: list[dict[str, str | int]], target_dir: str, dir_mapping: dict[str, str]
+def generate_file_operation_commands(
+    files: list[dict[str, str | int]],
+    target_dir: str,
+    dir_mapping: dict[str, str],
+    operation: str = "mv",
 ) -> list[str]:
-    """Generate mv -iv commands for moving files to target directory.
+    """Generate file operation commands (mv or cp) for organizing files.
 
     Args:
         files: List of file metadata dictionaries
         target_dir: Target directory path
         dir_mapping: Mapping of source directories to numbered subdirectories
+        operation: File operation to use - "mv" for move or "cp" for copy
 
     Returns:
-        List of shell commands (mkdir and mv)
+        List of shell commands (mkdir and mv/cp)
+
+    Raises:
+        ValueError: If operation is not "mv" or "cp"
     """
+    if operation not in ("mv", "cp"):
+        raise ValueError(f"Invalid operation: {operation}. Must be 'mv' or 'cp'")
+
     commands: list[str] = []
     created_dirs: set[str] = set()
+    cmd_flags = "-iv" if operation == "mv" else "-pv"
 
     # Group files by source directory
     file_groups = group_files_by_directory(files)
@@ -216,51 +229,14 @@ def generate_move_commands(
             commands.append(f"mkdir -p {shlex.quote(str(target_path))}")
             created_dirs.add(target_subdir)
 
-        # Add mv commands for each file
+        # Add file operation commands for each file
         for file_entry in file_groups[source_dir]:
             source_path = str(file_entry["path"])
             filename = Path(source_path).name
             target_file = target_path / filename
-            commands.append(f"mv -iv {shlex.quote(source_path)} {shlex.quote(str(target_file))}")
-
-    return commands
-
-
-def generate_copy_commands(
-    files: list[dict[str, str | int]], target_dir: str, dir_mapping: dict[str, str]
-) -> list[str]:
-    """Generate cp -pv commands for copying files to target directory.
-
-    Args:
-        files: List of file metadata dictionaries
-        target_dir: Target directory path
-        dir_mapping: Mapping of source directories to numbered subdirectories
-
-    Returns:
-        List of shell commands (mkdir and cp)
-    """
-    commands: list[str] = []
-    created_dirs: set[str] = set()
-
-    # Group files by source directory
-    file_groups = group_files_by_directory(files)
-
-    # Generate commands for each source directory
-    for source_dir in sorted(file_groups.keys()):
-        target_subdir = dir_mapping[source_dir]
-        target_path = Path(target_dir) / target_subdir
-
-        # Add mkdir command if not already created
-        if target_subdir not in created_dirs:
-            commands.append(f"mkdir -p {shlex.quote(str(target_path))}")
-            created_dirs.add(target_subdir)
-
-        # Add cp commands for each file
-        for file_entry in file_groups[source_dir]:
-            source_path = str(file_entry["path"])
-            filename = Path(source_path).name
-            target_file = target_path / filename
-            commands.append(f"cp -pv {shlex.quote(source_path)} {shlex.quote(str(target_file))}")
+            quoted_source = shlex.quote(source_path)
+            quoted_target = shlex.quote(str(target_file))
+            commands.append(f"{operation} {cmd_flags} {quoted_source} {quoted_target}")
 
     return commands
 
@@ -407,26 +383,18 @@ def display_missing(missing: list[dict[str, str | int]]) -> None:
         print()
 
 
-def display_list_duplicates(
-    duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
+def display_file_paths(
+    items: Sequence[dict[str, str | int] | tuple[dict[str, str | int], dict[str, str | int]]],
+    extract_path: Callable[[Any], str] = lambda item: item["path"],
 ) -> None:
-    """Display duplicate file paths in list format (one per line).
+    """Display file paths in list format (one per line).
 
     Args:
-        duplicates: List of (scanned_entry, archive_entry) tuples
+        items: Sequence of items to display (dicts or tuples of dicts)
+        extract_path: Function to extract path from each item
     """
-    for scanned, _ in duplicates:
-        print(scanned["path"])
-
-
-def display_list_missing(missing: list[dict[str, str | int]]) -> None:
-    """Display missing file paths in list format (one per line).
-
-    Args:
-        missing: List of scanned file entries not in archive
-    """
-    for entry in missing:
-        print(entry["path"])
+    for item in items:
+        print(extract_path(item))
 
 
 def display_summary(
@@ -597,10 +565,10 @@ def process_command_mode(
 
     # Generate commands
     target_dir = args.move or args.copy
-    if args.move:
-        commands = generate_move_commands(files_to_process, target_dir, dir_mapping)
-    else:
-        commands = generate_copy_commands(files_to_process, target_dir, dir_mapping)
+    operation = "mv" if args.move else "cp"
+    commands = generate_file_operation_commands(
+        files_to_process, target_dir, dir_mapping, operation
+    )
 
     # Print umask first, then commands
     print("umask 022")
@@ -620,9 +588,9 @@ def process_list_mode(
         missing: List of missing files
     """
     if args.show_duplicates:
-        display_list_duplicates(duplicates)
+        display_file_paths(duplicates, extract_path=lambda item: item[0]["path"])
     if args.show_missing:
-        display_list_missing(missing)
+        display_file_paths(missing)
 
 
 def process_normal_mode(

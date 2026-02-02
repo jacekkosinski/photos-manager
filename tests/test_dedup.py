@@ -463,7 +463,7 @@ class TestGenerateCommands:
         target_dir = str(tmp_path / "target")
         dir_mapping = {"/scan/dir1": "dir00001"}
 
-        commands = dedup.generate_move_commands(files, target_dir, dir_mapping)
+        commands = dedup.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
 
         assert len(commands) == 3  # 1 mkdir + 2 mv
         assert commands[0].startswith("mkdir -p")
@@ -473,7 +473,7 @@ class TestGenerateCommands:
         assert commands[2].startswith("mv -iv")
         assert "file2.txt" in commands[2]
 
-    def test_generate_copy_commands(self, tmp_path: Path) -> None:
+    def test_generate_file_operation_commands(self, tmp_path: Path) -> None:
         """Test generating cp -pv commands."""
         files = [
             {"path": "/scan/dir1/file1.txt", "size": 100},
@@ -481,7 +481,7 @@ class TestGenerateCommands:
         target_dir = str(tmp_path / "target")
         dir_mapping = {"/scan/dir1": "dir00001"}
 
-        commands = dedup.generate_copy_commands(files, target_dir, dir_mapping)
+        commands = dedup.generate_file_operation_commands(files, target_dir, dir_mapping, "cp")
 
         assert len(commands) == 2  # 1 mkdir + 1 cp
         assert commands[0].startswith("mkdir -p")
@@ -496,7 +496,7 @@ class TestGenerateCommands:
         target_dir = str(tmp_path / "my target")
         dir_mapping = {"/scan/my photos": "dir00001"}
 
-        commands = dedup.generate_move_commands(files, target_dir, dir_mapping)
+        commands = dedup.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
 
         # Verify paths are quoted
         assert "'" in commands[0] or '"' in commands[0]
@@ -512,7 +512,7 @@ class TestGenerateCommands:
         target_dir = str(tmp_path / "target")
         dir_mapping = {"/scan/dir1": "dir00001", "/scan/dir2": "dir00002"}
 
-        commands = dedup.generate_move_commands(files, target_dir, dir_mapping)
+        commands = dedup.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
 
         mkdir_commands = [cmd for cmd in commands if cmd.startswith("mkdir")]
         assert len(mkdir_commands) == 2
@@ -527,7 +527,7 @@ class TestGenerateCommands:
         target_dir = str(tmp_path / "target")
         dir_mapping = {"/scan/dir$": "dir00001"}
 
-        commands = dedup.generate_move_commands(files, target_dir, dir_mapping)
+        commands = dedup.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
 
         # Should have proper quoting
         assert len(commands) == 2
@@ -576,7 +576,7 @@ class TestListDisplay:
             ),
         ]
 
-        dedup.display_list_duplicates(duplicates)
+        dedup.display_file_paths(duplicates, extract_path=lambda item: item[0]["path"])
 
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
@@ -586,7 +586,7 @@ class TestListDisplay:
 
     def test_display_list_duplicates_empty(self, capsys: "CaptureFixture[str]") -> None:
         """Test displaying empty duplicates list in list format."""
-        dedup.display_list_duplicates([])
+        dedup.display_file_paths([])
         captured = capsys.readouterr()
         assert captured.out == ""
 
@@ -597,7 +597,7 @@ class TestListDisplay:
             {"path": "/scan/new2.txt", "size": 200, "sha1": "mno", "md5": "pqr"},
         ]
 
-        dedup.display_list_missing(missing)
+        dedup.display_file_paths(missing)
 
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
@@ -607,7 +607,7 @@ class TestListDisplay:
 
     def test_display_list_missing_empty(self, capsys: "CaptureFixture[str]") -> None:
         """Test displaying empty missing list in list format."""
-        dedup.display_list_missing([])
+        dedup.display_file_paths([])
         captured = capsys.readouterr()
         assert captured.out == ""
 

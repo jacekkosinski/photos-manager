@@ -416,6 +416,74 @@ def verify_json_file_timestamp(
     return True, errors
 
 
+def _verify_timestamp_against_newest_json(
+    target_path: Path,
+    json_files: list[str],
+    target_name: str,
+    extra_validations: list[tuple[bool, str]] | None = None,
+) -> tuple[bool, list[str]]:
+    """Verify target path timestamp matches newest JSON file.
+
+    Helper function to verify that a file or directory timestamp matches
+    the newest JSON file in the archive.
+
+    Args:
+        target_path: Path to the target (file or directory) to verify.
+        json_files: List of JSON metadata files to check.
+        target_name: Descriptive name for error messages (e.g., "version file").
+        extra_validations: Optional list of (condition, error_message) tuples
+            for additional validation checks.
+
+    Returns:
+        Tuple containing:
+            - bool: True if timestamp matches, False otherwise
+            - list[str]: List of error messages (empty if no errors)
+    """
+    errors = []
+
+    if not json_files:
+        errors.append(f"No JSON files to compare {target_name} timestamp")
+        return False, errors
+
+    if not target_path.exists():
+        errors.append(f"{target_name.capitalize()} not found: {target_path}")
+        return False, errors
+
+    # Run extra validations if provided
+    if extra_validations:
+        for condition, error_msg in extra_validations:
+            if not condition:
+                errors.append(error_msg)
+                return False, errors
+
+    try:
+        # Find newest JSON file by modification time
+        newest_json_file = max(json_files, key=lambda f: Path(f).stat().st_mtime)
+        newest_json_path = Path(newest_json_file)
+
+        if not newest_json_path.exists():
+            errors.append(f"Newest JSON file not found: {newest_json_file}")
+            return False, errors
+
+        # Get timestamps
+        target_mtime = int(target_path.stat().st_mtime)
+        json_mtime = int(newest_json_path.stat().st_mtime)
+
+        if target_mtime != json_mtime:
+            errors.append(
+                f"{target_name.capitalize()} timestamp mismatch: "
+                f"expected {json_mtime} (from {newest_json_path.name}), "
+                f"got {target_mtime}, diff: {abs(target_mtime - json_mtime)}s"
+            )
+            return False, errors
+
+    except OSError as e:
+        errors.append(f"Error verifying {target_name} timestamp: {e}")
+        return False, errors
+
+    return True, errors
+
+
 def verify_version_file_timestamp(
     version_file: str, json_files: list[str]
 ) -> tuple[bool, list[str]]:
@@ -438,43 +506,8 @@ def verify_version_file_timestamp(
         >>> success
         True
     """
-    errors = []
-
-    if not json_files:
-        errors.append("No JSON files to compare version file timestamp")
-        return False, errors
-
     version_path = Path(version_file)
-    if not version_path.exists():
-        errors.append(f"Version file not found: {version_file}")
-        return False, errors
-
-    try:
-        # Find newest JSON file by modification time
-        newest_json_file = max(json_files, key=lambda f: Path(f).stat().st_mtime)
-        newest_json_path = Path(newest_json_file)
-
-        if not newest_json_path.exists():
-            errors.append(f"Newest JSON file not found: {newest_json_file}")
-            return False, errors
-
-        # Get timestamps
-        version_mtime = int(version_path.stat().st_mtime)
-        json_mtime = int(newest_json_path.stat().st_mtime)
-
-        if version_mtime != json_mtime:
-            errors.append(
-                f"Version file timestamp mismatch: "
-                f"expected {json_mtime} (from {newest_json_path.name}), "
-                f"got {version_mtime}, diff: {abs(version_mtime - json_mtime)}s"
-            )
-            return False, errors
-
-    except OSError as e:
-        errors.append(f"Error verifying version file timestamp: {e}")
-        return False, errors
-
-    return True, errors
+    return _verify_timestamp_against_newest_json(version_path, json_files, "version file")
 
 
 def verify_archive_directory_timestamp(
@@ -499,47 +532,13 @@ def verify_archive_directory_timestamp(
         >>> success
         True
     """
-    errors = []
-
-    if not json_files:
-        errors.append("No JSON files to compare directory timestamp")
-        return False, errors
-
     dir_path = Path(directory).resolve()
-    if not dir_path.exists():
-        errors.append(f"Directory not found: {directory}")
-        return False, errors
-
-    if not dir_path.is_dir():
-        errors.append(f"Path is not a directory: {directory}")
-        return False, errors
-
-    try:
-        # Find newest JSON file by modification time
-        newest_json_file = max(json_files, key=lambda f: Path(f).stat().st_mtime)
-        newest_json_path = Path(newest_json_file)
-
-        if not newest_json_path.exists():
-            errors.append(f"Newest JSON file not found: {newest_json_file}")
-            return False, errors
-
-        # Get timestamps
-        dir_mtime = int(dir_path.stat().st_mtime)
-        json_mtime = int(newest_json_path.stat().st_mtime)
-
-        if dir_mtime != json_mtime:
-            errors.append(
-                f"Archive directory timestamp mismatch: "
-                f"expected {json_mtime} (from {newest_json_path.name}), "
-                f"got {dir_mtime}, diff: {abs(dir_mtime - json_mtime)}s"
-            )
-            return False, errors
-
-    except OSError as e:
-        errors.append(f"Error verifying archive directory timestamp: {e}")
-        return False, errors
-
-    return True, errors
+    extra_validations = [
+        (dir_path.is_dir(), f"Path is not a directory: {directory}"),
+    ]
+    return _verify_timestamp_against_newest_json(
+        dir_path, json_files, "archive directory", extra_validations
+    )
 
 
 def collect_filesystem_files(directory: str) -> tuple[set[str], set[str]]:
