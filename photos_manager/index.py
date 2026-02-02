@@ -21,7 +21,6 @@ import json
 import os
 import re
 import sys
-import time
 from collections import Counter, OrderedDict
 from datetime import datetime
 from pathlib import Path
@@ -158,9 +157,9 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--time-zone",
-        default=time.tzname[0],
+        default="Europe/Warsaw",
         metavar="TZ",
-        help=f"Time zone for modification time (default: {time.tzname[0]})",
+        help="Time zone for modification time (default: Europe/Warsaw)",
     )
     parser.add_argument(
         "--sort-by-number",
