@@ -9,10 +9,9 @@ This script checks and fixes:
 Hidden files (starting with .) are skipped. Symbolic links are checked but not followed.
 
 Usage:
-    ./prepare.py /path/to/directory
-    ./prepare.py /path/to/dir1 /path/to/dir2 --dry-run
-    ./prepare.py /path/to/directory --user storage --group storage
-    python -m photos_manager.prepare /path/to/directory -n
+    photos prepare /path/to/directory
+    photos prepare /path/to/dir1 /path/to/dir2 --dry-run
+    photos prepare /path/to/directory --user storage --group storage
 """
 
 import argparse

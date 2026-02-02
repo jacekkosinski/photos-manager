@@ -10,10 +10,9 @@ metadata for each file found:
 Supports merging with existing JSON files and provides multiple sorting options.
 
 Usage:
-    ./index.py /path/to/directory
-    ./index.py /path/to/directory --merge existing.json
-    ./index.py /path/to/directory --sort-by-number
-    python -m photos_manager.index /path/to/directory
+    photos index /path/to/directory
+    photos index /path/to/directory --merge existing.json
+    photos index /path/to/directory --sort-by-number
 """
 
 import argparse

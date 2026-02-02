@@ -10,10 +10,9 @@ This is useful for ensuring filesystem timestamps match the actual photo dates
 after copying or restoring files from archives.
 
 Usage:
-    ./setmtime.py archive1.json
-    ./setmtime.py archive1.json archive2.json --all
-    ./setmtime.py archive.json --dry-run
-    python -m photos_manager.setmtime archive.json
+    photos setmtime archive1.json
+    photos setmtime archive1.json archive2.json --all
+    photos setmtime archive.json --dry-run
 """
 
 import argparse

@@ -21,10 +21,9 @@ are automatically excluded from processing as they contain version metadata rath
 than photo archive data.
 
 Usage:
-    ./mkversion.py /path/to/archive
-    ./mkversion.py /path/to/archive --output custom.json
-    ./mkversion.py /path/to/archive -o version.json
-    python -m photos_manager.mkversion /path/to/archive
+    photos mkversion /path/to/archive
+    photos mkversion /path/to/archive --output custom.json
+    photos mkversion /path/to/archive -o version.json
 
 The version string follows the format "photos-SIZE-COUNT" where:
 - SIZE is the total content size in terabytes (3 decimal places)

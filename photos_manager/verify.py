@@ -16,12 +16,11 @@ The script scans a directory for JSON metadata files (excluding *version.json)
 and optionally a .version.json file for comprehensive verification.
 
 Usage:
-    ./verify.py /path/to/archive
-    ./verify.py /path/to/archive --all
-    ./verify.py /path/to/archive --check-timestamps
-    ./verify.py /path/to/archive --all --check-timestamps
-    ./verify.py /path/to/archive --check-extra-files
-    python -m photos_manager.verify /path/to/archive
+    photos verify /path/to/archive
+    photos verify /path/to/archive --all
+    photos verify /path/to/archive --check-timestamps
+    photos verify /path/to/archive --all --check-timestamps
+    photos verify /path/to/archive --check-extra-files
 """
 
 import argparse
