@@ -362,13 +362,13 @@ After building, test the binary:
 
 # Test each subcommand
 ./dist/photos index --help
-./dist/photos mkversion --help
+./dist/photos manifest --help
 ./dist/photos setmtime --help
 ./dist/photos verify --help
 
 # Run actual commands
 ./dist/photos index /path/to/test/directory
-./dist/photos mkversion /path/to/test/directory
+./dist/photos manifest /path/to/test/directory
 ```
 
 ## Deployment

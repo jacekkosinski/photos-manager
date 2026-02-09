@@ -1,7 +1,7 @@
-"""mkversion - Generate version information from a collection of JSON files.
+"""manifest - Generate manifest information from a collection of JSON files.
 
 This script processes JSON files in a specified directory, validates their
-content, and generates a version file with metadata including:
+content, and generates a manifest file with metadata including:
 - Total size in bytes and terabytes
 - Total file count across all JSON files
 - Last modification timestamp of the most recently modified JSON file
@@ -21,9 +21,9 @@ are automatically excluded from processing as they contain version metadata rath
 than photo archive data.
 
 Usage:
-    photos mkversion /path/to/archive
-    photos mkversion /path/to/archive --output custom.json
-    photos mkversion /path/to/archive -o version.json
+    photos manifest /path/to/archive
+    photos manifest /path/to/archive --output custom.json
+    photos manifest /path/to/archive -o version.json
 
 The version string follows the format "photos-SIZE-COUNT" where:
 - SIZE is the total content size in terabytes (3 decimal places)
@@ -153,12 +153,12 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
-    """Configure argument parser for mkversion command.
+    """Configure argument parser for manifest command.
 
-    Adds all command-line arguments for the mkversion tool to the provided parser.
+    Adds all command-line arguments for the manifest tool to the provided parser.
 
     Args:
-        parser: ArgumentParser instance to configure with mkversion arguments.
+        parser: ArgumentParser instance to configure with manifest arguments.
     """
     parser.add_argument("directory", type=str, help="Path to the archive directory")
     parser.add_argument(
@@ -171,7 +171,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    """Execute mkversion command with parsed arguments.
+    """Execute manifest command with parsed arguments.
 
     Processes JSON files and generates a version JSON with aggregate statistics,
     version string, timestamps, and file hashes.

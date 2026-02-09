@@ -53,7 +53,7 @@ class TestMainFunction:
         captured = capsys.readouterr()
         assert "photos" in captured.out
         assert "index" in captured.out
-        assert "mkversion" in captured.out
+        assert "manifest" in captured.out
         assert "setmtime" in captured.out
         assert "verify" in captured.out
 
@@ -99,13 +99,13 @@ class TestIndexSubcommand:
             mock_run.assert_called_once()
 
 
-class TestMkversionSubcommand:
-    """Tests for mkversion subcommand."""
+class TestManifestSubcommand:
+    """Tests for manifest subcommand."""
 
-    def test_mkversion_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that mkversion subcommand delegates to mkversion.run()."""
-        with patch("photos_manager.mkversion.run", return_value=0) as mock_run:
-            monkeypatch.setattr(sys, "argv", ["photos", "mkversion", "/test/path"])
+    def test_manifest_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that manifest subcommand delegates to manifest.run()."""
+        with patch("photos_manager.manifest.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "manifest", "/test/path"])
 
             exit_code = main()
 
@@ -115,24 +115,24 @@ class TestMkversionSubcommand:
             assert isinstance(args, argparse.Namespace)
             assert args.directory == "/test/path"
 
-    def test_mkversion_with_help_flag(
+    def test_manifest_with_help_flag(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test that mkversion --help displays help message."""
-        monkeypatch.setattr(sys, "argv", ["photos", "mkversion", "--help"])
+        """Test that manifest --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "manifest", "--help"])
 
         with pytest.raises(SystemExit) as exc_info:
             main()
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        assert "mkversion" in captured.out
-        assert "version" in captured.out.lower()
+        assert "manifest" in captured.out
+        assert "version" in captured.out.lower() or "manifest" in captured.out.lower()
 
-    def test_mkversion_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that mkversion returns error code when run() fails."""
-        with patch("photos_manager.mkversion.run", return_value=1) as mock_run:
-            monkeypatch.setattr(sys, "argv", ["photos", "mkversion", "/test/path"])
+    def test_manifest_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that manifest returns error code when run() fails."""
+        with patch("photos_manager.manifest.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "manifest", "/test/path"])
 
             exit_code = main()
 

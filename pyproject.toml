@@ -4,7 +4,7 @@ requires = [ "setuptools>=68", "wheel" ]
 
 [project]
 name = "photos-manager-cli"
-description = "Modern CLI tool for managing photo archives with comprehensive testing (120 tests, 85% coverage)"
+description = "Modern CLI tool for managing photo archives with comprehensive testing (508 tests, 86% coverage)"
 readme = "README.md"
 keywords = [
   "archive",

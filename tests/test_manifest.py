@@ -1,4 +1,4 @@
-"""Tests for mkversion module."""
+"""Tests for manifest module."""
 
 import argparse
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from photos_manager.common import find_json_files_with_mtime as find_json_files
-from photos_manager.mkversion import run, validate_and_process_json
+from photos_manager.manifest import run, validate_and_process_json
 
 
 class TestFindJsonFiles:

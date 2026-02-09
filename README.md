@@ -61,7 +61,7 @@ photos <command> [options]
 **Available commands:**
 
 - `index` - Generate JSON file with file metadata
-- `mkversion` - Generate archive version information
+- `manifest` - Generate archive version information
 - `setmtime` - Update file timestamps based on metadata
 - `verify` - Verify archive integrity
 - `prepare` - Fix permissions and normalize filenames
@@ -76,7 +76,7 @@ photos --help
 
 # Get help for specific command
 photos index --help
-photos mkversion --help
+photos manifest --help
 photos setmtime --help
 photos verify --help
 ```
@@ -114,17 +114,17 @@ photos index /path/to/photos --time-zone Europe/Warsaw
 ]
 ```
 
-### mkversion - Generate Archive Version Info
+### manifest - Generate Archive Version Info
 
 Generate version metadata from a collection of JSON files (created by index).
 
 ```bash
 # Basic usage - output to stdout
-photos mkversion /path/to/archive
+photos manifest /path/to/archive
 
 # Save to file
-photos mkversion /path/to/archive --output version.json
-photos mkversion /path/to/archive -o .version.json
+photos manifest /path/to/archive --output version.json
+photos manifest /path/to/archive -o .version.json
 ```
 
 **Output format:**
@@ -229,7 +229,7 @@ photos verify /path/to/archive --all --check-timestamps --tolerance 2
 photos index /photos/2024 --time-zone Europe/Warsaw
 
 # Step 2: Generate version info from all JSON files
-photos mkversion /photos --output /photos/.version.json
+photos manifest /photos --output /photos/.version.json
 ```
 
 #### 2. Add new photos to existing archive
@@ -239,7 +239,7 @@ photos mkversion /photos --output /photos/.version.json
 photos index /photos/2025 --merge /photos/2024.json
 
 # Update version info
-photos mkversion /photos --output /photos/.version.json
+photos manifest /photos --output /photos/.version.json
 ```
 
 #### 3. Verify archive integrity
@@ -297,7 +297,7 @@ photos-manager-cli/
 │   ├── common.py          # Shared utilities
 │   ├── dedup.py           # Deduplication tool
 │   ├── index.py           # Generate file metadata JSON
-│   ├── mkversion.py       # Generate archive version info
+│   ├── manifest.py       # Generate archive version info
 │   ├── prepare.py         # Fix permissions and filenames
 │   ├── setmtime.py        # Update file timestamps from metadata
 │   ├── sync.py            # Synchronization tool
@@ -307,7 +307,7 @@ photos-manager-cli/
 │   ├── test_common.py
 │   ├── test_dedup.py
 │   ├── test_index.py
-│   ├── test_mkversion.py
+│   ├── test_manifest.py
 │   ├── test_prepare.py    # 117 tests
 │   ├── test_setmtime.py
 │   ├── test_sync.py
@@ -330,14 +330,14 @@ command:
 ```bash
 # Using Poetry
 poetry run photos index /path/to/photos
-poetry run photos mkversion /path/to/archive
+poetry run photos manifest /path/to/archive
 poetry run photos setmtime /path/to/photos.json
 poetry run photos verify /path/to/archive
 
 # Or after activating the virtual environment
 poetry shell
 photos index /path/to/photos
-photos mkversion /path/to/archive
+photos manifest /path/to/archive
 photos setmtime /path/to/photos.json
 photos verify /path/to/archive --all
 ```
@@ -348,7 +348,7 @@ For backward compatibility, individual commands are still available:
 
 ```bash
 index /path/to/photos
-mkversion /path/to/archive
+manifest /path/to/archive
 setmtime /path/to/photos.json
 verify /path/to/archive --all
 ```

@@ -1,7 +1,7 @@
 """Common utilities shared across photos_manager modules.
 
 This module provides shared functionality to eliminate code duplication
-across index, verify, setmtime, mkversion, and dedup modules.
+across index, verify, setmtime, manifest, and dedup modules.
 """
 
 import hashlib

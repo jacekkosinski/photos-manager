@@ -48,7 +48,7 @@ from photos_manager.common import (
 def load_version_json(file_path: str) -> dict[str, Any]:
     """Load version JSON data from a file.
 
-    Reads a version JSON file created by mkversion and parses it.
+    Reads a version JSON file created by manifest and parses it.
 
     Args:
         file_path: Path to the version JSON file to load.

@@ -28,7 +28,7 @@ poetry run pre-commit install
 # Using Poetry - unified CLI (recommended)
 poetry run photos --help
 poetry run photos index --help
-poetry run photos mkversion --help
+poetry run photos manifest --help
 poetry run photos setmtime --help
 poetry run photos verify --help
 
@@ -39,7 +39,7 @@ photos index --help
 
 # Legacy individual commands (still work)
 index --help
-mkversion --help
+manifest --help
 ```
 
 ## 4. Run Your First Commands
@@ -67,10 +67,10 @@ mkdir -p archive
 cp test_photos.json archive/
 
 # Generate version information
-photos mkversion archive
+photos manifest archive
 
 # Or save to file
-photos mkversion archive --output archive/.version.json
+photos manifest archive --output archive/.version.json
 cat archive/.version.json
 ```
 
@@ -97,12 +97,12 @@ photos-manager-cli/
 ├── photos_manager/       # Main source code
 │   ├── __init__.py      # Package initialization
 │   ├── index.py        # Generate file metadata JSON
-│   ├── mkversion.py     # Generate archive version info
+│   ├── manifest.py     # Generate archive version info
 │   ├── setmtime.py      # Update file timestamps from metadata
 │   └── verify.py        # Verify archive integrity
 ├── tests/               # Test files (120 tests, 85.46% coverage)
 │   ├── test_index.py   # Tests for index (32 tests)
-│   ├── test_mkversion.py # Tests for mkversion (19 tests)
+│   ├── test_manifest.py # Tests for manifest (19 tests)
 │   ├── test_setmtime.py  # Tests for setmtime (26 tests)
 │   └── test_verify.py    # Tests for verify (43 tests)
 ├── Makefile             # Development commands
@@ -118,7 +118,7 @@ photos-manager-cli/
 photos index /photos/2024 --time-zone Europe/Warsaw
 
 # 2. Generate version info
-photos mkversion /photos --output /photos/.version.json
+photos manifest /photos --output /photos/.version.json
 
 # 3. Verify integrity
 photos verify /photos

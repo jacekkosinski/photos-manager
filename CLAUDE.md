@@ -9,7 +9,7 @@ Photos Manager CLI is a Python 3.12+ toolkit for managing photo archives with
 utilities for indexing, verification, synchronization, and preparation:
 
 - **index** - Generate JSON metadata with checksums, sizes, and timestamps
-- **mkversion** - Aggregate metadata into version summaries
+- **manifest** - Aggregate metadata into version summaries
 - **setmtime** - Restore timestamps from metadata
 - **verify** - Verify archive integrity against metadata
 - **prepare** - Fix permissions and normalize filenames
@@ -76,14 +76,14 @@ make check-all
 ```bash
 # Using Poetry
 poetry run index /path/to/photos
-poetry run mkversion /path/to/archive
+poetry run manifest /path/to/archive
 poetry run setmtime /path/to/photos.json
 poetry run verify /path/to/archive
 
 # Or after activating virtual environment
 poetry shell
 index /path/to/photos
-mkversion /path/to/archive
+manifest /path/to/archive
 setmtime /path/to/photos.json --dry-run
 verify /path/to/archive --all
 ```
@@ -106,7 +106,7 @@ photos_manager/
 ├── common.py          # Shared utilities
 ├── dedup.py           # Deduplication tool
 ├── index.py           # Directory scanner and metadata generator
-├── mkversion.py       # Version aggregator for JSON files
+├── manifest.py       # Version aggregator for JSON files
 ├── prepare.py         # Directory preparation (permissions, naming)
 ├── setmtime.py        # Timestamp updater based on metadata
 ├── sync.py            # Synchronization tool
@@ -117,7 +117,7 @@ tests/                 # 508 tests total, 86.15% coverage
 ├── test_common.py
 ├── test_dedup.py
 ├── test_index.py
-├── test_mkversion.py
+├── test_manifest.py
 ├── test_prepare.py    # 117 tests, 80.28% coverage
 ├── test_setmtime.py
 ├── test_sync.py
@@ -180,7 +180,7 @@ All commits in this repository should follow these guidelines:
 
 1. Create `photos_manager/new_tool.py` with `main()` function
 1. Add CLI entry point in `pyproject.toml` under `[project.scripts]`
-1. Follow existing patterns from index.py or mkversion.py:
+1. Follow existing patterns from index.py or manifest.py:
    - Use argparse for argument parsing
    - Return `os.EX_OK` on success
    - Raise `SystemExit` with error messages on failure
@@ -199,5 +199,5 @@ The JSON format produced by index contains:
 - `date`: ISO 8601 timestamp with timezone (string)
 - `size`: File size in bytes (integer)
 
-This structure is validated by mkversion (expects all five fields) and used by
+This structure is validated by manifest (expects all five fields) and used by
 setmtime (requires `path` and `date` fields).
