@@ -31,15 +31,14 @@ poetry run photos index --help
 poetry run photos manifest --help
 poetry run photos setmtime --help
 poetry run photos verify --help
+poetry run photos prepare --help
+poetry run photos sync --help
+poetry run photos dedup --help
 
 # Or activate shell first
 poetry shell
 photos --help
 photos index --help
-
-# Legacy individual commands (still work)
-index --help
-manifest --help
 ```
 
 ## 4. Run Your First Commands
@@ -96,15 +95,25 @@ make help
 photos-manager-cli/
 ├── photos_manager/       # Main source code
 │   ├── __init__.py      # Package initialization
+│   ├── cli.py          # Main CLI entry point
+│   ├── common.py        # Shared utilities
+│   ├── dedup.py         # Deduplication tool
 │   ├── index.py        # Generate file metadata JSON
-│   ├── manifest.py     # Generate archive version info
-│   ├── setmtime.py      # Update file timestamps from metadata
+│   ├── manifest.py     # Generate archive manifest
+│   ├── prepare.py       # Fix permissions and filenames
+│   ├── setmtime.py      # Update file timestamps
+│   ├── sync.py          # Synchronization tool
 │   └── verify.py        # Verify archive integrity
-├── tests/               # Test files (120 tests, 85.46% coverage)
-│   ├── test_index.py   # Tests for index (32 tests)
-│   ├── test_manifest.py # Tests for manifest (19 tests)
-│   ├── test_setmtime.py  # Tests for setmtime (26 tests)
-│   └── test_verify.py    # Tests for verify (43 tests)
+├── tests/               # Test files (508 tests)
+│   ├── test_cli.py
+│   ├── test_common.py
+│   ├── test_dedup.py
+│   ├── test_index.py
+│   ├── test_manifest.py
+│   ├── test_prepare.py
+│   ├── test_setmtime.py
+│   ├── test_sync.py
+│   └── test_verify.py
 ├── Makefile             # Development commands
 └── pyproject.toml       # Project configuration
 ```
@@ -162,6 +171,46 @@ photos index /photos/february --merge january.json
 photos index /photos --sort-by-number
 
 # Results will be sorted: 1, 2, 3... instead of 1, 10, 11, 2, 20...
+```
+
+### Prepare directory for archiving
+
+```bash
+# Fix permissions, normalize filenames (lowercase, no spaces)
+# Preview changes first
+photos prepare /photos/incoming --dry-run
+
+# Apply fixes
+photos prepare /photos/incoming
+
+# With EXIF timestamp restoration (requires: pip install photos-manager-cli[exif])
+photos prepare /photos/incoming --use-exif
+
+# Custom user/group
+photos prepare /photos/incoming --user storage --group storage
+```
+
+### Synchronize archives
+
+```bash
+# Generate sync commands (rsync) for incremental backup
+photos sync /source/archive /dest/archive
+
+# Dry-run mode
+photos sync /source/archive /dest/archive --dry-run
+```
+
+### Find duplicates and missing files
+
+```bash
+# Find duplicates in scan directory (files that exist in archive)
+photos dedup archive.json /path/to/scan -d
+
+# Find missing files (files in archive but not in scan directory)
+photos dedup archive.json /path/to/scan -m
+
+# Both duplicates and missing
+photos dedup archive.json /path/to/scan -d -m
 ```
 
 ## 8. Before Committing
