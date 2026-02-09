@@ -2053,3 +2053,447 @@ class TestRun:
         assert exit_code == os.EX_OK
         captured = capsys.readouterr()
         assert "metadata1.json" in captured.out or "2" in captured.out
+
+    def test_run_detects_checksum_mismatch(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() with --all detects checksum mismatches."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+        test_file = test_dir / "file.txt"
+        test_file.write_text("wrong content")
+
+        # Create JSON with different checksums
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "md5": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 13,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=True,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        assert "sha1" in captured.out.lower() or "checksum" in captured.out.lower()
+
+    def test_run_detects_timestamp_errors_with_version_file(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() detects timestamp mismatches when checking timestamps."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        # Set file timestamp to long time ago
+        old_time = datetime.now().timestamp() - 86400  # 1 day ago
+        os.utime(test_file, (old_time, old_time))
+
+        # Create JSON with recent timestamp (mismatch)
+        recent_time = datetime.now().astimezone().isoformat()
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": recent_time,
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        # Create version file (required for timestamp checks)
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 7,
+            "file_count": 1,
+            "last_modified": recent_time,
+            "last_verified": recent_time,
+            "files": {"archive.json": calculate_file_hash(str(json_file))},
+        }
+        version_file = test_dir / ".version.json"
+        version_file.write_text(json.dumps(version_data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=True,
+            tolerance=1,  # 1 second tolerance won't be enough
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        # Should detect timestamp mismatch
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        assert "timestamp" in captured.err.lower() or "mtime" in captured.err.lower()
+
+    def test_run_with_check_timestamps_but_no_version_file(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() reports error when checking timestamps without version file."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        # No version file created
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=True,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        # Should report error about missing version file
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        assert "version file" in captured.err.lower() and "not found" in captured.err.lower()
+
+    def test_run_detects_multiple_extra_files(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() detects extra JSON files, regular files, and missing files."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+
+        # Create documented file
+        documented = test_dir / "documented.txt"
+        documented.write_text("doc")
+
+        # Create extra regular file
+        extra_regular = test_dir / "extra.txt"
+        extra_regular.write_text("extra")
+
+        # Document only one file
+        sha1, md5 = calculate_checksums(str(documented))
+        data = [
+            {
+                "path": str(documented),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 3,
+            },
+            # Add a missing file that's in metadata but not on disk
+            {
+                "path": str(test_dir / "missing.txt"),
+                "sha1": "missing_sha1",
+                "md5": "missing_md5",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 10,
+            },
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        # Create version file
+        version_data = {
+            "version": "photos-0.000-2",
+            "total_bytes": 13,
+            "file_count": 2,
+            "last_modified": "2025-01-01T00:00:00+00:00",
+            "last_verified": "2025-01-01T00:00:00+00:00",
+            "files": {"archive.json": calculate_file_hash(str(json_file))},
+        }
+        version_file = test_dir / ".version.json"
+        version_file.write_text(json.dumps(version_data))
+
+        # Create extra JSON file not in version
+        extra_json = test_dir / "extra_metadata.json"
+        extra_json.write_text("[]")
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=True,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        # Should detect all three types of issues
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+        assert "extra" in output.lower()
+        assert "missing" in output.lower()
+
+    def test_run_with_check_extra_files_but_no_version_file(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() reports error when checking extra files without version file."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        # No version file
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=True,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        # Should report error about missing version file
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        assert "version file" in captured.err.lower() and "not found" in captured.err.lower()
+
+    def test_run_detects_version_file_hash_mismatch(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() detects when JSON file hash doesn't match version file."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        # Create version file with WRONG hash
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 7,
+            "file_count": 1,
+            "last_modified": "2025-01-01T00:00:00+00:00",
+            "last_verified": "2025-01-01T00:00:00+00:00",
+            "files": {"archive.json": "wrong_hash_value_here"},
+        }
+        version_file = test_dir / ".version.json"
+        version_file.write_text(json.dumps(version_data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        # Should detect hash mismatch
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        assert "hash" in captured.err.lower() or "mismatch" in captured.err.lower()
+
+    def test_run_detects_version_file_totals_mismatch(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() detects when totals in version file don't match actual data."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        # Create version file with WRONG totals
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 999,  # Wrong!
+            "file_count": 99,  # Wrong!
+            "last_modified": "2025-01-01T00:00:00+00:00",
+            "last_verified": "2025-01-01T00:00:00+00:00",
+            "files": {"archive.json": calculate_file_hash(str(json_file))},
+        }
+        version_file = test_dir / ".version.json"
+        version_file.write_text(json.dumps(version_data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        # Should detect totals mismatch
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+        assert "bytes mismatch" in output.lower() or "count mismatch" in output.lower()
+
+    def test_run_with_check_permissions(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() with --check-permissions verifies file permissions."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        # Set wrong permissions (not 644)
+        test_file.chmod(0o600)
+
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=True,
+            owner="nonexistent_user",
+            group="nonexistent_group",
+        )
+
+        exit_code = run(args)
+
+        # Should detect permission/ownership issues
+        # (will fail both on permissions and ownership)
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+        assert (
+            "permission" in output.lower()
+            or "ownership" in output.lower()
+            or "owner" in output.lower()
+        )
