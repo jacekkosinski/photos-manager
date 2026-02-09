@@ -1,5 +1,6 @@
 """Tests for setmtime module."""
 
+import argparse
 import json
 import os
 from datetime import datetime
@@ -12,6 +13,7 @@ from _pytest.capture import CaptureFixture
 from photos_manager.common import load_json
 from photos_manager.setmtime import (
     get_newest_files,
+    run,
     set_dirs_timestamps,
     set_files_timestamps,
     set_json_timestamps,
@@ -346,3 +348,163 @@ class TestSetJsonTimestamps:
 
         captured = capsys.readouterr()
         assert "does not exist" in captured.err
+
+
+class TestRun:
+    """Integration tests for run() function."""
+
+    def test_run_updates_timestamps(self, tmp_path: Path, capsys: CaptureFixture[str]) -> None:
+        """Test that run() updates directory timestamps based on JSON."""
+        # Create test directory and files
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        test_file = test_dir / "photo.jpg"
+        test_file.write_text("photo content")
+
+        # Set old mtime on directory
+        old_time = 1000000000.0
+        os.utime(test_dir, (old_time, old_time))
+
+        # Create JSON with newer timestamp
+        data = [
+            {
+                "path": str(test_file),
+                "date": "2025-01-15T12:30:00+00:00",
+                "sha1": "abc",
+                "md5": "def",
+                "size": len("photo content"),
+            }
+        ]
+        json_file = tmp_path / "photos.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(json_files=[str(json_file)], dry_run=False, all=False)
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        assert "timestamps set" in captured.out.lower() or "timestamp" in captured.out.lower()
+
+    def test_run_with_dry_run(self, tmp_path: Path, capsys: CaptureFixture[str]) -> None:
+        """Test that run() in dry-run mode doesn't modify anything."""
+        # Create test directory
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        test_file = test_dir / "photo.jpg"
+        test_file.write_text("photo")
+
+        # Create JSON
+        data = [
+            {
+                "path": str(test_file),
+                "date": "2025-01-15T12:30:00+00:00",
+                "sha1": "abc",
+                "md5": "def",
+                "size": 5,
+            }
+        ]
+        json_file = tmp_path / "photos.json"
+        json_file.write_text(json.dumps(data))
+
+        # Store original mtime
+        original_dir_mtime = test_dir.stat().st_mtime
+
+        args = argparse.Namespace(json_files=[str(json_file)], dry_run=True, all=False)
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        assert "Set timestamp" in captured.out  # Dry run still prints messages
+
+        # Verify mtime wasn't actually changed in dry-run mode
+        assert test_dir.stat().st_mtime == original_dir_mtime
+
+    def test_run_with_all_flag(self, tmp_path: Path, capsys: CaptureFixture[str]) -> None:
+        """Test that run() with --all flag updates individual file timestamps."""
+        # Create test files
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        test_file = test_dir / "photo.jpg"
+        test_file.write_text("photo")
+
+        # Set old mtime
+        old_time = 1000000000.0
+        os.utime(test_file, (old_time, old_time))
+
+        # Create JSON with newer timestamp
+        data = [
+            {
+                "path": str(test_file),
+                "date": "2025-01-15T12:30:00+00:00",
+                "sha1": "abc",
+                "md5": "def",
+                "size": 5,
+            }
+        ]
+        json_file = tmp_path / "photos.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(json_files=[str(json_file)], dry_run=False, all=True)
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        # File mtime should be updated
+        assert test_file.stat().st_mtime != old_time
+
+    def test_run_with_multiple_json_files(
+        self, tmp_path: Path, capsys: CaptureFixture[str]
+    ) -> None:
+        """Test that run() processes multiple JSON files."""
+        # Create two sets of files
+        dir1 = tmp_path / "photos1"
+        dir2 = tmp_path / "photos2"
+        dir1.mkdir()
+        dir2.mkdir()
+
+        (dir1 / "file1.txt").write_text("content1")
+        (dir2 / "file2.txt").write_text("content2")
+
+        # Create two JSON files
+        data1 = [
+            {
+                "path": str(dir1 / "file1.txt"),
+                "date": "2025-01-15T12:30:00+00:00",
+                "sha1": "a",
+                "md5": "b",
+                "size": 8,
+            }
+        ]
+        data2 = [
+            {
+                "path": str(dir2 / "file2.txt"),
+                "date": "2025-01-16T12:30:00+00:00",
+                "sha1": "c",
+                "md5": "d",
+                "size": 8,
+            }
+        ]
+
+        json1 = tmp_path / "photos1.json"
+        json2 = tmp_path / "photos2.json"
+        json1.write_text(json.dumps(data1))
+        json2.write_text(json.dumps(data2))
+
+        args = argparse.Namespace(json_files=[str(json1), str(json2)], dry_run=False, all=False)
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+    def test_run_with_nonexistent_json_file(self, capsys: CaptureFixture[str]) -> None:
+        """Test that run() handles nonexistent JSON file gracefully."""
+        args = argparse.Namespace(json_files=["/nonexistent/file.json"], dry_run=False, all=False)
+
+        exit_code = run(args)
+
+        # Should complete but print error
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        assert "non-existent" in captured.err.lower() or "unreadable" in captured.err.lower()

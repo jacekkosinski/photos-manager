@@ -93,7 +93,6 @@ def find_version_file(directory: str) -> str | None:
         >>> version_file
         '/path/to/archive/.version.json'
     """
-    # Convert to absolute path with symlinks resolved to match normalize_paths behavior
     base_path = Path(directory).resolve()
     version_path = base_path / ".version.json"
     if version_path.exists():
@@ -193,7 +192,6 @@ def verify_file_entry(
 
     path = Path(file_path)
 
-    # Check file existence
     if not path.exists():
         errors.append(f"File not found: {file_path}")
         return False, errors
@@ -202,7 +200,6 @@ def verify_file_entry(
         errors.append(f"Path is not a file: {file_path}")
         return False, errors
 
-    # Check file size
     try:
         actual_size = path.stat().st_size
         if actual_size != expected_size:
@@ -213,7 +210,6 @@ def verify_file_entry(
         errors.append(f"Cannot stat file {file_path}: {e}")
         return False, errors
 
-    # Optionally verify checksums
     if verify_checksums:
         try:
             actual_sha1, actual_md5 = calculate_checksums(file_path)
@@ -233,7 +229,7 @@ def verify_file_entry(
             errors.append(f"Cannot read file for checksum verification {file_path}: {e}")
             return False, errors
 
-    return len(errors) == 0, errors
+    return not errors, errors
 
 
 def verify_timestamps(
@@ -271,13 +267,8 @@ def verify_timestamps(
         return False, errors
 
     try:
-        # Get actual modification time
         actual_mtime = int(path.stat().st_mtime)
-
-        # Parse expected timestamp
         expected_mtime = int(datetime.fromisoformat(expected_date).timestamp())
-
-        # Compare with tolerance
         diff = abs(actual_mtime - expected_mtime)
         if diff > tolerance_seconds:
             errors.append(
@@ -293,7 +284,7 @@ def verify_timestamps(
         errors.append(f"Cannot stat file {file_path}: {e}")
         return False, errors
 
-    return len(errors) == 0, errors
+    return not errors, errors
 
 
 def verify_directory_timestamps(data: list[dict[str, str | int]]) -> tuple[int, list[str]]:
@@ -315,19 +306,14 @@ def verify_directory_timestamps(data: list[dict[str, str | int]]) -> tuple[int, 
     """
     errors = []
 
-    # Group files by directory
     dir_files: dict[str, list[dict[str, str | int]]] = {}
     for entry in data:
         file_path = str(entry.get("path", ""))
         if not file_path:
             continue
-
         dir_path = str(Path(file_path).parent)
-        if dir_path not in dir_files:
-            dir_files[dir_path] = []
-        dir_files[dir_path].append(entry)
+        dir_files.setdefault(dir_path, []).append(entry)
 
-    # Check each directory
     for dir_path, files in dir_files.items():
         path = Path(dir_path)
         if not path.exists() or not path.is_dir():
@@ -335,14 +321,12 @@ def verify_directory_timestamps(data: list[dict[str, str | int]]) -> tuple[int, 
             continue
 
         try:
-            # Find newest file in directory
             newest_file = max(files, key=lambda x: datetime.fromisoformat(str(x["date"])))
             newest_file_path = Path(str(newest_file["path"]))
 
             if not newest_file_path.exists():
                 continue
 
-            # Get timestamps
             dir_mtime = int(path.stat().st_mtime)
             file_mtime = int(newest_file_path.stat().st_mtime)
 
@@ -388,7 +372,6 @@ def verify_json_file_timestamp(
         return False, errors
 
     try:
-        # Find newest entry
         newest_entry = max(data, key=lambda x: datetime.fromisoformat(str(x["date"])))
         newest_file_path = Path(str(newest_entry["path"]))
 
@@ -396,7 +379,6 @@ def verify_json_file_timestamp(
             errors.append(f"Newest file not found: {newest_file_path}")
             return False, errors
 
-        # Get timestamps
         json_mtime = int(json_path.stat().st_mtime)
         file_mtime = int(newest_file_path.stat().st_mtime)
 
@@ -448,7 +430,6 @@ def _verify_timestamp_against_newest_json(
         errors.append(f"{target_name.capitalize()} not found: {target_path}")
         return False, errors
 
-    # Run extra validations if provided
     if extra_validations:
         for condition, error_msg in extra_validations:
             if not condition:
@@ -456,7 +437,6 @@ def _verify_timestamp_against_newest_json(
                 return False, errors
 
     try:
-        # Find newest JSON file by modification time
         newest_json_file = max(json_files, key=lambda f: Path(f).stat().st_mtime)
         newest_json_path = Path(newest_json_file)
 
@@ -464,7 +444,6 @@ def _verify_timestamp_against_newest_json(
             errors.append(f"Newest JSON file not found: {newest_json_file}")
             return False, errors
 
-        # Get timestamps
         target_mtime = int(target_path.stat().st_mtime)
         json_mtime = int(newest_json_path.stat().st_mtime)
 
@@ -559,10 +538,8 @@ def collect_filesystem_files(directory: str) -> tuple[set[str], set[str]]:
         >>> len(regular) >= 0
         True
     """
-    regular_files = set()
-    json_files = set()
-
-    # Convert to absolute path with symlinks resolved to match normalize_paths behavior
+    regular_files: set[str] = set()
+    json_files: set[str] = set()
     base_path = Path(directory).resolve()
 
     for root, _, files in os.walk(base_path):
@@ -593,12 +570,7 @@ def collect_expected_files(all_data: list[dict[str, str | int]]) -> set[str]:
         >>> '/archive/photo.jpg' in files
         True
     """
-    expected_files = set()
-    for entry in all_data:
-        file_path = entry.get("path")
-        if file_path:
-            expected_files.add(str(file_path))
-    return expected_files
+    return {str(entry["path"]) for entry in all_data if "path" in entry}
 
 
 def find_extra_files(
@@ -630,25 +602,15 @@ def find_extra_files(
         >>> len(result[0]) == 0
         True
     """
-    # Collect all files from filesystem
     filesystem_regular, filesystem_json = collect_filesystem_files(directory)
-
-    # Collect expected regular files from metadata
     expected_files = collect_expected_files(all_data)
 
-    # Collect expected JSON files from the provided list
-    # This list should come from version file, not from filesystem scan
     expected_json = set(json_files)
     if version_file:
         expected_json.add(version_file)
 
-    # Find extra JSON files
     extra_json_files = filesystem_json - expected_json
-
-    # Find extra regular files
     extra_regular_files = filesystem_regular - expected_files
-
-    # Find missing files (in metadata but not in filesystem)
     missing_files = expected_files - filesystem_regular
 
     return extra_json_files, extra_regular_files, missing_files
@@ -725,7 +687,7 @@ def verify_version_file(
             f"File count mismatch: expected {expected_file_count}, got {actual_file_count}"
         )
 
-    return len(errors) == 0, errors
+    return not errors, errors
 
 
 def find_zero_byte_files(all_data: list[dict[str, str | int]]) -> list[str]:
@@ -743,13 +705,7 @@ def find_zero_byte_files(all_data: list[dict[str, str | int]]) -> list[str]:
         >>> len(zero_files)
         1
     """
-    zero_byte_files = []
-    for entry in all_data:
-        size = entry.get("size")
-        path = entry.get("path")
-        if size == 0 and path:
-            zero_byte_files.append(str(path))
-    return zero_byte_files
+    return [str(entry["path"]) for entry in all_data if entry.get("size") == 0 and "path" in entry]
 
 
 def find_duplicate_checksums(
@@ -777,7 +733,6 @@ def find_duplicate_checksums(
     sha1_map: dict[str, list[str]] = {}
     md5_map: dict[str, list[str]] = {}
 
-    # Build maps of checksums to file paths
     for entry in all_data:
         path = str(entry.get("path", ""))
         sha1 = str(entry.get("sha1", ""))
@@ -785,11 +740,9 @@ def find_duplicate_checksums(
 
         if path and sha1:
             sha1_map.setdefault(sha1, []).append(path)
-
         if path and md5:
             md5_map.setdefault(md5, []).append(path)
 
-    # Filter to only duplicates (more than one file)
     sha1_duplicates = {k: v for k, v in sha1_map.items() if len(v) > 1}
     md5_duplicates = {k: v for k, v in md5_map.items() if len(v) > 1}
 
@@ -819,21 +772,14 @@ def validate_date_format(date_str: str) -> tuple[bool, str | None]:
     except (ValueError, TypeError) as e:
         return False, f"Invalid ISO 8601 format: {e}"
 
-    # Check for 'T' separator between date and time
-    # Valid: 2024-01-01T12:00:00+02:00
-    # Invalid: 2024-01-01 12:00:00+02:00
     if "T" not in str(date_str):
         return (
             False,
             "Date format must use 'T' separator between date and time",
         )
 
-    # Check timezone format - must have colon or be Z (UTC)
-    # Valid: +02:00, -05:00, Z
-    # Invalid: +0200, -0500
     timezone_pattern = r"([+-]\d{2}:\d{2}|Z)$"
     if not re.search(timezone_pattern, str(date_str)):
-        # Check if it has timezone without colon
         if re.search(r"[+-]\d{4}$", str(date_str)):
             return False, "Timezone format should use colon (e.g., '+02:00' not '+0200')"
         return False, "Date must include timezone with colon format (e.g., '+02:00') or 'Z'"
@@ -867,9 +813,7 @@ def find_invalid_dates(all_data: list[dict[str, str | int]]) -> dict[str, list[t
 
         is_valid, error_msg = validate_date_format(str(date_str))
         if not is_valid and error_msg:
-            if path not in invalid_dates:
-                invalid_dates[path] = []
-            invalid_dates[path].append((str(date_str), error_msg))
+            invalid_dates.setdefault(path, []).append((str(date_str), error_msg))
 
     return invalid_dates
 
@@ -926,11 +870,9 @@ def _get_json_files_list(directory: str, version_file: str | None) -> tuple[list
     """
     json_files: list[str] = []
     if version_file:
-        # Read JSON file list from version file
         try:
             version_data = load_version_json(version_file)
             if "files" in version_data:
-                # Convert filenames to full paths with symlinks resolved
                 version_dir = Path(directory).resolve()
                 json_files = [str(version_dir / filename) for filename in version_data["files"]]
             else:
@@ -1020,7 +962,6 @@ def _verify_version_file_and_timestamps(
     """
     total_errors = 0
 
-    # Verify version file timestamp if check_timestamps enabled
     if check_timestamps:
         if not version_file:
             print("\nError: Version file (.version.json) not found", file=sys.stderr)
@@ -1036,7 +977,6 @@ def _verify_version_file_and_timestamps(
             else:
                 print("  Version file timestamp OK")
 
-        # Verify archive directory timestamp
         print("\nVerifying archive directory timestamp...")
         success, errors = verify_archive_directory_timestamp(directory, json_files)
         if not success:
@@ -1046,7 +986,6 @@ def _verify_version_file_and_timestamps(
         else:
             print("  Archive directory timestamp OK")
 
-    # Verify version file if found
     if version_file:
         print(f"\nVerifying version file {Path(version_file).name}...")
         success, errors = verify_version_file(version_file, json_files, all_data)
@@ -1128,7 +1067,6 @@ def _verify_date_formats(all_data: list[dict[str, str | int]], version_file: str
     """
     total_errors = 0
 
-    # Check date formats in metadata
     print("\nChecking date formats in metadata...")
     invalid_dates = find_invalid_dates(all_data)
     if invalid_dates:
@@ -1142,7 +1080,6 @@ def _verify_date_formats(all_data: list[dict[str, str | int]], version_file: str
     else:
         print("  All date formats are valid")
 
-    # Check date formats in version file
     if version_file:
         print("\nChecking date formats in version file...")
         version_date_errors = validate_version_file_dates(version_file)
@@ -1208,7 +1145,6 @@ def verify_permissions(
 
             path_errors: list[tuple[str, str]] = []
 
-            # Check permissions
             if current_perms != expected_perms:
                 path_errors.append(
                     (
@@ -1217,7 +1153,6 @@ def verify_permissions(
                     )
                 )
 
-            # Check owner
             try:
                 current_owner = pwd.getpwuid(file_stat.st_uid).pw_name
                 if current_owner != expected_owner:
@@ -1225,7 +1160,6 @@ def verify_permissions(
             except KeyError:
                 path_errors.append(("owner", f"Unknown owner UID: {file_stat.st_uid}"))
 
-            # Check group
             try:
                 current_group = grp.getgrgid(file_stat.st_gid).gr_name
                 if current_group != expected_group:
@@ -1236,28 +1170,23 @@ def verify_permissions(
             if path_errors:
                 errors[str(path)] = path_errors
 
-        except (OSError, PermissionError) as e:
+        except OSError as e:
             errors[str(path_str)] = [("access", f"Cannot access: {e}")]
 
-    # Check version file
     if version_file:
         check_path(version_file, is_directory=False)
 
-    # Check JSON files
     for json_file in json_files:
         check_path(json_file, is_directory=False)
 
-    # Check archive files from metadata
     checked_dirs: set[str] = set()
     for entry in all_data:
         file_path = entry.get("path")
         if not file_path:
             continue
 
-        # Check file
         check_path(str(file_path), is_directory=False)
 
-        # Check all parent directories
         path = Path(str(file_path))
         for parent in path.parents:
             parent_str = str(parent)
@@ -1265,7 +1194,6 @@ def verify_permissions(
                 check_path(parent_str, is_directory=True)
                 checked_dirs.add(parent_str)
 
-    # Check archive directory itself
     check_path(directory, is_directory=True)
 
     return errors
@@ -1414,14 +1342,12 @@ def run(args: argparse.Namespace) -> int:
         Found 2 JSON metadata file(s)
         ...
     """
-    # Validate directory
     directory_path = Path(args.directory)
     if not directory_path.is_dir() or not os.access(args.directory, os.R_OK):
         raise SystemExit(
             f"Error: The directory '{args.directory}' does not exist or is not readable"
         )
 
-    # Find version file and get list of JSON files to process
     print(f"Scanning directory: {args.directory}")
     version_file = find_version_file(args.directory)
     if version_file:
@@ -1442,13 +1368,11 @@ def run(args: argparse.Namespace) -> int:
     total_errors = 0
     all_data: list[dict[str, str | int]] = []
 
-    # Verify each JSON file
     for json_file in json_files:
         print(f"\nVerifying {Path(json_file).name}...")
 
         try:
             data = load_json(json_file)
-            # Normalize relative paths to absolute paths based on archive directory
             data = normalize_paths(data, args.directory)
             all_data.extend(data)
             file_count = len(data)
@@ -1488,18 +1412,15 @@ def run(args: argparse.Namespace) -> int:
             print(f"  Error: {e}", file=sys.stderr)
             total_errors += 1
 
-    # Verify version file and timestamps
     total_errors += _verify_version_file_and_timestamps(
         version_file, json_files, all_data, args.check_timestamps, args.directory
     )
 
-    # Check for extra files if requested
     if args.check_extra_files:
         total_errors += _verify_extra_files_check(
             args.directory, version_file, json_files, all_data
         )
 
-    # Check for zero-byte files
     print("\nChecking for zero-byte files...")
     zero_byte_files = find_zero_byte_files(all_data)
     if zero_byte_files:
@@ -1510,7 +1431,6 @@ def run(args: argparse.Namespace) -> int:
     else:
         print("  No zero-byte files found")
 
-    # Check for duplicate checksums
     print("\nChecking for duplicate checksums...")
     sha1_duplicates, md5_duplicates = find_duplicate_checksums(all_data)
 
@@ -1520,7 +1440,7 @@ def run(args: argparse.Namespace) -> int:
             print(f"    SHA1 {sha1} appears in {len(paths)} file(s):", file=sys.stderr)
             for path in sorted(paths):
                 print(f"      - {path}", file=sys.stderr)
-            total_errors += len(paths) - 1  # Count duplicates, not original
+            total_errors += len(paths) - 1
     else:
         print("  No duplicate SHA1 checksums found")
 
@@ -1530,20 +1450,16 @@ def run(args: argparse.Namespace) -> int:
             print(f"    MD5 {md5} appears in {len(paths)} file(s):", file=sys.stderr)
             for path in sorted(paths):
                 print(f"      - {path}", file=sys.stderr)
-            # Don't double-count if already counted in SHA1
     else:
         print("  No duplicate MD5 checksums found")
 
-    # Check date formats in metadata and version file
     total_errors += _verify_date_formats(all_data, version_file)
 
-    # Check permissions and ownership if requested
     if args.check_permissions:
         total_errors += _verify_permissions_check(
             args.directory, json_files, version_file, all_data, args.owner, args.group
         )
 
-    # Summary
     print(f"\n{'=' * 60}")
     print("Verification complete:")
     print(f"  Total files checked: {total_files}")

@@ -47,6 +47,29 @@ def load_json(file_path: str) -> list[dict[str, str | int]]:
     return data
 
 
+def _hash_file(file_path: str) -> tuple[str, str]:
+    """Read a file in chunks and compute SHA1 and MD5 digests.
+
+    Args:
+        file_path: Path to the file to hash
+
+    Returns:
+        Tuple of (sha1_hex, md5_hex)
+
+    Raises:
+        OSError: If file cannot be read
+    """
+    sha1_hash = hashlib.sha1(usedforsecurity=False)
+    md5_hash = hashlib.md5(usedforsecurity=False)
+
+    with Path(file_path).open("rb") as f:
+        while chunk := f.read(CHUNK_SIZE):
+            sha1_hash.update(chunk)
+            md5_hash.update(chunk)
+
+    return sha1_hash.hexdigest(), md5_hash.hexdigest()
+
+
 def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
     """Calculate SHA1 and MD5 checksums for a file (lenient).
 
@@ -59,22 +82,11 @@ def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
     Returns:
         Tuple of (sha1_hex, md5_hex), or (None, None) if error occurs
     """
-    sha1_hash = hashlib.sha1(usedforsecurity=False)
-    md5_hash = hashlib.md5(usedforsecurity=False)
-
     try:
-        with Path(file_path).open("rb") as f:
-            while True:
-                data = f.read(CHUNK_SIZE)
-                if not data:
-                    break
-                sha1_hash.update(data)
-                md5_hash.update(data)
+        return _hash_file(file_path)
     except OSError as e:
         print(f"Warning: Cannot read '{file_path}': {e}", file=sys.stderr)
         return None, None
-
-    return sha1_hash.hexdigest(), md5_hash.hexdigest()
 
 
 def calculate_checksums_strict(file_path: str) -> tuple[str, str]:
@@ -92,18 +104,56 @@ def calculate_checksums_strict(file_path: str) -> tuple[str, str]:
     Raises:
         OSError: If file cannot be read
     """
-    sha1_hash = hashlib.sha1(usedforsecurity=False)
-    md5_hash = hashlib.md5(usedforsecurity=False)
+    return _hash_file(file_path)
 
-    with Path(file_path).open("rb") as f:
-        while True:
-            data = f.read(CHUNK_SIZE)
-            if not data:
-                break
-            sha1_hash.update(data)
-            md5_hash.update(data)
 
-    return sha1_hash.hexdigest(), md5_hash.hexdigest()
+def _validate_directory(directory: str) -> Path:
+    """Validate that the given path is an existing directory.
+
+    Args:
+        directory: Path to validate
+
+    Returns:
+        Validated Path object
+
+    Raises:
+        SystemExit: If path doesn't exist or isn't a directory
+    """
+    dir_path = Path(directory)
+
+    if not dir_path.exists():
+        raise SystemExit(f"Error: Directory '{directory}' does not exist")
+
+    if not dir_path.is_dir():
+        raise SystemExit(f"Error: '{directory}' is not a directory")
+
+    return dir_path
+
+
+def _find_metadata_json_files(directory: str) -> list[Path]:
+    """Find JSON metadata files in directory, excluding *version.json.
+
+    Args:
+        directory: Root directory to search
+
+    Returns:
+        List of Path objects for matching JSON files
+
+    Raises:
+        SystemExit: If directory is invalid or no JSON files found
+    """
+    dir_path = _validate_directory(directory)
+
+    json_files = [
+        json_file
+        for json_file in dir_path.rglob("*.json")
+        if not json_file.name.endswith("version.json")
+    ]
+
+    if not json_files:
+        raise SystemExit(f"Error: No JSON files found in '{directory}'")
+
+    return json_files
 
 
 def find_json_files(directory: str) -> list[str]:
@@ -120,24 +170,7 @@ def find_json_files(directory: str) -> list[str]:
     Raises:
         SystemExit: If directory doesn't exist or no JSON files found
     """
-    dir_path = Path(directory)
-
-    if not dir_path.exists():
-        raise SystemExit(f"Error: Directory '{directory}' does not exist")
-
-    if not dir_path.is_dir():
-        raise SystemExit(f"Error: '{directory}' is not a directory")
-
-    # Find all JSON files, excluding *version.json
-    json_files = []
-    for json_file in dir_path.rglob("*.json"):
-        if not json_file.name.endswith("version.json"):
-            json_files.append(str(json_file))
-
-    if not json_files:
-        raise SystemExit(f"Error: No JSON files found in '{directory}'")
-
-    return sorted(json_files)
+    return sorted(str(f) for f in _find_metadata_json_files(directory))
 
 
 def find_json_files_with_mtime(directory: str) -> list[tuple[float, str]]:
@@ -154,23 +187,5 @@ def find_json_files_with_mtime(directory: str) -> list[tuple[float, str]]:
     Raises:
         SystemExit: If directory doesn't exist or no JSON files found
     """
-    dir_path = Path(directory)
-
-    if not dir_path.exists():
-        raise SystemExit(f"Error: Directory '{directory}' does not exist")
-
-    if not dir_path.is_dir():
-        raise SystemExit(f"Error: '{directory}' is not a directory")
-
-    # Find all JSON files with their modification times, excluding *version.json
-    json_files: list[tuple[float, str]] = []
-    for json_file in dir_path.rglob("*.json"):
-        if not json_file.name.endswith("version.json"):
-            mtime = json_file.stat().st_mtime
-            json_files.append((mtime, str(json_file)))
-
-    if not json_files:
-        raise SystemExit(f"Error: No JSON files found in '{directory}'")
-
-    # Sort by modification time, newest first
+    json_files = [(f.stat().st_mtime, str(f)) for f in _find_metadata_json_files(directory)]
     return sorted(json_files, key=lambda x: x[0], reverse=True)

@@ -1,12 +1,14 @@
 """Tests for mkversion module."""
 
+import argparse
 import json
+import os
 from pathlib import Path
 
 import pytest
 
 from photos_manager.common import find_json_files_with_mtime as find_json_files
-from photos_manager.mkversion import validate_and_process_json
+from photos_manager.mkversion import run, validate_and_process_json
 
 
 class TestFindJsonFiles:
@@ -152,3 +154,173 @@ class TestValidateAndProcessJson:
         assert total_bytes == 0
         assert file_count == 0
         assert "empty.json" in hashes
+
+
+class TestRun:
+    """Integration tests for run() function."""
+
+    def test_run_prints_to_stdout(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that run() prints version JSON to stdout when no output file specified."""
+        # Create test JSON file
+        data = [
+            {
+                "path": "/test/file.txt",
+                "sha1": "abc123",
+                "md5": "def456",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 1000,
+            }
+        ]
+        json_file = tmp_path / "test.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(directory=str(tmp_path), output_file=None)
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        assert "photos-" in captured.out
+
+        # Verify stdout contains valid JSON with correct structure
+        version_data = json.loads(captured.out)
+        assert "version" in version_data
+        assert "total_bytes" in version_data
+        assert "file_count" in version_data
+        assert "last_modified" in version_data
+        assert "files" in version_data
+        assert version_data["total_bytes"] == 1000
+        assert version_data["file_count"] == 1
+
+    def test_run_with_output_file(self, tmp_path: Path) -> None:
+        """Test that run() writes to specified output file."""
+        # Create test JSON file
+        data = [
+            {
+                "path": "/test/file.txt",
+                "sha1": "abc123",
+                "md5": "def456",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 500,
+            }
+        ]
+        json_file = tmp_path / "test.json"
+        json_file.write_text(json.dumps(data))
+
+        output_file = tmp_path / "custom.version.json"
+        args = argparse.Namespace(directory=str(tmp_path), output_file=str(output_file))
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        assert output_file.exists()
+
+        version_data = json.loads(output_file.read_text())
+        assert version_data["file_count"] == 1
+        assert version_data["total_bytes"] == 500
+
+    def test_run_with_nonexistent_directory(self) -> None:
+        """Test that run() raises SystemExit for nonexistent directory."""
+        args = argparse.Namespace(directory="/nonexistent/directory", output_file=None)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run(args)
+
+        assert "does not exist" in str(exc_info.value)
+
+    def test_run_with_no_json_files(self, tmp_path: Path) -> None:
+        """Test that run() raises SystemExit when no JSON files found."""
+        # Create empty directory
+        test_dir = tmp_path / "empty"
+        test_dir.mkdir()
+
+        args = argparse.Namespace(directory=str(test_dir), output=None)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run(args)
+
+        assert "No JSON files found" in str(exc_info.value)
+
+    def test_run_excludes_version_files(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() excludes *version.json files."""
+        # Create regular JSON file
+        data = [
+            {
+                "path": "/test/file.txt",
+                "sha1": "abc",
+                "md5": "def",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 100,
+            }
+        ]
+        (tmp_path / "test.json").write_text(json.dumps(data))
+
+        # Create version file (should be excluded)
+        version_data = {"version": "old"}
+        (tmp_path / "old.version.json").write_text(json.dumps(version_data))
+
+        output_file = tmp_path / ".version.json"
+        args = argparse.Namespace(directory=str(tmp_path), output_file=str(output_file))
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+        # Verify only test.json was processed
+        version_result = json.loads(output_file.read_text())
+        assert version_result["file_count"] == 1
+        assert "test.json" in version_result["files"]
+        assert "old.version.json" not in version_result["files"]
+
+    def test_run_with_multiple_json_files(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() processes multiple JSON files."""
+        # Create multiple JSON files
+        data1 = [
+            {
+                "path": "/test/file1.txt",
+                "sha1": "a",
+                "md5": "b",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 100,
+            }
+        ]
+        data2 = [
+            {
+                "path": "/test/file2.txt",
+                "sha1": "c",
+                "md5": "d",
+                "date": "2025-01-02T00:00:00+00:00",
+                "size": 200,
+            }
+        ]
+        (tmp_path / "file1.json").write_text(json.dumps(data1))
+        (tmp_path / "file2.json").write_text(json.dumps(data2))
+
+        output_file = tmp_path / ".version.json"
+        args = argparse.Namespace(directory=str(tmp_path), output_file=str(output_file))
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+        version_data = json.loads(output_file.read_text())
+        assert version_data["file_count"] == 2
+        assert version_data["total_bytes"] == 300
+        assert len(version_data["files"]) == 2
+
+    def test_run_with_invalid_json_file(self, tmp_path: Path) -> None:
+        """Test that run() handles invalid JSON files."""
+        # Create invalid JSON file
+        invalid_file = tmp_path / "invalid.json"
+        invalid_file.write_text("{invalid json}")
+
+        args = argparse.Namespace(directory=str(tmp_path), output_file=None)
+
+        with pytest.raises(SystemExit) as exc_info:
+            run(args)
+
+        assert "Invalid JSON" in str(exc_info.value)

@@ -26,6 +26,7 @@ from photos_manager.verify import (
     find_zero_byte_files,
     load_version_json,
     normalize_paths,
+    run,
     validate_date_format,
     validate_version_file_dates,
     verify_archive_directory_timestamp,
@@ -1524,3 +1525,531 @@ class TestNormalizePaths:
 
         expected_path = base_dir / "subdir/file.jpg"
         assert str(result[0]["path"]) == str(expected_path)
+
+
+class TestRun:
+    """Integration tests for run() function."""
+
+    def test_run_verifies_basic_archive(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() verifies a basic archive successfully."""
+        import argparse
+
+        # Create test files
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        # Create JSON with metadata
+        sha1, md5 = calculate_checksums(str(test_file))
+        mtime = test_file.stat().st_mtime
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": datetime.fromtimestamp(mtime).astimezone().isoformat(),
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        assert "verified successfully" in captured.out.lower() or "ok" in captured.out.lower()
+
+    def test_run_detects_missing_file(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() detects missing files."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+
+        # Create JSON with non-existent file
+        data = [
+            {
+                "path": str(test_dir / "missing.txt"),
+                "sha1": "abc",
+                "md5": "def",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 10,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        assert "missing" in captured.out.lower() or "not found" in captured.out.lower()
+
+    def test_run_with_all_flag(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that run() with --all verifies checksums."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        # Create JSON with correct checksums
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=True,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+    def test_run_detects_size_mismatch(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() detects file size mismatches."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        # Create JSON with wrong size
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 999,  # Wrong size
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        assert "size" in captured.out.lower()
+
+    def test_run_with_version_file(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() verifies version file if present."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        # Create JSON
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        # Create version file
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 7,
+            "file_count": 1,
+            "last_modified": "2025-01-01T00:00:00+00:00",
+            "last_verified": "2025-01-01T00:00:00+00:00",
+            "files": {"archive.json": calculate_file_hash(str(json_file))},
+        }
+        version_file = test_dir / ".version.json"
+        version_file.write_text(json.dumps(version_data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+    def test_run_with_check_timestamps(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() with --check-timestamps verifies mtimes."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+        test_file = test_dir / "file.txt"
+        test_file.write_text("content")
+
+        # Get actual file timestamp
+        mtime = test_file.stat().st_mtime
+        timestamp = datetime.fromtimestamp(mtime).astimezone().isoformat()
+
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": timestamp,
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        # Create version file (required for timestamp verification)
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 7,
+            "file_count": 1,
+            "last_modified": timestamp,
+            "last_verified": timestamp,
+            "files": {"archive.json": calculate_file_hash(str(json_file))},
+        }
+        version_file = test_dir / ".version.json"
+        version_file.write_text(json.dumps(version_data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=True,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+    def test_run_with_nonexistent_directory(self) -> None:
+        """Test that run() handles nonexistent directory."""
+        import argparse
+
+        args = argparse.Namespace(
+            directory="/nonexistent/directory",
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            run(args)
+
+        assert "does not exist" in str(exc_info.value).lower()
+
+    def test_run_with_verbose_flag(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() with --verbose shows detailed output."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+        test_file = test_dir / "file.txt"
+        test_file.write_text("test")
+
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 4,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=True,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+    def test_run_with_quiet_flag(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that run() with --quiet suppresses normal output."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+        test_file = test_dir / "file.txt"
+        test_file.write_text("test")
+
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 4,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=True,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+    def test_run_with_empty_json(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that run() handles empty JSON files."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+
+        # Create empty JSON
+        json_file = test_dir / "archive.json"
+        json_file.write_text("[]")
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+    def test_run_with_check_extra_files(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() with --check-extra-files detects extra files."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+
+        # Create a documented file
+        test_file = test_dir / "documented.txt"
+        test_file.write_text("documented")
+
+        # Create an extra file not in JSON
+        extra_file = test_dir / "extra.txt"
+        extra_file.write_text("extra")
+
+        sha1, md5 = calculate_checksums(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 11,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=True,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        # Should detect extra file
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        assert "extra" in captured.out.lower()
+
+    def test_run_multiple_json_files(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() processes multiple JSON metadata files."""
+        import argparse
+
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+
+        # Create files for first JSON
+        file1 = test_dir / "file1.txt"
+        file1.write_text("content1")
+
+        # Create files for second JSON
+        file2 = test_dir / "file2.txt"
+        file2.write_text("content2")
+
+        # Create first JSON
+        sha1_1, md5_1 = calculate_checksums(str(file1))
+        data1 = [
+            {
+                "path": str(file1),
+                "sha1": sha1_1,
+                "md5": md5_1,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 8,
+            }
+        ]
+        (test_dir / "metadata1.json").write_text(json.dumps(data1))
+
+        # Create second JSON
+        sha1_2, md5_2 = calculate_checksums(str(file2))
+        data2 = [
+            {
+                "path": str(file2),
+                "sha1": sha1_2,
+                "md5": md5_2,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 8,
+            }
+        ]
+        (test_dir / "metadata2.json").write_text(json.dumps(data2))
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            all=False,
+            check_timestamps=False,
+            tolerance=2,
+            verbose=False,
+            quiet=False,
+            check_extra_files=False,
+            check_permissions=False,
+            owner=None,
+            group=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        assert "metadata1.json" in captured.out or "2" in captured.out

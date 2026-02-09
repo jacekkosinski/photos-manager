@@ -1,12 +1,14 @@
 """Tests for index module."""
 
+import argparse
 import json
+import os
 from pathlib import Path
 
 import pytest
 
 from photos_manager.common import calculate_checksums, load_json
-from photos_manager.index import extract_numbers, get_file_info
+from photos_manager.index import extract_numbers, get_file_info, run
 
 
 class TestCalculateChecksums:
@@ -283,3 +285,225 @@ class TestLoadJson:
 
         assert result is not None
         assert result[0]["path"] == "/photos/zdjęcie.jpg"
+
+
+class TestRun:
+    """Integration tests for run() function."""
+
+    def test_run_creates_json_file(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that run() creates a JSON file with correct structure."""
+        # Create test directory with a file
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        test_file = test_dir / "test.txt"
+        test_file.write_text("Hello")
+
+        # Change to tmp_path so output file is created there
+        monkeypatch.chdir(tmp_path)
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            time_zone="UTC",
+            sort_by_number=False,
+            sort_by_dir=False,
+            merge=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        output_file = tmp_path / "photos.json"
+        assert output_file.exists()
+
+        # Verify JSON structure
+        data = json.loads(output_file.read_text())
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert "path" in data[0]
+        assert "sha1" in data[0]
+        assert "md5" in data[0]
+        assert "date" in data[0]
+        assert "size" in data[0]
+
+    def test_run_with_invalid_directory(self) -> None:
+        """Test that run() raises SystemExit for invalid directory."""
+        args = argparse.Namespace(
+            directory="/nonexistent/directory",
+            time_zone="UTC",
+            sort_by_number=False,
+            sort_by_dir=False,
+            merge=None,
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            run(args)
+
+        assert "not a valid directory" in str(exc_info.value)
+
+    def test_run_with_merge(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that run() merges data from existing JSON."""
+        # Create test directory
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        test_file = test_dir / "new.txt"
+        test_file.write_text("New")
+
+        # Create merge file
+        merge_data = [
+            {
+                "path": "/old/file.txt",
+                "sha1": "old_sha1",
+                "md5": "old_md5",
+                "date": "2024-01-01T00:00:00+00:00",
+                "size": 100,
+            }
+        ]
+        merge_file = tmp_path / "merge.json"
+        merge_file.write_text(json.dumps(merge_data))
+
+        monkeypatch.chdir(tmp_path)
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            time_zone="UTC",
+            sort_by_number=False,
+            sort_by_dir=False,
+            merge=str(merge_file),
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        output_file = tmp_path / "photos.json"
+        data = json.loads(output_file.read_text())
+        assert len(data) == 2  # One new + one merged
+
+    def test_run_with_duplicate_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that run() detects duplicate paths."""
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        test_file = test_dir / "test.txt"
+        test_file.write_text("Content")
+
+        # Create merge file with duplicate path
+        merge_data = [
+            {
+                "path": str(test_file),
+                "sha1": "different_sha1",
+                "md5": "different_md5",
+                "date": "2024-01-01T00:00:00+00:00",
+                "size": 100,
+            }
+        ]
+        merge_file = tmp_path / "merge.json"
+        merge_file.write_text(json.dumps(merge_data))
+
+        monkeypatch.chdir(tmp_path)
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            time_zone="UTC",
+            sort_by_number=False,
+            sort_by_dir=False,
+            merge=str(merge_file),
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            run(args)
+
+        assert "Duplicate path found" in str(exc_info.value)
+
+    def test_run_with_sort_by_number(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that run() sorts by number when requested."""
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        (test_dir / "file_10.txt").write_text("10")
+        (test_dir / "file_2.txt").write_text("2")
+        (test_dir / "file_1.txt").write_text("1")
+
+        monkeypatch.chdir(tmp_path)
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            time_zone="UTC",
+            sort_by_number=True,
+            sort_by_dir=False,
+            merge=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        output_file = tmp_path / "photos.json"
+        data = json.loads(output_file.read_text())
+        filenames = [Path(item["path"]).name for item in data]
+        assert filenames == ["file_1.txt", "file_2.txt", "file_10.txt"]
+
+    def test_run_with_sort_by_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that run() sorts by directory when requested."""
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        (test_dir / "a_dir").mkdir()
+        (test_dir / "b_dir").mkdir()
+        (test_dir / "a_dir" / "file.txt").write_text("a")
+        (test_dir / "b_dir" / "file.txt").write_text("b")
+        (test_dir / "file.txt").write_text("root")
+
+        monkeypatch.chdir(tmp_path)
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            time_zone="UTC",
+            sort_by_number=False,
+            sort_by_dir=True,
+            merge=None,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        output_file = tmp_path / "photos.json"
+        data = json.loads(output_file.read_text())
+        # Files should be grouped by directory
+        dirs = [str(Path(item["path"]).parent) for item in data]
+        assert dirs == sorted(dirs)
+
+    def test_run_with_nonexistent_merge_file(self, tmp_path: Path) -> None:
+        """Test that run() raises SystemExit for nonexistent merge file."""
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            time_zone="UTC",
+            sort_by_number=False,
+            sort_by_dir=False,
+            merge="/nonexistent/merge.json",
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            run(args)
+
+        assert "merge file" in str(exc_info.value).lower()
+        assert "does not exist" in str(exc_info.value).lower()
+
+    def test_run_with_invalid_merge_json(self, tmp_path: Path) -> None:
+        """Test that run() raises SystemExit for invalid merge JSON."""
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+
+        merge_file = tmp_path / "invalid.json"
+        merge_file.write_text("{invalid json}")
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            time_zone="UTC",
+            sort_by_number=False,
+            sort_by_dir=False,
+            merge=str(merge_file),
+        )
+
+        with pytest.raises(SystemExit) as exc_info:
+            run(args)
+
+        assert "invalid format" in str(exc_info.value).lower()

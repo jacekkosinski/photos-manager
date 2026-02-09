@@ -20,7 +20,7 @@ import json
 import os
 import re
 import sys
-from collections import Counter, OrderedDict
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -78,26 +78,20 @@ def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
             for file in files:
                 file_path = Path(root) / file
 
-                # Calculate checksums
                 sha1, md5 = calculate_checksums(str(file_path))
                 if sha1 is None or md5 is None:
                     continue
 
-                # Get file size and modification time
                 stat_info = file_path.stat()
-                size = stat_info.st_size
-                mod_time = stat_info.st_mtime
-                # Use isoformat() for proper ISO 8601 with timezone (+01:00 instead of +0100)
-                mod_time_with_tz = datetime.fromtimestamp(mod_time, local_tz).isoformat()
+                mod_time_with_tz = datetime.fromtimestamp(stat_info.st_mtime, local_tz).isoformat()
 
-                # Append file information to the list
                 file_info_list.append(
                     {
                         "path": str(file_path),
                         "sha1": sha1,
                         "md5": md5,
                         "date": mod_time_with_tz,
-                        "size": size,
+                        "size": stat_info.st_size,
                     }
                 )
     except OSError as e:
@@ -208,14 +202,11 @@ def run(args: argparse.Namespace) -> int:
         >>> exit_code = run(args)
         File information written to photos.json
     """
-    # Ensure the directory exists
     if not Path(args.directory).is_dir():
         raise SystemExit(f"Error: The specified path '{args.directory}' is not a valid directory")
 
-    # Get file information
     file_info_list = get_file_info(args.directory, args.time_zone)
 
-    # Merge information from previous JSON file
     if args.merge:
         try:
             merge_path = Path(args.merge)
@@ -231,16 +222,13 @@ def run(args: argparse.Namespace) -> int:
                 f"Error: JSON file '{args.merge}' contains invalid format"
             ) from exception
 
-    # Checks for duplicate 'path', 'sha1', and 'md5' in the list
     for key in ["path", "sha1", "md5"]:
         counts = Counter(entry[key] for entry in file_info_list)
-        duplicates = [item for item, count in counts.items() if count > 1]
+        duplicates = sorted(str(item) for item, count in counts.items() if count > 1)
 
         if duplicates:
-            duplicates_str = sorted(str(dup) for dup in duplicates)
-            raise SystemExit(f"Error: Duplicate {key} found: {', '.join(duplicates_str)}")
+            raise SystemExit(f"Error: Duplicate {key} found: {', '.join(duplicates)}")
 
-    # Sort file information
     if args.sort_by_number:
         file_info_list.sort(key=lambda x: extract_numbers(str(x["path"])))
     elif args.sort_by_dir:
@@ -254,24 +242,21 @@ def run(args: argparse.Namespace) -> int:
     else:
         file_info_list.sort(key=lambda x: (x["date"], str(Path(str(x["path"])).name)))
 
-    # Make custom keys order in dict data
-    custom_order = ["path", "sha1", "md5", "date", "size"]
+    # Reorder keys for consistent JSON output
+    key_order = ["path", "sha1", "md5", "date", "size"]
     sorted_file_info = [
-        OrderedDict(sorted(item.items(), key=lambda x: custom_order.index(str(x[0]))))
-        for item in file_info_list
+        {key: item[key] for key in key_order if key in item} for item in file_info_list
     ]
 
-    # Define output JSON file name
     dir_path = Path(args.directory)
     dir_name = dir_path.name if dir_path.name else dir_path.resolve().name
     output_json = f"{dir_name}.json"
 
-    # Write file information to JSON file
     try:
         output_path = Path(output_json)
         with output_path.open("w", encoding="utf-8") as json_file:
             json.dump(sorted_file_info, json_file, ensure_ascii=False, indent=4)
-            json_file.write("\n")  # Ensure newline at end of file
+            json_file.write("\n")
         print(f"File information written to {output_json}")
     except OSError as exception:
         raise SystemExit(

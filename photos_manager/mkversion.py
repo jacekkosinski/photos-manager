@@ -118,43 +118,35 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
         path = Path(file_path)
         filename = path.name
         try:
-            # Calculate SHA1 while reading (for file integrity, not security)
             sha1 = hashlib.sha1(usedforsecurity=False)
             with path.open("rb") as file:
                 content = file.read()
                 sha1.update(content)
 
-            # Parse and validate JSON
             data = json.loads(content)
 
-            # Validate that data is a list
             if not isinstance(data, list):
                 raise SystemExit(
                     f"Error: JSON file {file_path} must contain an array of objects, "
                     f"got {type(data).__name__}"
                 )
 
-            # Validate that all items are dictionaries
             if not all(isinstance(item, dict) for item in data):
                 raise SystemExit(f"Error: JSON file {file_path} must contain an array of objects")
 
-            # Check required fields
-            if not all(required_json_fields.issubset(set(item.keys())) for item in data):
+            if not all(required_json_fields <= item.keys() for item in data):
                 raise SystemExit(
                     f"Error: JSON file {file_path} is missing required fields "
                     f"(md5, path, sha1, size, date)"
                 )
 
-            # Sum sizes and count files
             total_bytes += sum(item["size"] for item in data)
             files_count += len(data)
-
-            # Store hash
             file_hashes[filename] = sha1.hexdigest()
 
         except json.JSONDecodeError as exception:
             raise SystemExit(f"Error: Invalid JSON in {file_path}") from exception
-        except (OSError, PermissionError) as exception:
+        except OSError as exception:
             raise SystemExit(f"Error: Could not read {file_path}: {exception}") from exception
 
     return total_bytes, files_count, file_hashes
@@ -225,34 +217,24 @@ def run(args: argparse.Namespace) -> int:
         >>> args = parser.parse_args(['/path/to/archive'])
         >>> exit_code = run(args)
     """
-    # Validate directory
     directory_path = Path(args.directory)
     if not directory_path.is_dir() or not os.access(args.directory, os.R_OK):
         raise SystemExit(
             f"Error: The directory '{args.directory}' does not exist or is not readable"
         )
 
-    # Find JSON files
     json_files_with_mtimes = find_json_files(args.directory)
     json_files = [path for (_, path) in json_files_with_mtimes]
-
-    # Process JSON files
     total_bytes, file_count, file_hashes = validate_and_process_json(json_files)
 
-    # Calculate TB with proper formatting and get last three digits of files count
     total_tb = total_bytes / BYTES_PER_TB
-    tb_str = f"{total_tb:.3f}"
     last_three_digits = file_count % 1000
+    version = f"photos-{total_tb:.3f}-{last_three_digits}"
 
-    # Get timestamps
     youngest_mtime = datetime.fromtimestamp(json_files_with_mtimes[0][0]).astimezone()
     last_modified = youngest_mtime.isoformat(timespec="seconds")
     last_verified = datetime.now().astimezone().isoformat(timespec="seconds")
 
-    # Create version string
-    version = f"photos-{tb_str}-{last_three_digits}"
-
-    # Generate output JSON
     output = {
         "version": version,
         "total_bytes": total_bytes,
@@ -263,14 +245,13 @@ def run(args: argparse.Namespace) -> int:
     }
     output_json = json.dumps(output, ensure_ascii=False, indent=4)
 
-    # Write to file or stdout
     if args.output_file is None:
         print(output_json)
     else:
         try:
             output_path = Path(args.output_file)
             output_path.write_text(output_json, encoding="utf-8")
-        except (OSError, PermissionError) as exception:
+        except OSError as exception:
             raise SystemExit(
                 f"Error: Could not write to output file '{args.output_file}': {exception}"
             ) from exception

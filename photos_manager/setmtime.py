@@ -52,35 +52,29 @@ def get_newest_files(
         >>> newest_overall['path']
         '/photos/2024/img_999.jpg'
     """
-    # Load JSON data from the file
     data = load_json(json_file)
     if not data:
         raise SystemExit(f"Error: JSON file '{json_file}' is empty")
 
-    # Group entries by directory path
     grouped_files: dict[str, list[dict[str, str | int]]] = {}
     for entry in data:
         try:
             directory = str(Path(str(entry["path"])).parent)
         except KeyError as exception:
             raise SystemExit(f"Error: Missing 'path' key in entry: {entry}") from exception
+        grouped_files.setdefault(directory, []).append(entry)
 
-        if directory not in grouped_files:
-            grouped_files[directory] = []
-        grouped_files[directory].append(entry)
-
-    # Find the newest file in each directory
     newest_files: dict[str, dict[str, str | int]] = {}
     for directory, files in grouped_files.items():
         try:
-            newest_file = max(files, key=lambda x: datetime.fromisoformat(str(x["date"])))
+            newest_files[directory] = max(
+                files, key=lambda x: datetime.fromisoformat(str(x["date"]))
+            )
         except KeyError as exception:
             raise SystemExit(f"Error: Missing 'date' key in entry: {files[0]}") from exception
         except ValueError as exception:
             raise SystemExit(f"Error: Invalid date format in entry: {files[0]}") from exception
-        newest_files[directory] = newest_file
 
-    # Find the file with the newest timestamp across all entries
     try:
         newest_entry = max(data, key=lambda x: datetime.fromisoformat(str(x["date"])))
     except (KeyError, ValueError) as exception:
@@ -118,7 +112,6 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
         Set timestamp for file '/photos/img.jpg' to match '1704376496' time
         >>> set_files_timestamps("archive.json")  # Actually updates files
     """
-    # Load JSON data from the file
     json_data = load_json(json_file)
     if not json_data:
         raise SystemExit(f"Error: JSON file '{json_file}' is empty")
@@ -134,7 +127,6 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
             )
             continue
 
-        # Convert date string to timestamp
         try:
             expected_timestamp = int(datetime.fromisoformat(str(timestamp_str)).timestamp())
         except ValueError as e:
@@ -142,20 +134,13 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
             continue
 
         path = Path(str(file_path))
+        required_access = os.R_OK if dry_run else os.W_OK
+        access_label = "readable" if dry_run else "writable"
 
-        # Check if file exists and has appropriate permissions
-        if dry_run:
-            # In dry-run mode, only check if file exists and is readable
-            if not path.exists() or not os.access(str(path), os.R_OK):
-                print(f"Error: File not found or not readable: {file_path}", file=sys.stderr)
-                continue
-        else:
-            # In normal mode, check if file exists and is writable
-            if not path.exists() or not os.access(str(path), os.W_OK):
-                print(f"Error: File not found or not writable: {file_path}", file=sys.stderr)
-                continue
+        if not path.exists() or not os.access(str(path), required_access):
+            print(f"Error: File not found or not {access_label}: {file_path}", file=sys.stderr)
+            continue
 
-        # Get current timestamp
         try:
             current_mtime = int(path.stat().st_mtime)
         except OSError as e:
@@ -165,7 +150,6 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
             )
             continue
 
-        # Check if update is needed
         if current_mtime != expected_timestamp:
             print(f"Set timestamp for file '{file_path}' to match '{expected_timestamp}' time")
             if not dry_run:
@@ -272,7 +256,6 @@ def set_json_timestamps(
         Set timestamp for 'photos.json' to match file '/photos/img.jpg' (...)
         Set timestamp for directory 'photos' to match file '/photos/img.jpg' (...)
     """
-    # Get the path from newest_entry
     reference_path_str = newest_entry.get("path")
     if not reference_path_str:
         print("Error: Missing 'path' in newest entry", file=sys.stderr)
@@ -284,10 +267,8 @@ def set_json_timestamps(
         return
 
     try:
-        # Get the modification time of the reference file
         reference_mtime = reference_path.stat().st_mtime
 
-        # Check and update JSON file timestamp
         json_path = Path(json_file)
         json_mtime = json_path.stat().st_mtime
         if json_mtime != reference_mtime:
@@ -298,7 +279,6 @@ def set_json_timestamps(
             if not dry_run:
                 os.utime(str(json_path), (reference_mtime, reference_mtime))
 
-        # Check and update directory timestamp
         dir_path = Path(dir_name)
         dir_mtime = dir_path.stat().st_mtime
         if dir_mtime != reference_mtime:
@@ -379,7 +359,6 @@ def run(args: argparse.Namespace) -> int:
     for json_file in args.json_files:
         json_path = Path(json_file)
 
-        # Skip if JSON file does not exist or is unreadable
         if not json_path.exists() or not os.access(str(json_path), os.R_OK):
             print(
                 f"Error: Skipping non-existent or unreadable JSON file '{json_file}'",
@@ -387,15 +366,11 @@ def run(args: argparse.Namespace) -> int:
             )
             continue
 
-        # Skip empty JSON files or not a regular file
         if json_path.stat().st_size == 0 or not json_path.is_file():
             print(f"Error: Skipping empty or invalid JSON file '{json_file}'", file=sys.stderr)
             continue
 
-        # Take dirname from JSON filename (e.g., 'photos.json' -> 'photos')
         dir_name = str(json_path.with_suffix(""))
-
-        # Check if the corresponding directory exists and is readable
         dir_path = Path(dir_name)
         if not dir_path.is_dir() or not os.access(str(dir_path), os.R_OK):
             print(
@@ -405,7 +380,6 @@ def run(args: argparse.Namespace) -> int:
             continue
 
         try:
-            # Process timestamps
             if args.all:
                 set_files_timestamps(json_file, dry_run=args.dry_run)
 
