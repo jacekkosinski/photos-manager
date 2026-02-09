@@ -26,6 +26,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 from photos_manager.common import find_json_files, load_json
 from photos_manager.verify import find_version_file
@@ -1059,50 +1060,47 @@ def _print_verbose_operations(operations: list[SyncOperation], verbose: bool) ->
         print(f"  ... ({len(operations) - 20} more operations)")
 
 
-def run(args: argparse.Namespace) -> int:
-    """Execute sync command with parsed arguments.
-
-    Performs archive synchronization by:
-    1. Validating source and destination archives
-    2. Loading archive metadata
-    3. Computing sync plan
-    4. Optimizing operations
-    5. Checking for dangerous operations
-    6. Executing or outputting sync commands
-
-    Args:
-        args: Parsed command-line arguments with fields:
-            - source: Source archive directory
-            - dest: Destination archive directory
-            - dry_run: Whether to preview changes only
-            - execute: Whether to actually execute operations
-            - no_delete: Whether to skip deletions
-            - output: Optional output script path
-            - verbose: Whether to show detailed information
+def _validate_and_load_archives(
+    args: argparse.Namespace,
+) -> tuple[
+    int,
+    list[dict[str, str | int]] | None,
+    list[str] | None,
+    str | None,
+    list[dict[str, str | int]] | None,
+    list[str] | None,
+    str | None,
+    set[str] | None,
+    set[str] | None,
+    set[str] | None,
+    str | None,
+]:
+    """Validate archives and load metadata.
 
     Returns:
-        int: Exit code indicating success or failure
-            - os.EX_OK (0): Successful execution
-            - 1: Error occurred during processing
+        Tuple of (exit_code, source_data, source_json_files, source_version, dest_data,
+        dest_json_files, dest_version, changed_jsons, new_jsons, deleted_jsons,
+        source_version_path)
 
-    Examples:
-        >>> args = parser.parse_args(['/source', '/dest'])
-        >>> exit_code = run(args)
-        Scanning source archive: /source
-        ...
+        exit_code will be:
+        - 0 if successful or archives are identical
+        - 1 if error occurred
+
+        When exit_code is 0 and source_data is None, archives are identical.
+        When exit_code is 1, all other values will be None.
     """
     print(f"Scanning source archive: {args.source}")
 
-    # Validate archives (check write permission only when executing)
+    # Validate archives
     valid, errors = validate_archive_directories(
         args.source, args.dest, check_dest_writable=args.execute
     )
     if not valid:
         for error in errors:
             print(f"Error: {error}", file=sys.stderr)
-        return 1
+        return 1, None, None, None, None, None, None, None, None, None, None
 
-    # Load and compare version files first (optimization)
+    # Load and compare version files
     source_version_data, source_version_path = load_version_data(args.source)
     dest_version_data, _dest_version_path = load_version_data(args.dest)
 
@@ -1113,17 +1111,15 @@ def run(args: argparse.Namespace) -> int:
     # Determine which JSONs to process
     jsons_to_process: set[str] | None = None
     if source_version_data and dest_version_data:
-        # Optimization: only load changed/new JSONs
         jsons_to_process = changed_jsons | new_jsons
         if not jsons_to_process and not deleted_jsons:
             print("Archives are identical (all JSON files have matching SHA1)")
-            return os.EX_OK
+            return 0, None, None, None, None, None, None, None, None, None, None
         print(
             f"  Version comparison: {len(changed_jsons)} changed, "
             f"{len(new_jsons)} new, {len(deleted_jsons)} deleted JSON(s)"
         )
     else:
-        # Fallback: no version files, process all
         if source_version_data:
             print("  Source has version file, destination does not")
         elif dest_version_data:
@@ -1131,14 +1127,14 @@ def run(args: argparse.Namespace) -> int:
         else:
             print("  No version files found, comparing all files")
 
-    # Load source archive (filtered if optimization applies)
+    # Load source archive
     source_data, source_json_files, source_version, source_errors = load_archive(
         args.source, json_filter=jsons_to_process
     )
     if source_errors:
         for error in source_errors:
             print(f"Error: {error}", file=sys.stderr)
-        return 1
+        return 1, None, None, None, None, None, None, None, None, None, None
 
     if source_version:
         print(f"  Found version file: {Path(source_version).name}")
@@ -1147,20 +1143,49 @@ def run(args: argparse.Namespace) -> int:
 
     print(f"\nScanning destination archive: {args.dest}")
 
-    # Load destination archive (filtered if optimization applies)
+    # Load destination archive
     dest_data, dest_json_files, dest_version, dest_errors = load_archive(
         args.dest, json_filter=jsons_to_process
     )
     if dest_errors:
         for error in dest_errors:
             print(f"Error: {error}", file=sys.stderr)
-        return 1
+        return 1, None, None, None, None, None, None, None, None, None, None
 
     if dest_version:
         print(f"  Found version file: {Path(dest_version).name}")
     print(f"  Found {len(dest_json_files)} JSON metadata file(s)")
     print(f"  Total files in destination: {len(dest_data):,}")
 
+    return (
+        0,
+        source_data,
+        source_json_files,
+        source_version,
+        dest_data,
+        dest_json_files,
+        dest_version,
+        changed_jsons,
+        new_jsons,
+        deleted_jsons,
+        source_version_path,
+    )
+
+
+def _compute_all_operations(
+    source_data: list[dict[str, str | int]],
+    dest_data: list[dict[str, str | int]],
+    changed_jsons: set[str],
+    new_jsons: set[str],
+    deleted_jsons: set[str],
+    source_version_path: str | None,
+    args: argparse.Namespace,
+) -> tuple[list[SyncOperation], list[str]]:
+    """Compute all sync operations.
+
+    Returns:
+        Tuple of (operations, warnings)
+    """
     print("\nAnalyzing differences...")
 
     # Compute sync plan
@@ -1170,7 +1195,7 @@ def run(args: argparse.Namespace) -> int:
     metadata_ops = compute_metadata_updates(operations, source_data, args.dest)
     operations.extend(metadata_ops)
 
-    # Add JSON file operations (copy changed/new, delete removed)
+    # Add JSON file operations
     json_ops = compute_json_operations(
         changed_jsons, new_jsons, deleted_jsons, args.source, args.dest
     )
@@ -1181,6 +1206,19 @@ def run(args: argparse.Namespace) -> int:
     if version_op:
         operations.append(version_op)
 
+    return operations, warnings
+
+
+def _finalize_operations(
+    operations: list[SyncOperation],
+    dest_data: list[dict[str, str | int]],
+    args: argparse.Namespace,
+) -> tuple[list[SyncOperation], dict[str, int]]:
+    """Optimize, filter, and count operations.
+
+    Returns:
+        Tuple of (operations, op_counts)
+    """
     # Optimize operations
     operations = optimize_operations(operations, dest_data, args.dest)
 
@@ -1193,6 +1231,20 @@ def run(args: argparse.Namespace) -> int:
     for op in operations:
         op_counts[op.op_type] = op_counts.get(op.op_type, 0) + 1
 
+    return operations, op_counts
+
+
+def _handle_execution(
+    operations: list[SyncOperation],
+    warnings: list[str],
+    op_counts: dict[str, int],
+    args: argparse.Namespace,
+) -> int:
+    """Handle operation execution or dry-run.
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
     # Print summary
     _print_operation_summary(op_counts, len(operations))
 
@@ -1212,7 +1264,7 @@ def run(args: argparse.Namespace) -> int:
     # Show detailed operations if verbose
     _print_verbose_operations(operations, args.verbose)
 
-    # Rewrite destination paths if requested (for remote execution)
+    # Rewrite destination paths if requested
     if args.rewrite_dest:
         operations = rewrite_operation_paths(operations, args.dest, args.rewrite_dest)
 
@@ -1246,3 +1298,79 @@ def run(args: argparse.Namespace) -> int:
             print(f"To review commands, see: {args.output}")
 
     return os.EX_OK
+
+
+def run(args: argparse.Namespace) -> int:
+    """Execute sync command with parsed arguments.
+
+    Performs archive synchronization by:
+    1. Validating source and destination archives
+    2. Loading archive metadata
+    3. Computing sync plan
+    4. Optimizing operations
+    5. Checking for dangerous operations
+    6. Executing or outputting sync commands
+
+    Args:
+        args: Parsed command-line arguments with fields:
+            - source: Source archive directory
+            - dest: Destination archive directory
+            - dry_run: Whether to preview changes only
+            - execute: Whether to actually execute operations
+            - no_delete: Whether to skip deletions
+            - output: Optional output script path
+            - verbose: Whether to show detailed information
+
+    Returns:
+        int: Exit code indicating success or failure
+            - os.EX_OK (0): Successful execution
+            - 1: Error occurred during processing
+
+    Examples:
+        >>> args = parser.parse_args(['/source', '/dest'])
+        >>> exit_code = run(args)
+        Scanning source archive: /source
+        ...
+    """
+    # Validate and load archives
+    (
+        exit_code,
+        source_data,
+        _source_json_files,
+        _source_version,
+        dest_data,
+        _dest_json_files,
+        _dest_version,
+        changed_jsons,
+        new_jsons,
+        deleted_jsons,
+        source_version_path,
+    ) = _validate_and_load_archives(args)
+
+    # Return early if error occurred or archives are identical
+    if source_data is None:
+        return exit_code
+
+    # At this point, all data should be loaded (not None)
+    # Type narrowing for mypy
+    dest_data = cast("list[dict[str, str | int]]", dest_data)
+    changed_jsons = cast("set[str]", changed_jsons)
+    new_jsons = cast("set[str]", new_jsons)
+    deleted_jsons = cast("set[str]", deleted_jsons)
+
+    # Compute all operations
+    operations, warnings = _compute_all_operations(
+        source_data,
+        dest_data,
+        changed_jsons,
+        new_jsons,
+        deleted_jsons,
+        source_version_path,
+        args,
+    )
+
+    # Finalize operations (optimize, filter, count)
+    operations, op_counts = _finalize_operations(operations, dest_data, args)
+
+    # Handle execution or dry-run
+    return _handle_execution(operations, warnings, op_counts, args)
