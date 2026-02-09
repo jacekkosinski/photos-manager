@@ -69,7 +69,7 @@ scripts.photos = "photos_manager.cli:main"
 
 [tool.poetry]
 name = "photos-manager-cli"
-version = "0.3.0"                                             # NOTE: Keep in sync with photos_manager/__version__
+version = "0.4.0"                                             # NOTE: Keep in sync with photos_manager/__version__
 description = "Modern CLI tool for managing photos"
 authors = [ "Jacek Kosiński <jacek.kosinski@softflow.tech>" ]
 packages = [ { include = "photos_manager" } ]
@@ -251,7 +251,7 @@ skips = [
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.3.0"
+version = "0.4.0"
 version_scheme = "semver"
 update_changelog_on_bump = true
 tag_format = "v$version"
