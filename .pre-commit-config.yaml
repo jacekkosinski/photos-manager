@@ -36,6 +36,17 @@ repos:
           - pydantic>=2.5.0
         args: [--strict, --ignore-missing-imports]
 
+  # tryceratops - linter for exception handling best practices
+  - repo: https://github.com/guilatrova/tryceratops
+    rev: v2.3.3
+    hooks:
+      - id: tryceratops
+        args:
+          - --ignore=TRY003 # Allow long messages in exceptions
+          - --ignore=TRY101 # Allow multiple try blocks (common in file operations)
+          - --ignore=TRY300 # Allow statements after try/except (style preference)
+          - --ignore=TRY301 # Allow raise in try blocks (common pattern)
+
   # interrogate - check docstring coverage
   - repo: https://github.com/econchick/interrogate
     rev: 1.7.0
@@ -99,6 +110,12 @@ repos:
       - id: bandit
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
+
+  # Gitleaks - detect secrets, passwords, API keys, tokens
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
 
   # pyproject.toml formatter - ensures consistent formatting
   - repo: https://github.com/tox-dev/pyproject-fmt
