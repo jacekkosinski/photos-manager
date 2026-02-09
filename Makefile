@@ -73,6 +73,8 @@ clean: ## Clean up generated files
 	find . -type f -name "*.pyc" -delete
 	find . -type f -name "*.pyo" -delete
 	find . -type f -name ".coverage" -delete
+	find . -type f -name "coverage.xml" -delete
+	find . -type f -name "interrogate_badge.svg" -delete
 
 check-all: lint format-check type-check docstring-check complexity test pre-commit ## Run all quality checks
 
