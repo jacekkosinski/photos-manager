@@ -1227,6 +1227,320 @@ class TestRunWithExifFlag:
             assert call_args[0][4] is True  # 5th positional argument is use_exif
 
 
+class TestRunIntegration:
+    """Integration tests for run() function."""
+
+    def test_run_processes_single_directory(self, tmp_path: Path) -> None:
+        """Test that run() successfully processes a directory."""
+        import argparse
+
+        test_dir = tmp_path / "test"
+        test_dir.mkdir()
+
+        # Create file with wrong permissions
+        test_file = test_dir / "test.txt"
+        test_file.touch()
+        test_file.chmod(0o777)
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        args = argparse.Namespace(
+            directories=[str(test_dir)],
+            dry_run=False,
+            user=current_user,
+            group=current_group,
+            use_exif=False,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        assert stat.S_IMODE(test_file.stat().st_mode) == FILE_PERMISSIONS
+
+    def test_run_with_nonexistent_directory(self) -> None:
+        """Test that run() raises SystemExit for nonexistent directory."""
+        import argparse
+
+        args = argparse.Namespace(
+            directories=["/nonexistent/path/that/does/not/exist"],
+            dry_run=False,
+            user="storage",
+            group="storage",
+            use_exif=False,
+        )
+
+        with pytest.raises(SystemExit, match="does not exist"):
+            run(args)
+
+    def test_run_with_file_instead_of_directory(self, tmp_path: Path) -> None:
+        """Test that run() raises SystemExit when path is a file."""
+        import argparse
+
+        test_file = tmp_path / "file.txt"
+        test_file.touch()
+
+        args = argparse.Namespace(
+            directories=[str(test_file)],
+            dry_run=False,
+            user="storage",
+            group="storage",
+            use_exif=False,
+        )
+
+        with pytest.raises(SystemExit, match="is not a directory"):
+            run(args)
+
+    def test_run_with_multiple_directories(self, tmp_path: Path) -> None:
+        """Test that run() processes multiple directories."""
+        import argparse
+
+        # Create two directories with issues
+        dir1 = tmp_path / "dir1"
+        dir1.mkdir()
+        file1 = dir1 / "TEST.TXT"
+        file1.touch()
+
+        dir2 = tmp_path / "dir2"
+        dir2.mkdir()
+        file2 = dir2 / "FILE.TXT"
+        file2.touch()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        args = argparse.Namespace(
+            directories=[str(dir1), str(dir2)],
+            dry_run=False,
+            user=current_user,
+            group=current_group,
+            use_exif=False,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        # Verify both directories were processed
+        assert (dir1 / "test.txt").exists()
+        assert (dir2 / "file.txt").exists()
+
+    def test_run_with_dry_run_flag(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+        """Test that run() with --dry-run shows message and doesn't modify files."""
+        import argparse
+
+        test_dir = tmp_path / "test"
+        test_dir.mkdir()
+
+        # Create file with wrong permissions
+        test_file = test_dir / "TEST.TXT"
+        test_file.write_text("content")
+        test_file.chmod(0o777)
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        args = argparse.Namespace(
+            directories=[str(test_dir)],
+            dry_run=True,
+            user=current_user,
+            group=current_group,
+            use_exif=False,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+        # Verify DRY-RUN message in output
+        captured = capsys.readouterr()
+        assert "DRY-RUN" in captured.out
+
+        # Verify no actual changes were made
+        assert test_file.exists()  # Original uppercase file still exists
+        assert stat.S_IMODE(test_file.stat().st_mode) == 0o777  # Permissions unchanged
+
+    def test_run_returns_error_code_on_failure(self, tmp_path: Path) -> None:
+        """Test that run() returns 1 when processing fails."""
+        import argparse
+
+        test_dir = tmp_path / "test"
+        test_dir.mkdir()
+
+        test_file = test_dir / "test.txt"
+        test_file.touch()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        args = argparse.Namespace(
+            directories=[str(test_dir)],
+            dry_run=False,
+            user=current_user,
+            group=current_group,
+            use_exif=False,
+        )
+
+        # Mock process_directory to return False (indicating failure)
+        with patch("photos_manager.prepare.process_directory", return_value=False):
+            exit_code = run(args)
+
+        assert exit_code == 1
+
+    def test_run_with_use_exif_flag(self, tmp_path: Path) -> None:
+        """Test that run() with --use-exif checks EXIF libraries."""
+        import argparse
+
+        test_dir = tmp_path / "test"
+        test_dir.mkdir()
+
+        args = argparse.Namespace(
+            directories=[str(test_dir)],
+            dry_run=True,
+            user="storage",
+            group="storage",
+            use_exif=True,
+        )
+
+        with (
+            patch("photos_manager.prepare.EXIF_AVAILABLE", False),
+            pytest.raises(SystemExit, match="EXIF libraries not installed"),
+        ):
+            run(args)
+
+    def test_run_processes_permissions_and_names(self, tmp_path: Path) -> None:
+        """Test that run() fixes both permissions and filenames."""
+        import argparse
+
+        test_dir = tmp_path / "test"
+        test_dir.mkdir()
+
+        # Create file with wrong permissions AND uppercase name
+        test_file = test_dir / "MY FILE.TXT"
+        test_file.touch()
+        test_file.chmod(0o777)
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        args = argparse.Namespace(
+            directories=[str(test_dir)],
+            dry_run=False,
+            user=current_user,
+            group=current_group,
+            use_exif=False,
+        )
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+
+        # Verify filename was normalized
+        normalized_file = test_dir / "my_file.txt"
+        assert normalized_file.exists()
+        assert not test_file.exists()
+
+        # Verify permissions were fixed
+        assert stat.S_IMODE(normalized_file.stat().st_mode) == FILE_PERMISSIONS
+
+    def test_run_resolves_directory_paths(self, tmp_path: Path) -> None:
+        """Test that run() resolves directory paths correctly."""
+        import argparse
+
+        test_dir = tmp_path / "test"
+        test_dir.mkdir()
+
+        test_file = test_dir / "test.txt"
+        test_file.touch()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        # Use relative path (if possible)
+        args = argparse.Namespace(
+            directories=[str(test_dir)],
+            dry_run=True,
+            user=current_user,
+            group=current_group,
+            use_exif=False,
+        )
+
+        # Should not raise an error
+        exit_code = run(args)
+        assert exit_code == os.EX_OK
+
+    def test_run_with_exif_processing_enabled(self, tmp_path: Path) -> None:
+        """Test that run() passes use_exif flag to process_directory."""
+        import argparse
+
+        test_dir = tmp_path / "test"
+        test_dir.mkdir()
+
+        test_file = test_dir / "photo.jpg"
+        test_file.touch()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        args = argparse.Namespace(
+            directories=[str(test_dir)],
+            dry_run=True,
+            user=current_user,
+            group=current_group,
+            use_exif=True,
+        )
+
+        with (
+            patch("photos_manager.prepare.EXIF_AVAILABLE", True),
+            patch("photos_manager.prepare.process_directory") as mock_process,
+        ):
+            mock_process.return_value = True
+            exit_code = run(args)
+
+            assert exit_code == os.EX_OK
+            # Verify process_directory was called with use_exif=True
+            assert mock_process.called
+            call_kwargs = mock_process.call_args[1] if mock_process.call_args[1] else {}
+            # Check positional argument (5th argument is use_exif)
+            if len(mock_process.call_args[0]) >= 5:
+                assert mock_process.call_args[0][4] is True
+            else:
+                assert call_kwargs.get("use_exif") is True
+
+    def test_run_handles_mixed_success_and_failure(self, tmp_path: Path) -> None:
+        """Test that run() returns error if any directory fails."""
+        import argparse
+
+        dir1 = tmp_path / "dir1"
+        dir1.mkdir()
+
+        dir2 = tmp_path / "dir2"
+        dir2.mkdir()
+
+        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_group = grp.getgrgid(os.getgid()).gr_name
+
+        args = argparse.Namespace(
+            directories=[str(dir1), str(dir2)],
+            dry_run=False,
+            user=current_user,
+            group=current_group,
+            use_exif=False,
+        )
+
+        # Mock to return success for first dir, failure for second
+        call_count = [0]
+
+        def mock_process(*_args: Any, **_kwargs: Any) -> bool:
+            call_count[0] += 1
+            return call_count[0] == 1  # True for first call, False for second
+
+        with patch("photos_manager.prepare.process_directory", side_effect=mock_process):
+            exit_code = run(args)
+
+        # Should return error code since one directory failed
+        assert exit_code == 1
+
+
 class TestProcessExifTimestamps:
     """Tests for _process_exif_timestamps function."""
 
