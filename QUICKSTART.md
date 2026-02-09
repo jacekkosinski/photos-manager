@@ -29,7 +29,7 @@ poetry run pre-commit install
 poetry run photos --help
 poetry run photos index --help
 poetry run photos manifest --help
-poetry run photos setmtime --help
+poetry run photos fixdates --help
 poetry run photos verify --help
 poetry run photos prepare --help
 poetry run photos sync --help
@@ -101,7 +101,7 @@ photos-manager-cli/
 │   ├── index.py        # Generate file metadata JSON
 │   ├── manifest.py     # Generate archive manifest
 │   ├── prepare.py       # Fix permissions and filenames
-│   ├── setmtime.py      # Update file timestamps
+│   ├── fixdates.py      # Update file timestamps
 │   ├── sync.py          # Synchronization tool
 │   └── verify.py        # Verify archive integrity
 ├── tests/               # Test files (508 tests)
@@ -111,7 +111,7 @@ photos-manager-cli/
 │   ├── test_index.py
 │   ├── test_manifest.py
 │   ├── test_prepare.py
-│   ├── test_setmtime.py
+│   ├── test_fixdates.py
 │   ├── test_sync.py
 │   └── test_verify.py
 ├── Makefile             # Development commands
@@ -140,16 +140,16 @@ photos verify /photos --all --check-timestamps
 
 ```bash
 # After copying files from backup, timestamps may be wrong
-# Use setmtime to restore original timestamps
+# Use fixdates to restore original timestamps
 
 # Preview changes first
-photos setmtime /photos/2024.json --dry-run
+photos fixdates /photos/2024.json --dry-run
 
 # Update directory timestamps only (fast)
-photos setmtime /photos/2024.json
+photos fixdates /photos/2024.json
 
 # Update all file and directory timestamps
-photos setmtime /photos/2024.json --all
+photos fixdates /photos/2024.json --all
 ```
 
 ### Merge multiple photo directories

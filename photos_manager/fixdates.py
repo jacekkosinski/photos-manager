@@ -1,18 +1,18 @@
-"""setmtime - Set file and directory timestamps based on JSON metadata.
+"""fixdates - Fix file and directory timestamps based on JSON metadata.
 
 This script updates modification timestamps of files and directories to match
 the timestamps stored in JSON metadata files (created by index). It can:
-- Update file timestamps to match the 'date' field in JSON metadata
-- Update directory timestamps to match the newest file in each directory
-- Update JSON file timestamps to match the newest file it describes
+- Fix file timestamps to match the 'date' field in JSON metadata
+- Fix directory timestamps to match the newest file in each directory
+- Fix JSON file timestamps to match the newest file it describes
 
-This is useful for ensuring filesystem timestamps match the actual photo dates
+This is useful for fixing filesystem timestamps to match the actual photo dates
 after copying or restoring files from archives.
 
 Usage:
-    photos setmtime archive1.json
-    photos setmtime archive1.json archive2.json --all
-    photos setmtime archive.json --dry-run
+    photos fixdates archive1.json
+    photos fixdates archive1.json archive2.json --all
+    photos fixdates archive.json --dry-run
 """
 
 import argparse
@@ -297,12 +297,12 @@ def set_json_timestamps(
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
-    """Configure argument parser for setmtime command.
+    """Configure argument parser for fixdates command.
 
-    Adds all command-line arguments for the setmtime tool to the provided parser.
+    Adds all command-line arguments for the fixdates tool to the provided parser.
 
     Args:
-        parser: ArgumentParser instance to configure with setmtime arguments.
+        parser: ArgumentParser instance to configure with fixdates arguments.
     """
     parser.add_argument(
         "json_files", nargs="+", help="One or more JSON files containing file metadata"
@@ -322,7 +322,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    """Execute setmtime command with parsed arguments.
+    """Execute fixdates command with parsed arguments.
 
     Processes each JSON file and coordinates timestamp updates for files,
     directories, and JSON metadata files based on the newest file information.

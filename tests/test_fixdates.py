@@ -1,4 +1,4 @@
-"""Tests for setmtime module."""
+"""Tests for fixdates module."""
 
 import argparse
 import json
@@ -11,7 +11,7 @@ import pytest
 from _pytest.capture import CaptureFixture
 
 from photos_manager.common import load_json
-from photos_manager.setmtime import (
+from photos_manager.fixdates import (
     get_newest_files,
     run,
     set_dirs_timestamps,

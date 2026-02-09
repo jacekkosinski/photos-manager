@@ -5,7 +5,7 @@ This is the main entry point for the photos-manager CLI suite, providing
 a unified interface to all photo management commands:
 - index: Generate JSON file with file metadata
 - manifest: Generate archive version information
-- setmtime: Update file timestamps based on metadata
+- fixdates: Fix file and directory dates to match JSON metadata
 - verify: Verify archive integrity
 - sync: Synchronize source and destination archives
 - prepare: Prepare directories for archiving (fix permissions, ownership, filenames)
@@ -14,7 +14,7 @@ a unified interface to all photo management commands:
 Usage:
     photos index /path/to/directory
     photos manifest /path/to/archive
-    photos setmtime archive.json
+    photos fixdates archive.json
     photos verify /path/to/archive
     photos sync /source/archive /dest/archive
     photos prepare /path/to/directory --dry-run
@@ -25,7 +25,7 @@ import argparse
 import sys
 from typing import cast
 
-from photos_manager import __version__, dedup, index, manifest, prepare, setmtime, sync, verify
+from photos_manager import __version__, dedup, fixdates, index, manifest, prepare, sync, verify
 
 
 def main() -> int:
@@ -43,7 +43,7 @@ def main() -> int:
     Examples:
         $ photos index /path/to/photos
         $ photos manifest /path/to/archive --output version.json
-        $ photos setmtime archive.json --all
+        $ photos fixdates archive.json --all
         $ photos verify /path/to/archive --all --check-timestamps
     """
     # Create main parser
@@ -87,14 +87,14 @@ def main() -> int:
     manifest.setup_parser(manifest_parser)
     manifest_parser.set_defaults(func=manifest.run)
 
-    # setmtime subcommand
-    setmtime_parser = subparsers.add_parser(
-        "setmtime",
-        help="Update file timestamps based on metadata",
-        description="Set file and directory timestamps based on JSON metadata",
+    # fixdates subcommand
+    fixdates_parser = subparsers.add_parser(
+        "fixdates",
+        help="Fix file and directory dates to match JSON metadata",
+        description="Fix file and directory timestamps to match JSON metadata",
     )
-    setmtime.setup_parser(setmtime_parser)
-    setmtime_parser.set_defaults(func=setmtime.run)
+    fixdates.setup_parser(fixdates_parser)
+    fixdates_parser.set_defaults(func=fixdates.run)
 
     # verify subcommand
     verify_parser = subparsers.add_parser(

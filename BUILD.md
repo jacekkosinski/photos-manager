@@ -363,7 +363,7 @@ After building, test the binary:
 # Test each subcommand
 ./dist/photos index --help
 ./dist/photos manifest --help
-./dist/photos setmtime --help
+./dist/photos fixdates --help
 ./dist/photos verify --help
 
 # Run actual commands

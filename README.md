@@ -62,7 +62,7 @@ photos <command> [options]
 
 - `index` - Generate JSON file with file metadata
 - `manifest` - Generate archive version information
-- `setmtime` - Update file timestamps based on metadata
+- `fixdates` - Update file timestamps based on metadata
 - `verify` - Verify archive integrity
 - `prepare` - Fix permissions and normalize filenames
 - `sync` - Synchronize archives
@@ -77,7 +77,7 @@ photos --help
 # Get help for specific command
 photos index --help
 photos manifest --help
-photos setmtime --help
+photos fixdates --help
 photos verify --help
 ```
 
@@ -148,23 +148,23 @@ photos manifest /path/to/archive -o .version.json
 - TB: Total size in terabytes (3 decimal places)
 - count%1000: Last three digits of total file count
 
-### setmtime - Update File Timestamps
+### fixdates - Update File Timestamps
 
 Update file and directory modification timestamps based on JSON metadata
 (created by index).
 
 ```bash
 # Preview changes without applying them
-photos setmtime photos.json --dry-run
+photos fixdates photos.json --dry-run
 
 # Update directory timestamps only (default)
-photos setmtime photos.json
+photos fixdates photos.json
 
 # Update all file timestamps plus directories
-photos setmtime photos.json --all
+photos fixdates photos.json --all
 
 # Process multiple JSON files
-photos setmtime archive1.json archive2.json --all
+photos fixdates archive1.json archive2.json --all
 ```
 
 **What it updates:**
@@ -260,16 +260,16 @@ diff original.json current.json
 
 ```bash
 # After copying files from backup/archive, their timestamps may be wrong
-# Use setmtime to restore original timestamps from metadata
+# Use fixdates to restore original timestamps from metadata
 
 # Preview what will be changed
-photos setmtime /photos/restored/2024.json --dry-run
+photos fixdates /photos/restored/2024.json --dry-run
 
 # Update directory timestamps only
-photos setmtime /photos/restored/2024.json
+photos fixdates /photos/restored/2024.json
 
 # Update all file and directory timestamps
-photos setmtime /photos/restored/2024.json --all
+photos fixdates /photos/restored/2024.json --all
 ```
 
 ## Setup Pre-commit Hooks
@@ -299,7 +299,7 @@ photos-manager-cli/
 │   ├── index.py           # Generate file metadata JSON
 │   ├── manifest.py       # Generate archive version info
 │   ├── prepare.py         # Fix permissions and filenames
-│   ├── setmtime.py        # Update file timestamps from metadata
+│   ├── fixdates.py        # Update file timestamps from metadata
 │   ├── sync.py            # Synchronization tool
 │   └── verify.py          # Verify archive integrity
 ├── tests/                 # 508 tests, 86.15% coverage
@@ -309,7 +309,7 @@ photos-manager-cli/
 │   ├── test_index.py
 │   ├── test_manifest.py
 │   ├── test_prepare.py    # 117 tests
-│   ├── test_setmtime.py
+│   ├── test_fixdates.py
 │   ├── test_sync.py
 │   └── test_verify.py
 ├── pyproject.toml         # Project configuration
@@ -331,14 +331,14 @@ command:
 # Using Poetry
 poetry run photos index /path/to/photos
 poetry run photos manifest /path/to/archive
-poetry run photos setmtime /path/to/photos.json
+poetry run photos fixdates /path/to/photos.json
 poetry run photos verify /path/to/archive
 
 # Or after activating the virtual environment
 poetry shell
 photos index /path/to/photos
 photos manifest /path/to/archive
-photos setmtime /path/to/photos.json
+photos fixdates /path/to/photos.json
 photos verify /path/to/archive --all
 ```
 
@@ -349,7 +349,7 @@ For backward compatibility, individual commands are still available:
 ```bash
 index /path/to/photos
 manifest /path/to/archive
-setmtime /path/to/photos.json
+fixdates /path/to/photos.json
 verify /path/to/archive --all
 ```
 

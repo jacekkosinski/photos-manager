@@ -54,7 +54,7 @@ class TestMainFunction:
         assert "photos" in captured.out
         assert "index" in captured.out
         assert "manifest" in captured.out
-        assert "setmtime" in captured.out
+        assert "fixdates" in captured.out
         assert "verify" in captured.out
 
 
@@ -140,13 +140,13 @@ class TestManifestSubcommand:
             mock_run.assert_called_once()
 
 
-class TestSetmtimeSubcommand:
-    """Tests for setmtime subcommand."""
+class TestFixdatesSubcommand:
+    """Tests for fixdates subcommand."""
 
-    def test_setmtime_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that setmtime subcommand delegates to setmtime.run()."""
-        with patch("photos_manager.setmtime.run", return_value=0) as mock_run:
-            monkeypatch.setattr(sys, "argv", ["photos", "setmtime", "archive.json"])
+    def test_fixdates_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that fixdates subcommand delegates to fixdates.run()."""
+        with patch("photos_manager.fixdates.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "fixdates", "archive.json"])
 
             exit_code = main()
 
@@ -156,24 +156,24 @@ class TestSetmtimeSubcommand:
             assert isinstance(args, argparse.Namespace)
             assert args.json_files == ["archive.json"]
 
-    def test_setmtime_with_help_flag(
+    def test_fixdates_with_help_flag(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test that setmtime --help displays help message."""
-        monkeypatch.setattr(sys, "argv", ["photos", "setmtime", "--help"])
+        """Test that fixdates --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "fixdates", "--help"])
 
         with pytest.raises(SystemExit) as exc_info:
             main()
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        assert "setmtime" in captured.out
+        assert "fixdates" in captured.out
         assert "timestamp" in captured.out.lower() or "mtime" in captured.out.lower()
 
-    def test_setmtime_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test that setmtime returns error code when run() fails."""
-        with patch("photos_manager.setmtime.run", return_value=1) as mock_run:
-            monkeypatch.setattr(sys, "argv", ["photos", "setmtime", "archive.json"])
+    def test_fixdates_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that fixdates returns error code when run() fails."""
+        with patch("photos_manager.fixdates.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "fixdates", "archive.json"])
 
             exit_code = main()
 

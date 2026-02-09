@@ -10,7 +10,7 @@ utilities for indexing, verification, synchronization, and preparation:
 
 - **index** - Generate JSON metadata with checksums, sizes, and timestamps
 - **manifest** - Aggregate metadata into version summaries
-- **setmtime** - Restore timestamps from metadata
+- **fixdates** - Restore timestamps from metadata
 - **verify** - Verify archive integrity against metadata
 - **prepare** - Fix permissions and normalize filenames
 - **sync** - Synchronize archives
@@ -96,7 +96,7 @@ make check-all
 # Using Poetry
 poetry run index /path/to/photos
 poetry run manifest /path/to/archive
-poetry run setmtime /path/to/photos.json
+poetry run fixdates /path/to/photos.json
 poetry run verify /path/to/archive
 poetry run prepare /path/to/directory --dry-run
 poetry run sync /source/archive /dest/archive
@@ -106,7 +106,7 @@ poetry run dedup archive.json /path/to/scan
 poetry shell
 index /path/to/photos
 manifest /path/to/archive
-setmtime /path/to/photos.json --dry-run
+fixdates /path/to/photos.json --dry-run
 verify /path/to/archive --all
 prepare /path/to/directory --dry-run
 sync /source/archive /dest/archive
@@ -129,7 +129,7 @@ Typical archive management workflow:
 1. **index** - Scan directory, generate JSON metadata files
 1. **manifest** - Aggregate JSON files into .version.json manifest
 1. **verify** - Validate archive integrity against metadata
-1. **setmtime** - Restore timestamps from metadata (after copying from archive)
+1. **fixdates** - Restore timestamps from metadata (after copying from archive)
 
 JSON format: Each file entry contains `path`, `sha1`, `md5`, `date`, `size`.
 
@@ -144,7 +144,7 @@ photos_manager/
 ├── index.py           # Directory scanner and metadata generator
 ├── manifest.py       # Version aggregator for JSON files
 ├── prepare.py         # Directory preparation (permissions, naming)
-├── setmtime.py        # Timestamp updater based on metadata
+├── fixdates.py        # Timestamp updater based on metadata
 ├── sync.py            # Synchronization tool
 └── verify.py          # Archive integrity verifier
 
@@ -155,7 +155,7 @@ tests/                 # 508 tests total
 ├── test_index.py
 ├── test_manifest.py
 ├── test_prepare.py
-├── test_setmtime.py
+├── test_fixdates.py
 ├── test_sync.py
 └── test_verify.py
 ```
@@ -250,4 +250,4 @@ The JSON format produced by index contains:
 - `size`: File size in bytes (integer)
 
 This structure is validated by manifest (expects all five fields) and used by
-setmtime (requires `path` and `date` fields).
+fixdates (requires `path` and `date` fields).
