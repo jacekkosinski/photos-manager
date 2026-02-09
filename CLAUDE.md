@@ -16,6 +16,22 @@ utilities for indexing, verification, synchronization, and preparation:
 - **sync** - Synchronize archives
 - **dedup** - Deduplicate files
 
+## Requirements
+
+- Python 3.12+
+- Poetry (recommended) or pip
+- Optional: EXIF libraries (piexif, Pillow) for prepare --use-exif
+
+Quick install:
+
+```bash
+# Install Poetry
+curl -sSL https://install.python-poetry.org | python3 -
+
+# Install with EXIF support
+poetry install --extras exif
+```
+
 ## Development Commands
 
 ### Setup
@@ -43,6 +59,9 @@ poetry run pytest
 
 # Run specific test file
 poetry run pytest tests/test_prepare.py
+
+# Run specific test class
+poetry run pytest tests/test_prepare.py::TestRunIntegration -v
 
 # Run with verbose output
 poetry run pytest -v
@@ -102,6 +121,17 @@ All utilities are standalone scripts following unified implementation style:
 - Comprehensive Google-style docstrings
 - Complete argument validation with clear error messages
 - Designed to be called as CLI tools or imported as modules
+
+### Tool Workflow
+
+Typical archive management workflow:
+
+1. **index** - Scan directory, generate JSON metadata files
+1. **manifest** - Aggregate JSON files into .version.json manifest
+1. **verify** - Validate archive integrity against metadata
+1. **setmtime** - Restore timestamps from metadata (after copying from archive)
+
+JSON format: Each file entry contains `path`, `sha1`, `md5`, `date`, `size`.
 
 ### Project Structure
 
@@ -180,6 +210,19 @@ All commits in this repository should follow these guidelines:
 - **NO AI attribution**: Do not include references to AI assistants, Claude, or
   similar attribution in commit messages
 - **Co-Authored-By**: Do not add Co-Authored-By tags for AI assistants
+
+## Common Gotchas
+
+- **prepare --use-exif**: Requires EXIF libraries. Install with
+  `pip install photos-manager-cli[exif]`
+- **Version files**: Use `.version.json` pattern - these are excluded from
+  manifest processing
+- **Skipped tests**: 4 EXIF tests skip when piexif/Pillow not installed (this is
+  expected)
+- **Permissions**: prepare module operations may require appropriate user/group
+  permissions
+- **Case sensitivity**: prepare module handles case-insensitive filesystems
+  (macOS) correctly
 
 ## Common Patterns
 
