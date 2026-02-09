@@ -46,7 +46,7 @@ docstring-badge: ## Generate docstring coverage badge
 	poetry run interrogate -v --generate-badge . photos_manager/
 
 complexity: ## Check code complexity with xenon
-	poetry run python -m xenon --max-absolute=D --max-modules=B --max-average=B photos_manager/
+	poetry run xenon --max-absolute=D --max-modules=B --max-average=B photos_manager/
 
 pre-commit: ## Run all pre-commit hooks
 	poetry run pre-commit run --all-files
