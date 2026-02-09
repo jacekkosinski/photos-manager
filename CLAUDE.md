@@ -35,7 +35,7 @@ pre-commit install
 
 ### Testing
 
-The project has comprehensive test coverage with 508 tests (86.15% coverage).
+The project has comprehensive test coverage with 508 tests.
 
 ```bash
 # Run all tests with coverage
@@ -79,6 +79,9 @@ poetry run index /path/to/photos
 poetry run manifest /path/to/archive
 poetry run setmtime /path/to/photos.json
 poetry run verify /path/to/archive
+poetry run prepare /path/to/directory --dry-run
+poetry run sync /source/archive /dest/archive
+poetry run dedup archive.json /path/to/scan
 
 # Or after activating virtual environment
 poetry shell
@@ -86,6 +89,9 @@ index /path/to/photos
 manifest /path/to/archive
 setmtime /path/to/photos.json --dry-run
 verify /path/to/archive --all
+prepare /path/to/directory --dry-run
+sync /source/archive /dest/archive
+dedup archive.json /path/to/scan -d -m
 ```
 
 ## Architecture
@@ -112,13 +118,13 @@ photos_manager/
 ├── sync.py            # Synchronization tool
 └── verify.py          # Archive integrity verifier
 
-tests/                 # 508 tests total, 86.15% coverage
+tests/                 # 508 tests total
 ├── test_cli.py
 ├── test_common.py
 ├── test_dedup.py
 ├── test_index.py
 ├── test_manifest.py
-├── test_prepare.py    # 117 tests, 80.28% coverage
+├── test_prepare.py
 ├── test_setmtime.py
 ├── test_sync.py
 └── test_verify.py
@@ -141,6 +147,7 @@ Pre-commit hooks run automatically on every commit and check:
 - Ruff linting and formatting
 - mypy strict type checking
 - interrogate docstring coverage (>= 80%)
+- Xenon code complexity checks (Radon CI)
 - File checks (trailing whitespace, large files, etc.)
 - Poetry lock file validity
 - Security checks with bandit
@@ -149,11 +156,11 @@ To run manually: `pre-commit run --all-files`
 
 ## Testing Conventions
 
-- Tests use pytest with comprehensive coverage (508 tests, 86.15% overall)
+- Tests use pytest with comprehensive coverage (508 tests)
 - Each module has dedicated test file matching the module name
 - Test structure includes:
   - Unit tests for individual functions
-  - Integration tests for `main()` CLI entry points
+  - Integration tests for `run()` CLI entry points
   - Edge case and error handling tests
 - Coverage is tracked with pytest-cov (reports in htmlcov/)
 - Type checking is relaxed in tests (see mypy overrides in pyproject.toml)
@@ -178,7 +185,7 @@ All commits in this repository should follow these guidelines:
 
 ### Adding a new CLI utility
 
-1. Create `photos_manager/new_tool.py` with `main()` function
+1. Create `photos_manager/new_tool.py` with `run()` function
 1. Add CLI entry point in `pyproject.toml` under `[project.scripts]`
 1. Follow existing patterns from index.py or manifest.py:
    - Use argparse for argument parsing
