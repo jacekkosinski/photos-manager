@@ -211,6 +211,57 @@ All commits in this repository should follow these guidelines:
   similar attribution in commit messages
 - **Co-Authored-By**: Do not add Co-Authored-By tags for AI assistants
 
+## Version Management
+
+This project uses **Commitizen** (`cz`) for automated version bumping and
+CHANGELOG generation.
+
+### Bumping Version
+
+```bash
+# Bump version automatically based on conventional commits
+poetry run cz bump --changelog --increment MINOR   # 0.3.0 → 0.4.0
+poetry run cz bump --changelog --increment PATCH   # 0.3.0 → 0.3.1
+poetry run cz bump --changelog --increment MAJOR   # 0.3.0 → 1.0.0
+
+# Check current version
+poetry run cz version --project
+```
+
+The `cz bump` command will:
+
+1. Analyze commit history using conventional commit format
+1. Determine appropriate version increment
+1. Update version in `photos_manager/__init__.py` and `pyproject.toml`
+1. Generate/update `CHANGELOG.md` with changes since last version
+1. Create a git commit with message: `bump: version X.Y.Z → X.Y.Z+1`
+1. Create an annotated git tag with same message format
+
+### Git Tag Format
+
+All version tags follow the format:
+
+```
+Tag name: v0.4.0
+Tag message: bump: version 0.3.0 → 0.4.0
+```
+
+This format is consistent across all releases (see `git tag -l -n9`).
+
+### Manual Version Update
+
+If `cz bump` fails (e.g., due to pre-commit hook formatting), you can:
+
+1. Let `cz bump` update the files (even if commit fails)
+1. Stage the mdformat-modified CHANGELOG.md: `git add CHANGELOG.md`
+1. Commit manually: `git commit -m "bump: version X → Y"`
+1. Create tag manually: `git tag -a vX.Y.Z -m "bump: version X → Y"`
+
+Always ensure version is synchronized in both:
+
+- `photos_manager/__init__.py` - `__version__ = "X.Y.Z"`
+- `pyproject.toml` - `version = "X.Y.Z"`
+
 ## Common Gotchas
 
 - **prepare --use-exif**: Requires EXIF libraries. Install with
