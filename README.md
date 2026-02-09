@@ -10,7 +10,7 @@ management.
 
 - 🚀 Modern Python 3.12
 - 📝 Type-safe with mypy strict mode
-- ✅ Comprehensive testing with pytest (120 tests, 85.46% coverage)
+- ✅ Comprehensive testing with pytest (508 tests, 86.15% coverage)
 - 📚 Google-style docstrings with interrogate validation
 - 🔧 Pre-commit hooks for code quality
 - 🎯 Linting and formatting with Ruff
@@ -64,6 +64,9 @@ photos <command> [options]
 - `mkversion` - Generate archive version information
 - `setmtime` - Update file timestamps based on metadata
 - `verify` - Verify archive integrity
+- `prepare` - Fix permissions and normalize filenames
+- `sync` - Synchronize archives
+- `dedup` - Deduplicate files
 
 ### Quick Start
 
@@ -289,25 +292,32 @@ architecture details and development patterns.
 ```
 photos-manager-cli/
 ├── photos_manager/
-│   ├── __init__.py          # Package initialization
+│   ├── __init__.py        # Package initialization
+│   ├── cli.py             # Main CLI entry point
+│   ├── common.py          # Shared utilities
+│   ├── dedup.py           # Deduplication tool
 │   ├── index.py           # Generate file metadata JSON
-│   ├── mkversion.py        # Generate archive version info
-│   ├── setmtime.py         # Update file timestamps from metadata
-│   └── verify.py           # Verify archive integrity
-├── tests/
-│   ├── __init__.py
-│   ├── test_index.py      # Tests for index (32 tests)
-│   ├── test_mkversion.py   # Tests for mkversion (19 tests)
-│   ├── test_setmtime.py    # Tests for setmtime (26 tests)
-│   └── test_verify.py      # Tests for verify (43 tests)
-├── pyproject.toml          # Project configuration
+│   ├── mkversion.py       # Generate archive version info
+│   ├── prepare.py         # Fix permissions and filenames
+│   ├── setmtime.py        # Update file timestamps from metadata
+│   ├── sync.py            # Synchronization tool
+│   └── verify.py          # Verify archive integrity
+├── tests/                 # 508 tests, 86.15% coverage
+│   ├── test_cli.py
+│   ├── test_common.py
+│   ├── test_dedup.py
+│   ├── test_index.py
+│   ├── test_mkversion.py
+│   ├── test_prepare.py    # 117 tests
+│   ├── test_setmtime.py
+│   ├── test_sync.py
+│   └── test_verify.py
+├── pyproject.toml         # Project configuration
 ├── .pre-commit-config.yaml # Pre-commit hooks config
-├── .editorconfig           # Editor settings
-├── Makefile                # Development commands
-├── LICENSE                 # MIT License
-├── README.md               # This file
-├── QUICKSTART.md           # Quick start guide
-└── CLAUDE.md               # AI assistant development guide
+├── Makefile               # Development commands
+├── LICENSE                # MIT License
+├── README.md              # This file
+└── CLAUDE.md              # Development guide
 ```
 
 ### Running the Tools
@@ -392,7 +402,7 @@ poetry run interrogate -v --generate-badge . photos_manager/
 
 ### Testing
 
-The project has comprehensive test coverage with 120 tests covering all modules.
+The project has comprehensive test coverage with 508 tests covering all modules.
 
 ```bash
 # Run all tests
@@ -402,26 +412,13 @@ poetry run pytest
 poetry run pytest --cov
 
 # Run specific test file
-poetry run pytest tests/test_index.py
+poetry run pytest tests/test_prepare.py
 
 # Run with verbose output
 poetry run pytest -v
 ```
 
-**Test Coverage:**
-
-- Overall: 85.46%
-- index.py: 95.38%
-- mkversion.py: 96.97%
-- setmtime.py: 84.08%
-- verify.py: 80.15%
-
-**Test Suite:**
-
-- 32 tests for index module
-- 19 tests for mkversion module (including 7 main() integration tests)
-- 26 tests for setmtime module (including 8 main() integration tests)
-- 43 tests for verify module (including 11 main() integration tests)
+**Test Coverage:** 86.15% overall with 508 tests across all modules.
 
 ### Documentation
 
