@@ -1,7 +1,9 @@
 """Tests for verify module."""
 
+import argparse
 import json
 import os
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import cast
@@ -1182,7 +1184,9 @@ class TestValidateVersionFileDates:
 class TestVerifyPermissions:
     """Tests for verify_permissions function."""
 
-    def test_correct_permissions_and_ownership(self, tmp_path: Path) -> None:
+    def test_correct_permissions_and_ownership(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that correct permissions and ownership return no errors."""
         # Create test structure
         test_file = tmp_path / "photos" / "test.jpg"
@@ -1209,13 +1213,7 @@ class TestVerifyPermissions:
         tmp_path.chmod(0o755)
 
         # Get current user and group
-        import grp
-        import pwd
-
-        current_uid = os.getuid()
-        current_gid = os.getgid()
-        current_user = pwd.getpwuid(current_uid).pw_name
-        current_group = grp.getgrgid(current_gid).gr_name
+        current_user, current_group = current_user_and_group
 
         errors = verify_permissions(
             str(tmp_path), [str(json_file)], None, data, current_user, current_group
@@ -1223,7 +1221,9 @@ class TestVerifyPermissions:
 
         assert errors == {}
 
-    def test_detects_incorrect_file_permissions(self, tmp_path: Path) -> None:
+    def test_detects_incorrect_file_permissions(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that incorrect file permissions are detected."""
         test_file = tmp_path / "test.jpg"
         test_file.write_bytes(b"Test")
@@ -1231,13 +1231,7 @@ class TestVerifyPermissions:
         # Set incorrect permissions (755 instead of 644)
         test_file.chmod(0o755)
 
-        import grp
-        import pwd
-
-        current_uid = os.getuid()
-        current_gid = os.getgid()
-        current_user = pwd.getpwuid(current_uid).pw_name
-        current_group = grp.getgrgid(current_gid).gr_name
+        current_user, current_group = current_user_and_group
 
         data: list[dict[str, str | int]] = [
             {"path": str(test_file), "size": 4, "sha1": "abc", "md5": "def"}
@@ -1248,7 +1242,9 @@ class TestVerifyPermissions:
         assert str(test_file) in errors
         assert any(issue_type == "permissions" for issue_type, _ in errors[str(test_file)])
 
-    def test_detects_incorrect_directory_permissions(self, tmp_path: Path) -> None:
+    def test_detects_incorrect_directory_permissions(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that incorrect directory permissions are detected."""
         test_dir = tmp_path / "photos"
         test_dir.mkdir()
@@ -1260,13 +1256,7 @@ class TestVerifyPermissions:
         # Set incorrect directory permissions (644 instead of 755)
         test_dir.chmod(0o644)
 
-        import grp
-        import pwd
-
-        current_uid = os.getuid()
-        current_gid = os.getgid()
-        current_user = pwd.getpwuid(current_uid).pw_name
-        current_group = grp.getgrgid(current_gid).gr_name
+        current_user, current_group = current_user_and_group
 
         data: list[dict[str, str | int]] = [
             {"path": str(test_file), "size": 4, "sha1": "abc", "md5": "def"}
@@ -1280,7 +1270,9 @@ class TestVerifyPermissions:
         assert str(test_dir) in errors
         assert any(issue_type == "permissions" for issue_type, _ in errors[str(test_dir)])
 
-    def test_handles_nonexistent_file(self, tmp_path: Path) -> None:
+    def test_handles_nonexistent_file(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that nonexistent files are handled gracefully."""
         # Create subdirectory with correct permissions
         photos_dir = tmp_path / "photos"
@@ -1290,13 +1282,7 @@ class TestVerifyPermissions:
 
         nonexistent = photos_dir / "nonexistent.jpg"
 
-        import grp
-        import pwd
-
-        current_uid = os.getuid()
-        current_gid = os.getgid()
-        current_user = pwd.getpwuid(current_uid).pw_name
-        current_group = grp.getgrgid(current_gid).gr_name
+        current_user, current_group = current_user_and_group
 
         data: list[dict[str, str | int]] = [
             {"path": str(nonexistent), "size": 4, "sha1": "abc", "md5": "def"}
@@ -1307,7 +1293,9 @@ class TestVerifyPermissions:
         # Nonexistent files should not generate errors (just skipped)
         assert errors == {}
 
-    def test_checks_version_file_permissions(self, tmp_path: Path) -> None:
+    def test_checks_version_file_permissions(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that version file permissions are checked."""
         version_file = tmp_path / ".version.json"
         version_file.write_text(json.dumps({"version": "test"}))
@@ -1315,13 +1303,7 @@ class TestVerifyPermissions:
         # Set incorrect permissions
         version_file.chmod(0o755)
 
-        import grp
-        import pwd
-
-        current_uid = os.getuid()
-        current_gid = os.getgid()
-        current_user = pwd.getpwuid(current_uid).pw_name
-        current_group = grp.getgrgid(current_gid).gr_name
+        current_user, current_group = current_user_and_group
 
         errors = verify_permissions(
             str(tmp_path), [], str(version_file), [], current_user, current_group
@@ -1330,7 +1312,9 @@ class TestVerifyPermissions:
         assert str(version_file) in errors
         assert any(issue_type == "permissions" for issue_type, _ in errors[str(version_file)])
 
-    def test_checks_json_file_permissions(self, tmp_path: Path) -> None:
+    def test_checks_json_file_permissions(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that JSON file permissions are checked."""
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps([]))
@@ -1338,13 +1322,7 @@ class TestVerifyPermissions:
         # Set incorrect permissions
         json_file.chmod(0o600)
 
-        import grp
-        import pwd
-
-        current_uid = os.getuid()
-        current_gid = os.getgid()
-        current_user = pwd.getpwuid(current_uid).pw_name
-        current_group = grp.getgrgid(current_gid).gr_name
+        current_user, current_group = current_user_and_group
 
         errors = verify_permissions(
             str(tmp_path), [str(json_file)], None, [], current_user, current_group
@@ -1425,10 +1403,12 @@ class TestRun:
     """Integration tests for run() function."""
 
     def test_run_verifies_basic_archive(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() verifies a basic archive successfully."""
-        import argparse
 
         # Create test files
         test_dir = tmp_path / "archive"
@@ -1451,18 +1431,7 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir))
 
         exit_code = run(args)
 
@@ -1471,10 +1440,12 @@ class TestRun:
         assert "verified successfully" in captured.out.lower() or "ok" in captured.out.lower()
 
     def test_run_detects_missing_file(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() detects missing files."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1492,18 +1463,7 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir))
 
         exit_code = run(args)
 
@@ -1511,9 +1471,13 @@ class TestRun:
         captured = capsys.readouterr()
         assert "missing" in captured.out.lower() or "not found" in captured.out.lower()
 
-    def test_run_with_all_flag(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_run_with_all_flag(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
+    ) -> None:
         """Test that run() with --all verifies checksums."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1534,28 +1498,19 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=True,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir), all=True)
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
 
     def test_run_detects_size_mismatch(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() detects file size mismatches."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1576,18 +1531,7 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir))
 
         exit_code = run(args)
 
@@ -1596,10 +1540,12 @@ class TestRun:
         assert "size" in captured.out.lower()
 
     def test_run_with_version_file(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() verifies version file if present."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1632,28 +1578,19 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir))
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
 
     def test_run_with_check_timestamps(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() with --check-timestamps verifies mtimes."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1689,39 +1626,17 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=True,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir), check_timestamps=True)
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
 
-    def test_run_with_nonexistent_directory(self) -> None:
+    def test_run_with_nonexistent_directory(
+        self, verify_args: Callable[..., argparse.Namespace]
+    ) -> None:
         """Test that run() handles nonexistent directory."""
-        import argparse
-
-        args = argparse.Namespace(
-            directory="/nonexistent/directory",
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory="/nonexistent/directory")
 
         with pytest.raises(SystemExit) as exc_info:
             run(args)
@@ -1729,10 +1644,12 @@ class TestRun:
         assert "does not exist" in str(exc_info.value).lower()
 
     def test_run_with_verbose_flag(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() with --verbose shows detailed output."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1752,26 +1669,19 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=True,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir), verbose=True)
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
 
-    def test_run_with_quiet_flag(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_run_with_quiet_flag(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
+    ) -> None:
         """Test that run() with --quiet suppresses normal output."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1791,26 +1701,19 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=True,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir), quiet=True)
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
 
-    def test_run_with_empty_json(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_run_with_empty_json(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
+    ) -> None:
         """Test that run() handles empty JSON files."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1819,28 +1722,19 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text("[]")
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir))
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
 
     def test_run_with_check_extra_files(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() with --check-extra-files detects extra files."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1866,18 +1760,7 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=True,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir), check_extra_files=True)
 
         exit_code = run(args)
 
@@ -1887,10 +1770,12 @@ class TestRun:
         assert "extra" in captured.out.lower()
 
     def test_run_multiple_json_files(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() processes multiple JSON metadata files."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1929,18 +1814,7 @@ class TestRun:
         ]
         (test_dir / "metadata2.json").write_text(json.dumps(data2))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir))
 
         exit_code = run(args)
 
@@ -1949,10 +1823,12 @@ class TestRun:
         assert "metadata1.json" in captured.out or "2" in captured.out
 
     def test_run_detects_checksum_mismatch(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() with --all detects checksum mismatches."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1972,18 +1848,7 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=True,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir), all=True)
 
         exit_code = run(args)
 
@@ -1992,10 +1857,12 @@ class TestRun:
         assert "sha1" in captured.out.lower() or "checksum" in captured.out.lower()
 
     def test_run_detects_timestamp_errors_with_version_file(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() detects timestamp mismatches when checking timestamps."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -2033,18 +1900,7 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=True,
-            tolerance=1,  # 1 second tolerance won't be enough
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir), check_timestamps=True, tolerance=1)
 
         exit_code = run(args)
 
@@ -2054,10 +1910,12 @@ class TestRun:
         assert "timestamp" in captured.err.lower() or "mtime" in captured.err.lower()
 
     def test_run_with_check_timestamps_but_no_version_file(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() reports error when checking timestamps without version file."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -2079,18 +1937,7 @@ class TestRun:
 
         # No version file created
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=True,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir), check_timestamps=True)
 
         exit_code = run(args)
 
@@ -2100,10 +1947,12 @@ class TestRun:
         assert "version file" in captured.err.lower() and "not found" in captured.err.lower()
 
     def test_run_detects_multiple_extra_files(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() detects extra JSON files, regular files, and missing files."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -2154,18 +2003,7 @@ class TestRun:
         extra_json = test_dir / "extra_metadata.json"
         extra_json.write_text("[]")
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=True,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir), check_extra_files=True)
 
         exit_code = run(args)
 
@@ -2177,10 +2015,12 @@ class TestRun:
         assert "missing" in output.lower()
 
     def test_run_with_check_extra_files_but_no_version_file(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() reports error when checking extra files without version file."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -2203,18 +2043,7 @@ class TestRun:
 
         # No version file
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=True,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir), check_extra_files=True)
 
         exit_code = run(args)
 
@@ -2224,10 +2053,12 @@ class TestRun:
         assert "version file" in captured.err.lower() and "not found" in captured.err.lower()
 
     def test_run_detects_version_file_hash_mismatch(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() detects when JSON file hash doesn't match version file."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -2260,18 +2091,7 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir))
 
         exit_code = run(args)
 
@@ -2281,10 +2101,12 @@ class TestRun:
         assert "hash" in captured.err.lower() or "mismatch" in captured.err.lower()
 
     def test_run_detects_version_file_totals_mismatch(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() detects when totals in version file don't match actual data."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -2317,18 +2139,7 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = argparse.Namespace(
-            directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
-            check_permissions=False,
-            owner=None,
-            group=None,
-        )
+        args = verify_args(directory=str(test_dir))
 
         exit_code = run(args)
 
@@ -2339,10 +2150,12 @@ class TestRun:
         assert "bytes mismatch" in output.lower() or "count mismatch" in output.lower()
 
     def test_run_with_check_permissions(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
     ) -> None:
         """Test that run() with --check-permissions verifies file permissions."""
-        import argparse
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -2366,14 +2179,8 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(
+        args = verify_args(
             directory=str(test_dir),
-            all=False,
-            check_timestamps=False,
-            tolerance=2,
-            verbose=False,
-            quiet=False,
-            check_extra_files=False,
             check_permissions=True,
             owner="nonexistent_user",
             group="nonexistent_group",

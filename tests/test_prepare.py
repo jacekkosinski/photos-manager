@@ -1,6 +1,6 @@
 """Tests for prepare module."""
 
-import grp
+import grp  # noqa: F401
 import os
 import pwd
 import stat
@@ -195,13 +195,14 @@ class TestCheckDirPermissions:
 class TestCheckOwnership:
     """Tests for check_ownership function."""
 
-    def test_correct_ownership_returns_true(self, tmp_path: Path) -> None:
+    def test_correct_ownership_returns_true(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that files with correct ownership return True."""
         test_file = tmp_path / "test.txt"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         is_ok, user, group = check_ownership(test_file, current_user, current_group)
 
@@ -470,65 +471,70 @@ class TestRenameToNormalized:
 class TestProcessDirectory:
     """Tests for process_directory function."""
 
-    def test_returns_success_on_no_errors(self, tmp_path: Path) -> None:
+    def test_returns_success_on_no_errors(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that processing returns True when no errors occur."""
         test_file = tmp_path / "test.txt"
         test_file.touch()
         test_file.chmod(FILE_PERMISSIONS)
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         result = process_directory(tmp_path, current_user, current_group, dry_run=True)
 
         assert result is True
 
-    def test_fixes_file_permissions(self, tmp_path: Path) -> None:
+    def test_fixes_file_permissions(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that file permissions are fixed."""
         test_file = tmp_path / "test.txt"
         test_file.touch()
         test_file.chmod(0o777)
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         process_directory(tmp_path, current_user, current_group, dry_run=False)
 
         assert stat.S_IMODE(test_file.stat().st_mode) == FILE_PERMISSIONS
 
-    def test_fixes_directory_permissions(self, tmp_path: Path) -> None:
+    def test_fixes_directory_permissions(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that directory permissions are fixed."""
         subdir = tmp_path / "subdir"
         subdir.mkdir()
         subdir.chmod(0o700)
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         process_directory(tmp_path, current_user, current_group, dry_run=False)
 
         assert stat.S_IMODE(subdir.stat().st_mode) == DIR_PERMISSIONS
 
-    def test_renames_uppercase_files(self, tmp_path: Path) -> None:
+    def test_renames_uppercase_files(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that uppercase files are renamed."""
         test_file = tmp_path / "TEST.TXT"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         process_directory(tmp_path, current_user, current_group, dry_run=False)
 
         assert (tmp_path / "test.txt").exists()
         assert not test_file.exists()
 
-    def test_converts_spaces_to_underscores(self, tmp_path: Path) -> None:
+    def test_converts_spaces_to_underscores(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that spaces in filenames are converted to underscores."""
         test_file = tmp_path / "my file.txt"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         process_directory(tmp_path, current_user, current_group, dry_run=False)
 
@@ -559,12 +565,14 @@ class TestErrorHandling:
         assert is_ok is False
         assert user.isdigit()
 
-    def test_check_ownership_unknown_gid(self, tmp_path: Path) -> None:
+    def test_check_ownership_unknown_gid(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test check_ownership handles unknown gid gracefully."""
         test_file = tmp_path / "test.txt"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_user, _ = current_user_and_group
 
         with patch("photos_manager.prepare.grp.getgrgid", side_effect=KeyError("gid")):
             is_ok, _user, group = check_ownership(test_file, current_user, "somegroup")
@@ -614,13 +622,13 @@ class TestErrorHandling:
         assert "not found" in captured.err
 
     def test_fix_ownership_nonexistent_group(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
     ) -> None:
         """Test fix_ownership with nonexistent group."""
         test_file = tmp_path / "test.txt"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
+        current_user, _ = current_user_and_group
 
         result = fix_ownership(test_file, current_user, "nonexistent_group_12345", dry_run=False)
 
@@ -629,13 +637,14 @@ class TestErrorHandling:
         assert "Error:" in captured.err
         assert "not found" in captured.err
 
-    def test_fix_ownership_chown_oserror(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_fix_ownership_chown_oserror(
+        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test fix_ownership handles chown OSError."""
         test_file = tmp_path / "test.txt"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         with patch(
             "photos_manager.prepare.os.chown", side_effect=OSError("Operation not permitted")
@@ -647,14 +656,13 @@ class TestErrorHandling:
         assert "Error:" in captured.err
 
     def test_fix_ownership_unknown_current_uid(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
     ) -> None:
         """Test fix_ownership handles unknown current uid in dry-run."""
         test_file = tmp_path / "test.txt"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         # Mock getpwuid to fail for the second call (getting current owner)
         call_count = [0]
@@ -708,14 +716,13 @@ class TestErrorHandling:
         assert result.name == "test_1.txt"
 
     def test_process_directory_returns_false_on_errors(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
     ) -> None:
         """Test process_directory returns False when errors occur."""
         test_file = tmp_path / "TEST.TXT"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         with patch.object(Path, "rename", side_effect=OSError("Cannot rename")):
             result = process_directory(tmp_path, current_user, current_group, dry_run=False)
@@ -845,7 +852,7 @@ class TestExifDateExtraction:
             result = extract_exif_date_from_image(Path("photo.jpg"))
             assert result is None
 
-    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")  # type: ignore[untyped-decorator]
+    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")
     def test_extracts_datetime_original_with_piexif(self, tmp_path: Path) -> None:
         """Test extracting DateTimeOriginal using piexif."""
         test_file = tmp_path / "test.jpg"
@@ -862,7 +869,7 @@ class TestExifDateExtraction:
         result = extract_exif_date_from_image(test_file)
         assert result == datetime(2025, 1, 24, 15, 30, 45)
 
-    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")  # type: ignore[untyped-decorator]
+    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")
     def test_extracts_datetime_digitized_with_piexif(self, tmp_path: Path) -> None:
         """Test extracting DateTimeDigitized using piexif."""
         test_file = tmp_path / "test.jpg"
@@ -879,7 +886,7 @@ class TestExifDateExtraction:
         result = extract_exif_date_from_image(test_file)
         assert result == datetime(2025, 1, 24, 16, 0, 0)
 
-    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")  # type: ignore[untyped-decorator]
+    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")
     def test_prefers_datetime_original_over_digitized(self, tmp_path: Path) -> None:
         """Test that DateTimeOriginal takes priority over DateTimeDigitized."""
         test_file = tmp_path / "test.jpg"
@@ -897,7 +904,7 @@ class TestExifDateExtraction:
         result = extract_exif_date_from_image(test_file)
         assert result == datetime(2025, 1, 24, 15, 30, 45)
 
-    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")  # type: ignore[untyped-decorator]
+    @pytest.mark.skipif(not EXIF_LIBS_INSTALLED, reason="EXIF libraries not installed")
     def test_extracts_datetime_from_0th_ifd(self, tmp_path: Path) -> None:
         """Test extracting DateTime from 0th IFD."""
         test_file = tmp_path / "test.jpg"
@@ -1076,14 +1083,13 @@ class TestProcessDirectoryWithExif:
     """Tests for process_directory with EXIF support."""
 
     def test_processes_exif_when_flag_set(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
     ) -> None:
         """Test that EXIF processing occurs when use_exif=True."""
         test_file = tmp_path / "photo.jpg"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         with patch(
             "photos_manager.prepare._process_exif_timestamps", return_value=False
@@ -1093,13 +1099,14 @@ class TestProcessDirectoryWithExif:
             # Verify EXIF processing was called
             assert mock_exif.called
 
-    def test_skips_exif_when_flag_not_set(self, tmp_path: Path) -> None:
+    def test_skips_exif_when_flag_not_set(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that EXIF processing is skipped when use_exif=False."""
         test_file = tmp_path / "photo.jpg"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         with patch("photos_manager.prepare._process_exif_timestamps") as mock_exif:
             process_directory(tmp_path, current_user, current_group, dry_run=True, use_exif=False)
@@ -1107,13 +1114,14 @@ class TestProcessDirectoryWithExif:
             # Verify EXIF processing was NOT called
             assert not mock_exif.called
 
-    def test_exif_phase_runs_after_rename(self, tmp_path: Path) -> None:
+    def test_exif_phase_runs_after_rename(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that EXIF phase runs after filename normalization."""
         test_file = tmp_path / "PHOTO.JPG"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         call_order = []
 
@@ -1137,13 +1145,14 @@ class TestProcessDirectoryWithExif:
             # Verify order: rename first, then EXIF
             assert call_order == ["rename", "exif"]
 
-    def test_exif_errors_affect_return_value(self, tmp_path: Path) -> None:
+    def test_exif_errors_affect_return_value(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that EXIF errors cause process_directory to return False."""
         test_file = tmp_path / "photo.jpg"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         with patch("photos_manager.prepare._process_exif_timestamps", return_value=True):
             result = process_directory(
@@ -1214,7 +1223,9 @@ class TestRunWithExifFlag:
 class TestRunIntegration:
     """Integration tests for run() function."""
 
-    def test_run_processes_single_directory(self, tmp_path: Path) -> None:
+    def test_run_processes_single_directory(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that run() successfully processes a directory."""
         import argparse
 
@@ -1226,8 +1237,7 @@ class TestRunIntegration:
         test_file.touch()
         test_file.chmod(0o777)
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         args = argparse.Namespace(
             directories=[str(test_dir)],
@@ -1275,7 +1285,9 @@ class TestRunIntegration:
         with pytest.raises(SystemExit, match="is not a directory"):
             run(args)
 
-    def test_run_with_multiple_directories(self, tmp_path: Path) -> None:
+    def test_run_with_multiple_directories(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that run() processes multiple directories."""
         import argparse
 
@@ -1290,8 +1302,7 @@ class TestRunIntegration:
         file2 = dir2 / "FILE.TXT"
         file2.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         args = argparse.Namespace(
             directories=[str(dir1), str(dir2)],
@@ -1308,7 +1319,9 @@ class TestRunIntegration:
         assert (dir1 / "test.txt").exists()
         assert (dir2 / "file.txt").exists()
 
-    def test_run_with_dry_run_flag(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_run_with_dry_run_flag(
+        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that run() with --dry-run shows message and doesn't modify files."""
         import argparse
 
@@ -1320,8 +1333,7 @@ class TestRunIntegration:
         test_file.write_text("content")
         test_file.chmod(0o777)
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         args = argparse.Namespace(
             directories=[str(test_dir)],
@@ -1343,7 +1355,9 @@ class TestRunIntegration:
         assert test_file.exists()  # Original uppercase file still exists
         assert stat.S_IMODE(test_file.stat().st_mode) == 0o777  # Permissions unchanged
 
-    def test_run_returns_error_code_on_failure(self, tmp_path: Path) -> None:
+    def test_run_returns_error_code_on_failure(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that run() returns 1 when processing fails."""
         import argparse
 
@@ -1353,8 +1367,7 @@ class TestRunIntegration:
         test_file = test_dir / "test.txt"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         args = argparse.Namespace(
             directories=[str(test_dir)],
@@ -1370,7 +1383,9 @@ class TestRunIntegration:
 
         assert exit_code == 1
 
-    def test_run_processes_permissions_and_names(self, tmp_path: Path) -> None:
+    def test_run_processes_permissions_and_names(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that run() fixes both permissions and filenames."""
         import argparse
 
@@ -1382,8 +1397,7 @@ class TestRunIntegration:
         test_file.touch()
         test_file.chmod(0o777)
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         args = argparse.Namespace(
             directories=[str(test_dir)],
@@ -1405,7 +1419,9 @@ class TestRunIntegration:
         # Verify permissions were fixed
         assert stat.S_IMODE(normalized_file.stat().st_mode) == FILE_PERMISSIONS
 
-    def test_run_resolves_directory_paths(self, tmp_path: Path) -> None:
+    def test_run_resolves_directory_paths(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that run() resolves directory paths correctly."""
         import argparse
 
@@ -1415,8 +1431,7 @@ class TestRunIntegration:
         test_file = test_dir / "test.txt"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         # Use relative path (if possible)
         args = argparse.Namespace(
@@ -1431,7 +1446,9 @@ class TestRunIntegration:
         exit_code = run(args)
         assert exit_code == os.EX_OK
 
-    def test_run_with_exif_processing_enabled(self, tmp_path: Path) -> None:
+    def test_run_with_exif_processing_enabled(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that run() passes use_exif flag to process_directory."""
         import argparse
 
@@ -1441,8 +1458,7 @@ class TestRunIntegration:
         test_file = test_dir / "photo.jpg"
         test_file.touch()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         args = argparse.Namespace(
             directories=[str(test_dir)],
@@ -1469,7 +1485,9 @@ class TestRunIntegration:
             else:
                 assert call_kwargs.get("use_exif") is True
 
-    def test_run_handles_mixed_success_and_failure(self, tmp_path: Path) -> None:
+    def test_run_handles_mixed_success_and_failure(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
         """Test that run() returns error if any directory fails."""
         import argparse
 
@@ -1479,8 +1497,7 @@ class TestRunIntegration:
         dir2 = tmp_path / "dir2"
         dir2.mkdir()
 
-        current_user = pwd.getpwuid(os.getuid()).pw_name
-        current_group = grp.getgrgid(os.getgid()).gr_name
+        current_user, current_group = current_user_and_group
 
         args = argparse.Namespace(
             directories=[str(dir1), str(dir2)],
