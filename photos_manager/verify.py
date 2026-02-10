@@ -1029,19 +1029,21 @@ def _verify_extra_files_check(
     )
 
     if extra_json:
-        print(f"  Found {len(extra_json)} extra JSON file(s) not in .version.json:")
+        print(
+            f"  Found {len(extra_json)} extra JSON file(s) not in .version.json:", file=sys.stderr
+        )
         for file_path in sorted(extra_json):
             print(f"    - {file_path}", file=sys.stderr)
             total_errors += 1
 
     if extra_regular:
-        print(f"  Found {len(extra_regular)} extra file(s) not in metadata:")
+        print(f"  Found {len(extra_regular)} extra file(s) not in metadata:", file=sys.stderr)
         for file_path in sorted(extra_regular):
             print(f"    - {file_path}", file=sys.stderr)
             total_errors += 1
 
     if missing:
-        print(f"  Found {len(missing)} missing file(s) from filesystem:")
+        print(f"  Found {len(missing)} missing file(s) from filesystem:", file=sys.stderr)
         for file_path in sorted(missing):
             print(f"    - {file_path}", file=sys.stderr)
             total_errors += 1
@@ -1230,7 +1232,10 @@ def _verify_permissions_check(
     )
 
     if permission_errors:
-        print(f"  Found {len(permission_errors)} file(s)/directory(ies) with incorrect settings:")
+        print(
+            f"  Found {len(permission_errors)} file(s)/directory(ies) with incorrect settings:",
+            file=sys.stderr,
+        )
         for path, issues in sorted(permission_errors.items()):
             print(f"    {path}:", file=sys.stderr)
             for issue_type, description in issues:

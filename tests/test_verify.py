@@ -1489,7 +1489,7 @@ class TestRun:
 
         assert exit_code != os.EX_OK
         captured = capsys.readouterr()
-        assert "missing" in captured.out.lower() or "not found" in captured.out.lower()
+        assert "missing" in captured.err.lower() or "not found" in captured.err.lower()
 
     def test_run_with_all_flag(
         self,
@@ -1557,7 +1557,7 @@ class TestRun:
 
         assert exit_code != os.EX_OK
         captured = capsys.readouterr()
-        assert "size" in captured.out.lower()
+        assert "size" in captured.err.lower()
 
     def test_run_with_version_file(
         self,
@@ -1663,13 +1663,13 @@ class TestRun:
 
         assert "does not exist" in str(exc_info.value).lower()
 
-    def test_run_with_verbose_flag(
+    def test_run_produces_output_on_success(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
         verify_args: Callable[..., argparse.Namespace],
     ) -> None:
-        """Test that run() with --verbose shows detailed output."""
+        """Test that run() produces output and exits cleanly for a valid archive."""
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1689,19 +1689,21 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = verify_args(directory=str(test_dir), verbose=True)
+        args = verify_args(directory=str(test_dir))
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        assert captured.out != ""
 
-    def test_run_with_quiet_flag(
+    def test_run_reports_no_errors_on_clean_archive(
         self,
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
         verify_args: Callable[..., argparse.Namespace],
     ) -> None:
-        """Test that run() with --quiet suppresses normal output."""
+        """Test that run() reports zero errors for a fully valid archive."""
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1721,11 +1723,13 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = verify_args(directory=str(test_dir), quiet=True)
+        args = verify_args(directory=str(test_dir))
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        assert captured.err == ""
 
     def test_run_with_empty_json(
         self,

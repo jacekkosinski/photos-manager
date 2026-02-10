@@ -34,8 +34,6 @@ def verify_args(tmp_path: Path) -> Callable[..., argparse.Namespace]:
         all: bool = False,  # noqa: A002
         check_timestamps: bool = False,
         tolerance: int = 2,
-        verbose: bool = False,
-        quiet: bool = False,
         check_extra_files: bool = False,
         check_permissions: bool = False,
         owner: str | None = None,
@@ -46,8 +44,6 @@ def verify_args(tmp_path: Path) -> Callable[..., argparse.Namespace]:
             all=all,
             check_timestamps=check_timestamps,
             tolerance=tolerance,
-            verbose=verbose,
-            quiet=quiet,
             check_extra_files=check_extra_files,
             check_permissions=check_permissions,
             owner=owner,

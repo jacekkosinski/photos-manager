@@ -370,7 +370,7 @@ def optimize_operations(
 
     Examples:
         >>> ops = [SyncOperation('copy', '/src/a.jpg', '/dest/new/a.jpg', 123, 'test')]
-        >>> optimized = optimize_operations(ops, [], [], '/dest')
+        >>> optimized = optimize_operations(ops, [], '/dest')
         >>> optimized[0].op_type
         'mkdir'
     """
