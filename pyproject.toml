@@ -39,7 +39,6 @@ dynamic = [ "version" ]
 dependencies = [
   # Project uses only Python standard library
 ]
-
 optional-dependencies.dev = [
   "commitizen>=4,<5",
   "interrogate>=1.5,<2",
@@ -62,36 +61,30 @@ urls.Changelog = "https://github.com/softflow-tech/photos-manager/blob/master/CH
 urls.Homepage = "https://github.com/softflow-tech/photos-manager"
 urls.Issues = "https://github.com/softflow-tech/photos-manager/issues"
 urls.Repository = "https://github.com/softflow-tech/photos-manager"
-
 # Poetry configuration (used for dependency management)
 # Note: Build system uses setuptools (see [build-system] above)
 scripts.photos = "photos_manager.cli:main"
 
 [tool.poetry]
 name = "photos-manager-cli"
-version = "0.4.0"                                             # NOTE: Keep in sync with photos_manager/__version__
+version = "0.4.0"  # NOTE: Keep in sync with photos_manager/__version__
 description = "Modern CLI tool for managing photos"
 authors = [ "Jacek Kosiński <jacek.kosinski@softflow.tech>" ]
 packages = [ { include = "photos_manager" } ]
+dependencies.python = "^3.12"
 
-[tool.poetry.dependencies]
-python = "^3.12"
+[tool.setuptools]
 # No runtime dependencies - project uses only Python standard library
 
-[tool.poetry.group.dev.dependencies]
-
-[tool.setuptools.dynamic]
-version = { attr = "photos_manager.__version__" }
+dynamic.version = { attr = "photos_manager.__version__" }
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
 src = [ ".", "tests" ]
-
 format.indent-style = "space"
 format.quote-style = "double"
 format.line-ending = "auto"
-
 # Ruff linting rules
 lint.select = [
   "A",   # flake8-builtins
@@ -119,23 +112,23 @@ lint.ignore = [
   "S607", # starting process with partial path is OK in controlled environment
   "T201", # print() is allowed in CLI tools
 ]
-lint.per-file-ignores."__init__.py" = [ "D104" ] # Ignore missing docstring in __init__.py
-lint.per-file-ignores."tests/**/*.py" = [ "ARG", "D", "S101" ] # Ignore docstring, assert, and unused args in tests
+lint.per-file-ignores."__init__.py" = [ "D104" ]
+lint.per-file-ignores."tests/**/*.py" = [ "ARG", "D", "S101" ]
 lint.pydocstyle.convention = "google"
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file
-skip = '.git*,*.svg,*.lock'
+skip = ".git*,*.svg,*.lock"
 check-hidden = true
-ignore-words-list = 'asend'
+ignore-words-list = "asend"
 
-[tool.pytest.ini_options]
-minversion = "8.0"
-testpaths = [ "tests" ]
-python_files = [ "test_*.py", "*_test.py" ]
-python_classes = [ "Test*" ]
-python_functions = [ "test_*" ]
-addopts = [
+[tool.pytest]
+ini_options.minversion = "8.0"
+ini_options.testpaths = [ "tests" ]
+ini_options.python_files = [ "test_*.py", "*_test.py" ]
+ini_options.python_classes = [ "Test*" ]
+ini_options.python_functions = [ "test_*" ]
+ini_options.addopts = [
   "-v",
   "--strict-markers",
   "--strict-config",
@@ -145,39 +138,35 @@ addopts = [
   "--cov-report=xml",
   "--cov-branch",
 ]
-markers = [
+ini_options.markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
   "integration: marks tests as integration tests",
   "unit: marks tests as unit tests",
 ]
 
-[tool.coverage.run]
-source = [ "photos_manager" ]
-omit = [
-  "*/tests/*",
-  "*/test_*.py",
-  "*/__pycache__/*",
+[tool.coverage]
+run.omit = [
   "*/.venv/*",
+  "*/__pycache__/*",
+  "*/test_*.py",
+  "*/tests/*",
 ]
-
-[tool.coverage.report]
-precision = 2
-show_missing = true
-skip_covered = false
-fail_under = 85 # Enforce minimum coverage threshold
-exclude_lines = [
-  "pragma: no cover",
+run.source = [ "photos_manager" ]
+report.exclude_lines = [
+  "@(abc\\.)?abstractmethod",
+  "class .*\\bProtocol\\):",
   "def __repr__",
-  "raise AssertionError",
-  "raise NotImplementedError",
   "if __name__ == .__main__.:",
   "if TYPE_CHECKING:",
-  "class .*\\bProtocol\\):",
-  "@(abc\\.)?abstractmethod",
+  "pragma: no cover",
+  "raise AssertionError",
+  "raise NotImplementedError",
 ]
-
-[tool.coverage.html]
-directory = "htmlcov"
+report.fail_under = 85  # Enforce minimum coverage threshold
+report.precision = 2
+report.show_missing = true
+report.skip_covered = false
+html.directory = "htmlcov"
 
 # interrogate configuration (docstring coverage)
 
@@ -224,7 +213,7 @@ exclude = [ "setup.py", "docs", "build", "tests" ]
 ignore-regex = [ "^get$", "^mock_.*", ".*BaseClass.*" ]
 verbose = 1
 quiet = false
-whitelist-regex = [  ]
+whitelist-regex = []
 color = true
 omit-covered-files = false
 generate-badge = "."
