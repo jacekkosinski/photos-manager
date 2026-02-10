@@ -135,11 +135,10 @@ class TestCalculateChecksums:
         assert sha1 == "999aa3be859f5b133f5168e57d8a12221df6cec1"
         assert md5 == "752ef0e8f3ee573790c989f401cab9c4"
 
+    @pytest.mark.skipif(os.name == "nt", reason="Permission test not reliable on Windows")
+    @pytest.mark.skipif(os.getuid() == 0, reason="chmod 0o000 has no effect as root")
     def test_permission_error_returns_none(self, tmp_path: Path) -> None:
         """Test that permission error returns (None, None)."""
-        if os.name == "nt":  # Skip on Windows
-            pytest.skip("Permission test not reliable on Windows")
-
         test_file = tmp_path / "no_read.txt"
         test_file.write_bytes(b"test")
         test_file.chmod(0o000)
@@ -173,11 +172,10 @@ class TestCalculateChecksumsStrict:
         with pytest.raises(OSError, match="No such file"):
             calculate_checksums_strict(str(nonexistent))
 
+    @pytest.mark.skipif(os.name == "nt", reason="Permission test not reliable on Windows")
+    @pytest.mark.skipif(os.getuid() == 0, reason="chmod 0o000 has no effect as root")
     def test_permission_error_raises_oserror(self, tmp_path: Path) -> None:
         """Test that permission error raises OSError."""
-        if os.name == "nt":  # Skip on Windows
-            pytest.skip("Permission test not reliable on Windows")
-
         test_file = tmp_path / "no_read.txt"
         test_file.write_bytes(b"test")
         test_file.chmod(0o000)

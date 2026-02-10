@@ -1116,8 +1116,9 @@ class TestMain:
         parser = argparse.ArgumentParser()
         sync.setup_parser(parser)
 
-        with pytest.raises(SystemExit, match="2"):
+        with pytest.raises(SystemExit) as exc_info:
             parser.parse_args([])
+        assert exc_info.value.code == 2
 
     def test_run_invalid_source_directory(self, tmp_path: Path) -> None:
         """Test run with invalid source directory."""

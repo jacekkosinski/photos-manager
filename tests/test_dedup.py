@@ -120,7 +120,8 @@ class TestBuildArchiveIndex:
 
         size_index, _ = dedup.build_archive_index(archive_data)
 
-        assert 100 not in size_index
+        # Only the valid entry (size=200) should be indexed; "not_int" entry is skipped
+        assert len(size_index) == 1
         assert 200 in size_index
 
 
@@ -1128,8 +1129,8 @@ class TestMain:
             {
                 "path": str(archive_file.resolve()),
                 "size": 8,
-                "sha1": "6a0a8373d5853c7b2988574c966819f22bdc5cab",
-                "md5": "9b45b8b7a49a7b8e7f9e19f7ff229b75",
+                "sha1": "105e7a844ac896f68e6f7dc0a9389d3e9be95abc",
+                "md5": "7e55db001d319a94b0b713529a756623",
                 "date": datetime.now(UTC).isoformat(),
             }
         ]

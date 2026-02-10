@@ -93,7 +93,7 @@ class TestValidateAndProcessJson:
         assert total_bytes == 300
         assert file_count == 2
         assert "archive.json" in hashes
-        assert len(hashes["archive.json"]) == 40  # SHA1 hex length
+        assert hashes["archive.json"] == "f92a472aabf75795a5f296f40d5614a19a58213e"
 
     def test_rejects_non_array_json(self, tmp_path: Path) -> None:
         """Test that non-array JSON is rejected."""

@@ -1840,7 +1840,7 @@ class TestRun:
 
         assert exit_code == os.EX_OK
         captured = capsys.readouterr()
-        assert "metadata1.json" in captured.out or "2" in captured.out
+        assert "metadata1.json" in captured.out or "metadata2.json" in captured.out
 
     def test_run_detects_checksum_mismatch(
         self,

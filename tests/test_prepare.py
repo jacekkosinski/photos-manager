@@ -1,7 +1,6 @@
 """Tests for prepare module."""
 
 import argparse
-import grp  # noqa: F401
 import os
 import pwd
 import stat
