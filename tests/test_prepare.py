@@ -37,7 +37,6 @@ from photos_manager.prepare import (
     run,
     scan_directory,
     set_file_mtime_from_exif,
-    setup_parser,
 )
 
 # Try to import EXIF libraries for integration tests
@@ -1159,21 +1158,6 @@ class TestRunWithExifFlag:
 
     def test_checks_libraries_when_flag_set(self) -> None:
         """Test that EXIF libraries are checked when --use-exif is set."""
-        parser = MagicMock()
-        setup_parser(parser)
-
-        args = MagicMock()
-        args.use_exif = True
-        args.directories = []
-
-        with (
-            patch("photos_manager.prepare.EXIF_AVAILABLE", False),
-            pytest.raises(SystemExit, match="EXIF libraries not installed"),
-        ):
-            run(args)
-
-    def test_exits_if_libraries_not_available(self) -> None:
-        """Test that run() exits if EXIF libraries not available and flag is set."""
         args = MagicMock()
         args.use_exif = True
         args.directories = []
@@ -1385,27 +1369,6 @@ class TestRunIntegration:
             exit_code = run(args)
 
         assert exit_code == 1
-
-    def test_run_with_use_exif_flag(self, tmp_path: Path) -> None:
-        """Test that run() with --use-exif checks EXIF libraries."""
-        import argparse
-
-        test_dir = tmp_path / "test"
-        test_dir.mkdir()
-
-        args = argparse.Namespace(
-            directories=[str(test_dir)],
-            dry_run=True,
-            user="storage",
-            group="storage",
-            use_exif=True,
-        )
-
-        with (
-            patch("photos_manager.prepare.EXIF_AVAILABLE", False),
-            pytest.raises(SystemExit, match="EXIF libraries not installed"),
-        ):
-            run(args)
 
     def test_run_processes_permissions_and_names(self, tmp_path: Path) -> None:
         """Test that run() fixes both permissions and filenames."""

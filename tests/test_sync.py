@@ -920,7 +920,7 @@ class TestGenerateSyncScript:
             sync.SyncOperation("mkdir", None, "/dest/newdir", None, "test"),
         ]
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit, match="Cannot write sync script"):
             sync.generate_sync_script(operations, "/nonexistent/dir/sync.sh")
 
 
@@ -1106,7 +1106,7 @@ class TestMain:
         parser = argparse.ArgumentParser()
         sync.setup_parser(parser)
 
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit, match="2"):
             parser.parse_args([])
 
     def test_run_invalid_source_directory(self, tmp_path: Path) -> None:

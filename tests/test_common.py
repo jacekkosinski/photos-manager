@@ -170,7 +170,7 @@ class TestCalculateChecksumsStrict:
         """Test that nonexistent file raises OSError."""
         nonexistent = tmp_path / "nonexistent.txt"
 
-        with pytest.raises(OSError):
+        with pytest.raises(OSError, match="No such file"):
             calculate_checksums_strict(str(nonexistent))
 
     def test_permission_error_raises_oserror(self, tmp_path: Path) -> None:
@@ -183,7 +183,7 @@ class TestCalculateChecksumsStrict:
         test_file.chmod(0o000)
 
         try:
-            with pytest.raises(OSError):
+            with pytest.raises(OSError, match="Permission denied"):
                 calculate_checksums_strict(str(test_file))
         finally:
             test_file.chmod(0o644)

@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from photos_manager.common import find_json_files_with_mtime as find_json_files
+from photos_manager.common import find_json_files_with_mtime
 from photos_manager.manifest import run, validate_and_process_json
 
 
-class TestFindJsonFiles:
-    """Tests for find_json_files function."""
+class TestFindJsonFilesWithMtime:
+    """Tests for find_json_files_with_mtime function."""
 
     def test_finds_json_files(self, tmp_path: Path) -> None:
         """Test that JSON files are found in directory."""
@@ -20,7 +20,7 @@ class TestFindJsonFiles:
         (tmp_path / "file1.json").write_text("[]")
         (tmp_path / "file2.json").write_text("[]")
 
-        result = find_json_files(str(tmp_path))
+        result = find_json_files_with_mtime(str(tmp_path))
 
         assert len(result) == 2
         paths = [path for _, path in result]
@@ -34,7 +34,7 @@ class TestFindJsonFiles:
         (tmp_path / ".version.json").write_text("{}")
         (tmp_path / "backup.version.json").write_text("{}")
 
-        result = find_json_files(str(tmp_path))
+        result = find_json_files_with_mtime(str(tmp_path))
 
         # Should only find archive.json, not version files
         assert len(result) == 1
@@ -50,7 +50,7 @@ class TestFindJsonFiles:
         (tmp_path / "root.json").write_text("[]")
         (subdir / "nested.json").write_text("[]")
 
-        result = find_json_files(str(tmp_path))
+        result = find_json_files_with_mtime(str(tmp_path))
 
         assert len(result) == 2
         paths = [path for _, path in result]
@@ -61,7 +61,7 @@ class TestFindJsonFiles:
         """Test that modification times are returned."""
         (tmp_path / "file.json").write_text("[]")
 
-        result = find_json_files(str(tmp_path))
+        result = find_json_files_with_mtime(str(tmp_path))
 
         assert len(result) == 1
         mtime, _ = result[0]
@@ -71,7 +71,7 @@ class TestFindJsonFiles:
     def test_raises_on_empty_directory(self, tmp_path: Path) -> None:
         """Test that SystemExit is raised when no JSON files found."""
         with pytest.raises(SystemExit, match="No JSON files found"):
-            find_json_files(str(tmp_path))
+            find_json_files_with_mtime(str(tmp_path))
 
 
 class TestValidateAndProcessJson:

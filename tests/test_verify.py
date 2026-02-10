@@ -11,9 +11,6 @@ import pytest
 from photos_manager.common import (
     calculate_checksums_strict as calculate_checksums,
 )
-from photos_manager.common import (
-    find_json_files,
-)
 from photos_manager.verify import (
     calculate_file_hash,
     collect_expected_files,
@@ -62,50 +59,6 @@ class TestLoadVersionJson:
         """Test that SystemExit is raised for nonexistent file."""
         with pytest.raises(SystemExit, match="does not exist"):
             load_version_json(str(tmp_path / ".version.json"))
-
-
-class TestFindJsonFiles:
-    """Tests for find_json_files function."""
-
-    def test_finds_json_files(self, tmp_path: Path) -> None:
-        """Test that JSON files are found in directory."""
-        (tmp_path / "file1.json").write_text("[]")
-        (tmp_path / "file2.json").write_text("[]")
-
-        result = find_json_files(str(tmp_path))
-
-        assert len(result) == 2
-        assert any("file1.json" in p for p in result)
-        assert any("file2.json" in p for p in result)
-
-    def test_excludes_version_json_files(self, tmp_path: Path) -> None:
-        """Test that *version.json files are excluded."""
-        (tmp_path / "archive.json").write_text("[]")
-        (tmp_path / ".version.json").write_text("{}")
-        (tmp_path / "data.version.json").write_text("{}")
-
-        result = find_json_files(str(tmp_path))
-
-        assert len(result) == 1
-        assert "archive.json" in result[0]
-
-    def test_recursive_search(self, tmp_path: Path) -> None:
-        """Test that search is recursive."""
-        subdir = tmp_path / "subdir"
-        subdir.mkdir()
-        (tmp_path / "root.json").write_text("[]")
-        (subdir / "nested.json").write_text("[]")
-
-        result = find_json_files(str(tmp_path))
-
-        assert len(result) == 2
-        assert any("root.json" in p for p in result)
-        assert any("nested.json" in p for p in result)
-
-    def test_raises_on_empty_directory(self, tmp_path: Path) -> None:
-        """Test that SystemExit is raised when no JSON files found."""
-        with pytest.raises(SystemExit, match="No JSON files found"):
-            find_json_files(str(tmp_path))
 
 
 class TestFindVersionFile:
