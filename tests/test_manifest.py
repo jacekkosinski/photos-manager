@@ -237,7 +237,7 @@ class TestRun:
         test_dir = tmp_path / "empty"
         test_dir.mkdir()
 
-        args = argparse.Namespace(directory=str(test_dir), output=None)
+        args = argparse.Namespace(directory=str(test_dir), output_file=None)
 
         with pytest.raises(SystemExit) as exc_info:
             run(args)

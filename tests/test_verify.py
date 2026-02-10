@@ -95,8 +95,7 @@ class TestCalculateFileHash:
 
         result = calculate_file_hash(str(test_file))
 
-        assert len(result) == 40
-        assert isinstance(result, str)
+        assert result == "1eebdf4fdc9fc7bf283031b93f9aef3338de9052"
 
 
 @pytest.mark.unit
@@ -1928,7 +1927,8 @@ class TestRun:
         # Should detect timestamp mismatch
         assert exit_code != os.EX_OK
         captured = capsys.readouterr()
-        assert "timestamp" in captured.err.lower() or "mtime" in captured.err.lower()
+        output = captured.out + captured.err
+        assert "timestamp" in output.lower() or "mtime" in output.lower()
 
     def test_run_with_check_timestamps_but_no_version_file(
         self,

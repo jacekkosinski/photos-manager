@@ -1107,7 +1107,7 @@ class TestLoadArchive:
         assert any("invalid" in e.lower() or "json" in e.lower() for e in errors)
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 class TestMain:
     """Integration tests for the main run() function."""
 

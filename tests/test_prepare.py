@@ -1262,10 +1262,9 @@ class TestRunWithExifFlag:
             mock_process.return_value = True
             run(args)
 
-            # Verify process_directory was called with use_exif=True
-            assert mock_process.called
-            call_args = mock_process.call_args
-            assert call_args[0][4] is True  # 5th positional argument is use_exif
+            # process_directory is called positionally: (path, user, group, dry_run, use_exif)
+            mock_process.assert_called_once()
+            assert mock_process.call_args.args[4] is True  # index 4 = use_exif
 
 
 @pytest.mark.integration
@@ -1521,7 +1520,7 @@ class TestRunIntegration:
             assert exit_code == os.EX_OK
             # process_directory is called positionally: (path, user, group, dry_run, use_exif)
             mock_process.assert_called_once()
-            assert mock_process.call_args.args[4] is True
+            assert mock_process.call_args.args[4] is True  # index 4 = use_exif
 
     def test_run_handles_mixed_success_and_failure(
         self, tmp_path: Path, current_user_and_group: tuple[str, str]

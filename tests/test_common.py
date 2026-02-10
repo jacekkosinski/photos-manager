@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 from pathlib import Path
 
 import pytest
@@ -295,9 +296,6 @@ class TestFindJsonFilesWithMtime:
 
     def test_sorted_by_mtime_descending(self, tmp_path: Path) -> None:
         """Test that results are sorted by mtime, newest first."""
-        import os
-        import time
-
         base_time = time.time()
 
         file1 = tmp_path / "file1.json"
