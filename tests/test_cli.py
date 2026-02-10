@@ -200,7 +200,7 @@ class TestVerifySubcommand:
             mock_run.assert_called_once()
             args = mock_run.call_args[0][0]
             assert isinstance(args, argparse.Namespace)
-            assert hasattr(args, "directory") or hasattr(args, "json_file")
+            assert args.directory == "/test/path"
 
     def test_verify_with_help_flag(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]

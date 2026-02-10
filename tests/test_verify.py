@@ -1927,8 +1927,7 @@ class TestRun:
         # Should detect timestamp mismatch
         assert exit_code != os.EX_OK
         captured = capsys.readouterr()
-        output = captured.out + captured.err
-        assert "timestamp" in output.lower() or "mtime" in output.lower()
+        assert "timestamp" in captured.err.lower() or "mtime" in captured.err.lower()
 
     def test_run_with_check_timestamps_but_no_version_file(
         self,
@@ -2031,9 +2030,8 @@ class TestRun:
         # Should detect all three types of issues
         assert exit_code != os.EX_OK
         captured = capsys.readouterr()
-        output = captured.out + captured.err
-        assert "extra" in output.lower()
-        assert "missing" in output.lower()
+        assert "extra" in captured.err.lower()
+        assert "missing" in captured.err.lower()
 
     def test_run_with_check_extra_files_but_no_version_file(
         self,
@@ -2167,8 +2165,7 @@ class TestRun:
         # Should detect totals mismatch
         assert exit_code != os.EX_OK
         captured = capsys.readouterr()
-        output = captured.out + captured.err
-        assert "bytes mismatch" in output.lower() or "count mismatch" in output.lower()
+        assert "bytes mismatch" in captured.err.lower() or "count mismatch" in captured.err.lower()
 
     def test_run_with_check_permissions(
         self,
@@ -2213,9 +2210,8 @@ class TestRun:
         # (will fail both on permissions and ownership)
         assert exit_code != os.EX_OK
         captured = capsys.readouterr()
-        output = captured.out + captured.err
         assert (
-            "permission" in output.lower()
-            or "ownership" in output.lower()
-            or "owner" in output.lower()
+            "permission" in captured.err.lower()
+            or "ownership" in captured.err.lower()
+            or "owner" in captured.err.lower()
         )

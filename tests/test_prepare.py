@@ -14,6 +14,7 @@ import pytest
 from photos_manager.prepare import (
     DIR_PERMISSIONS,
     FILE_PERMISSIONS,
+    _process_exif_timestamps,
     check_dir_permissions,
     check_exif_libraries_available,
     check_file_permissions,
@@ -1571,8 +1572,6 @@ class TestProcessExifTimestamps:
         txt_file = tmp_path / "document.txt"
         txt_file.touch()
 
-        from photos_manager.prepare import _process_exif_timestamps
-
         all_items = [jpg_file, png_file, txt_file]
 
         exif_date = datetime(2025, 1, 24, 15, 30, 45)
@@ -1593,8 +1592,6 @@ class TestProcessExifTimestamps:
         jpg_file = tmp_path / "photo.jpg"
         jpg_file.touch()
 
-        from photos_manager.prepare import _process_exif_timestamps
-
         all_items = [jpg_file]
 
         # Mock to return False (no update needed)
@@ -1614,8 +1611,6 @@ class TestProcessExifTimestamps:
         txt_file = tmp_path / "document.txt"
         txt_file.touch()
 
-        from photos_manager.prepare import _process_exif_timestamps
-
         all_items = [txt_file]
 
         result = _process_exif_timestamps(all_items, dry_run=True)
@@ -1630,8 +1625,6 @@ class TestProcessExifTimestamps:
         """Test that exceptions are handled and reported as errors."""
         jpg_file = tmp_path / "photo.jpg"
         jpg_file.touch()
-
-        from photos_manager.prepare import _process_exif_timestamps
 
         all_items = [jpg_file]
 

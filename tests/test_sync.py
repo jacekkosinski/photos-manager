@@ -1674,7 +1674,7 @@ class TestLoadArchiveWithFilter:
         assert len(json_files) == 0
 
 
-@pytest.mark.unit
+@pytest.mark.integration
 class TestVersionOptimization:
     """Integration tests for version-based optimization."""
 

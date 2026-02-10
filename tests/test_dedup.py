@@ -1353,8 +1353,10 @@ class TestMain:
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
-        # No files to process, so no output
-        assert captured.out == ""
+        # No matching files — no move commands should be emitted
+        assert "umask 022" not in captured.out
+        assert "mv -iv" not in captured.out
+        assert "mkdir -p" not in captured.out
 
     def test_run_move_target_not_exists(self, tmp_path: Path) -> None:
         """Test error when target directory doesn't exist."""
