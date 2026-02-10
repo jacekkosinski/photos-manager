@@ -658,7 +658,6 @@ class TestValidateArchiveDirectories:
         valid, errors = sync.validate_archive_directories(str(source_dir), str(dest_dir))
 
         assert not valid
-        assert len(errors) > 0
         assert any("source" in e.lower() for e in errors)
 
     def test_validate_nonexistent_dest(self, tmp_path: Path) -> None:
@@ -670,7 +669,6 @@ class TestValidateArchiveDirectories:
         valid, errors = sync.validate_archive_directories(str(source_dir), str(dest_dir))
 
         assert not valid
-        assert len(errors) > 0
         assert any("destination" in e.lower() for e in errors)
 
     def test_validate_file_instead_of_directory(self, tmp_path: Path) -> None:
@@ -683,7 +681,7 @@ class TestValidateArchiveDirectories:
         valid, errors = sync.validate_archive_directories(str(source_file), str(dest_dir))
 
         assert not valid
-        assert len(errors) > 0
+        assert any("not a directory" in e.lower() or "directory" in e.lower() for e in errors)
 
 
 class TestOperationToCommand:
@@ -1080,7 +1078,7 @@ class TestLoadArchive:
 
         all_data, _json_files, _version, errors = sync.load_archive(str(archive_dir))
 
-        assert len(errors) > 0
+        assert any("no json" in e.lower() or "json" in e.lower() for e in errors)
         assert len(all_data) == 0
 
     def test_load_archive_invalid_json(self, tmp_path: Path) -> None:
@@ -1095,7 +1093,7 @@ class TestLoadArchive:
         _all_data, _json_files, _version, errors = sync.load_archive(str(archive_dir))
 
         # Should report errors but not crash
-        assert len(errors) > 0
+        assert any("invalid" in e.lower() or "json" in e.lower() for e in errors)
 
 
 class TestMain:

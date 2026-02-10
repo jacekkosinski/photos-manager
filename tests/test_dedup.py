@@ -5,15 +5,10 @@ import json
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import pytest
 
 from photos_manager import dedup
-
-if TYPE_CHECKING:
-    from _pytest.capture import CaptureFixture
-    from _pytest.monkeypatch import MonkeyPatch
 
 
 class TestScanDirectory:
@@ -461,7 +456,7 @@ class TestGenerateCommands:
 class TestDisplayCommands:
     """Tests for display_commands function."""
 
-    def test_display_commands(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_commands(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying commands."""
         commands = [
             "mkdir -p /target/dir00001",
@@ -476,7 +471,7 @@ class TestDisplayCommands:
         assert lines[0] == "mkdir -p /target/dir00001"
         assert lines[1] == "mv -iv /scan/file.txt /target/dir00001/file.txt"
 
-    def test_display_commands_empty(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_commands_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying empty command list."""
         dedup.display_commands([])
         captured = capsys.readouterr()
@@ -486,7 +481,7 @@ class TestDisplayCommands:
 class TestListDisplay:
     """Tests for list display functions."""
 
-    def test_display_list_duplicates(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_list_duplicates(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying duplicates in list format."""
         duplicates = [
             (
@@ -507,13 +502,13 @@ class TestListDisplay:
         assert lines[0] == "/scan/file1.txt"
         assert lines[1] == "/scan/file2.txt"
 
-    def test_display_list_duplicates_empty(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_list_duplicates_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying empty duplicates list in list format."""
         dedup.display_file_paths([])
         captured = capsys.readouterr()
         assert captured.out == ""
 
-    def test_display_list_missing(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_list_missing(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying missing files in list format."""
         missing = [
             {"path": "/scan/new1.txt", "size": 100, "sha1": "xyz", "md5": "uvw"},
@@ -528,7 +523,7 @@ class TestListDisplay:
         assert lines[0] == "/scan/new1.txt"
         assert lines[1] == "/scan/new2.txt"
 
-    def test_display_list_missing_empty(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_list_missing_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying empty missing list in list format."""
         dedup.display_file_paths([])
         captured = capsys.readouterr()
@@ -538,7 +533,7 @@ class TestListDisplay:
 class TestDisplayFunctions:
     """Tests for display functions."""
 
-    def test_display_duplicates_basic(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_duplicates_basic(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying duplicates without warnings."""
         duplicates = [
             (
@@ -568,7 +563,9 @@ class TestDisplayFunctions:
         assert fw == 0
         assert tw == 0
 
-    def test_display_duplicates_with_filename_warnings(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_duplicates_with_filename_warnings(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test displaying duplicates with filename warnings."""
         duplicates = [
             (
@@ -597,7 +594,7 @@ class TestDisplayFunctions:
         assert tw == 0
 
     def test_display_duplicates_with_timestamp_warnings(
-        self, capsys: "CaptureFixture[str]"
+        self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test displaying duplicates with timestamp warnings."""
         dt1 = datetime.now(UTC)
@@ -634,7 +631,7 @@ class TestDisplayFunctions:
         assert fw == 0
         assert tw == 0
 
-    def test_display_missing_basic(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_missing_basic(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying missing files."""
         missing = [{"path": "/scan/new.txt", "size": 100, "sha1": "xyz", "md5": "uvw"}]
 
@@ -644,13 +641,13 @@ class TestDisplayFunctions:
         assert "Missing from archive" in captured.out
         assert "/scan/new.txt" in captured.out
 
-    def test_display_missing_empty(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_missing_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying empty missing list."""
         dedup.display_missing([])
         captured = capsys.readouterr()
         assert captured.out == ""
 
-    def test_display_summary(self, capsys: "CaptureFixture[str]") -> None:
+    def test_display_summary(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying summary."""
         duplicates = [
             (
@@ -698,7 +695,7 @@ class TestSetupParser:
 class TestMain:
     """Integration tests for main/run functions."""
 
-    def test_run_no_flags(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_no_flags(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run without -d or -m flags shows error."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
@@ -725,7 +722,7 @@ class TestMain:
         captured = capsys.readouterr()
         assert "At least one of" in captured.out
 
-    def test_run_show_duplicates(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_show_duplicates(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with -d flag showing duplicates."""
         # Create archive
         archive_dir = tmp_path / "archive"
@@ -773,7 +770,7 @@ class TestMain:
         assert "Duplicates" in captured.out
         assert "Summary:" in captured.out
 
-    def test_run_show_missing(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_show_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with -m flag showing missing files."""
         # Create empty archive
         json_file = tmp_path / "archive.json"
@@ -804,7 +801,9 @@ class TestMain:
         captured = capsys.readouterr()
         assert "Missing from archive" in captured.out
 
-    def test_run_with_filename_check(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_with_filename_check(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test run with -f flag checking filenames."""
         # Create archive with different filename
         archive_dir = tmp_path / "archive"
@@ -851,7 +850,9 @@ class TestMain:
         assert "Filename differs" in captured.out
         assert "Filename warnings: 1" in captured.out
 
-    def test_run_with_timestamp_check(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_with_timestamp_check(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test run with -t flag checking timestamps."""
         # Create archive
         archive_dir = tmp_path / "archive"
@@ -1010,7 +1011,9 @@ class TestMain:
         result = dedup.run(args)
         assert result == os.EX_OK
 
-    def test_run_list_mode_duplicates(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_list_mode_duplicates(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test run with --list flag showing duplicates."""
         # Create archive
         archive_dir = tmp_path / "archive"
@@ -1062,7 +1065,9 @@ class TestMain:
         assert "Loading" not in captured.out
         assert "Summary" not in captured.out
 
-    def test_run_list_mode_missing(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_list_mode_missing(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test run with --list flag showing missing files."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
@@ -1096,7 +1101,7 @@ class TestMain:
         assert "Loading" not in captured.out
         assert "Summary" not in captured.out
 
-    def test_run_list_mode_both(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_list_mode_both(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with --list flag showing both duplicates and missing."""
         # Create archive
         archive_dir = tmp_path / "archive"
@@ -1149,7 +1154,7 @@ class TestMain:
         assert str(dup_file.resolve()) in output
         assert str(new_file.resolve()) in output
 
-    def test_main_entry_point(self, tmp_path: Path, monkeypatch: "MonkeyPatch") -> None:
+    def test_main_entry_point(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test main() entry point."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
@@ -1161,7 +1166,7 @@ class TestMain:
         result = dedup.main()
         assert result == os.EX_OK
 
-    def test_run_move_mode(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_move_mode(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with --move flag."""
         # Create empty archive
         json_file = tmp_path / "archive.json"
@@ -1202,7 +1207,7 @@ class TestMain:
         assert "mv -iv" in captured.out
         assert "dir00001" in captured.out
 
-    def test_run_copy_mode(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_copy_mode(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with --copy flag."""
         # Create archive
         archive_dir = tmp_path / "archive"
@@ -1306,7 +1311,7 @@ class TestMain:
         with pytest.raises(SystemExit, match="cannot be used with --list"):
             dedup.run(args)
 
-    def test_run_move_no_files(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_move_no_files(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test no output when no files match."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
@@ -1360,7 +1365,9 @@ class TestMain:
         with pytest.raises(SystemExit, match="does not exist"):
             dedup.run(args)
 
-    def test_run_move_custom_start(self, tmp_path: Path, capsys: "CaptureFixture[str]") -> None:
+    def test_run_move_custom_start(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test --start option with custom number."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")

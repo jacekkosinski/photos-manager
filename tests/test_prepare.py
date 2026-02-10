@@ -1,5 +1,6 @@
 """Tests for prepare module."""
 
+import argparse
 import grp  # noqa: F401
 import os
 import pwd
@@ -10,7 +11,6 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from _pytest.capture import CaptureFixture
 
 from photos_manager.prepare import (
     DIR_PERMISSIONS,
@@ -349,7 +349,9 @@ class TestFixFilePermissions:
         assert result is True
         assert stat.S_IMODE(test_file.stat().st_mode) == FILE_PERMISSIONS
 
-    def test_dry_run_does_not_change(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_dry_run_does_not_change(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that dry run does not modify permissions."""
         test_file = tmp_path / "test.txt"
         test_file.touch()
@@ -377,7 +379,9 @@ class TestFixDirPermissions:
         assert result is True
         assert stat.S_IMODE(test_dir.stat().st_mode) == DIR_PERMISSIONS
 
-    def test_dry_run_does_not_change(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_dry_run_does_not_change(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that dry run does not modify permissions."""
         test_dir = tmp_path / "testdir"
         test_dir.mkdir()
@@ -440,7 +444,9 @@ class TestRenameToNormalized:
         assert success is True
         assert new_path == test_file
 
-    def test_dry_run_does_not_rename(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_dry_run_does_not_rename(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that dry run does not rename file."""
         test_file = tmp_path / "TEST.TXT"
         test_file.touch()
@@ -582,7 +588,7 @@ class TestErrorHandling:
         assert group.isdigit()
 
     def test_fix_file_permissions_oserror(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test fix_file_permissions handles OSError."""
         test_file = tmp_path / "test.txt"
@@ -595,7 +601,9 @@ class TestErrorHandling:
         captured = capsys.readouterr()
         assert "Error:" in captured.err
 
-    def test_fix_dir_permissions_oserror(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_fix_dir_permissions_oserror(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test fix_dir_permissions handles OSError."""
         test_dir = tmp_path / "testdir"
         test_dir.mkdir()
@@ -608,7 +616,7 @@ class TestErrorHandling:
         assert "Error:" in captured.err
 
     def test_fix_ownership_nonexistent_user(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test fix_ownership with nonexistent user."""
         test_file = tmp_path / "test.txt"
@@ -622,7 +630,10 @@ class TestErrorHandling:
         assert "not found" in captured.err
 
     def test_fix_ownership_nonexistent_group(
-        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        current_user_and_group: tuple[str, str],
     ) -> None:
         """Test fix_ownership with nonexistent group."""
         test_file = tmp_path / "test.txt"
@@ -638,7 +649,10 @@ class TestErrorHandling:
         assert "not found" in captured.err
 
     def test_fix_ownership_chown_oserror(
-        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        current_user_and_group: tuple[str, str],
     ) -> None:
         """Test fix_ownership handles chown OSError."""
         test_file = tmp_path / "test.txt"
@@ -656,7 +670,10 @@ class TestErrorHandling:
         assert "Error:" in captured.err
 
     def test_fix_ownership_unknown_current_uid(
-        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        current_user_and_group: tuple[str, str],
     ) -> None:
         """Test fix_ownership handles unknown current uid in dry-run."""
         test_file = tmp_path / "test.txt"
@@ -686,7 +703,7 @@ class TestErrorHandling:
         assert "[FIX]" in captured.out
 
     def test_rename_to_normalized_oserror(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test rename_to_normalized handles OSError."""
         test_file = tmp_path / "TEST.TXT"
@@ -716,7 +733,10 @@ class TestErrorHandling:
         assert result.name == "test_1.txt"
 
     def test_process_directory_returns_false_on_errors(
-        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        current_user_and_group: tuple[str, str],
     ) -> None:
         """Test process_directory returns False when errors occur."""
         test_file = tmp_path / "TEST.TXT"
@@ -1000,7 +1020,9 @@ class TestSetMtimeFromExif:
             new_mtime = test_file.stat().st_mtime
             assert abs(new_mtime - exif_date.timestamp()) < 1.0
 
-    def test_dry_run_shows_changes(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_dry_run_shows_changes(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that dry run shows what would be changed."""
         test_file = tmp_path / "photo.jpg"
         test_file.touch()
@@ -1020,7 +1042,7 @@ class TestSetMtimeFromExif:
             assert "[FIX]" in captured.out
             assert "2025-01-24 15:30:45" in captured.out
 
-    def test_handles_oserror(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_handles_oserror(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that OSError is handled gracefully."""
         test_file = tmp_path / "photo.jpg"
         test_file.touch()
@@ -1083,7 +1105,10 @@ class TestProcessDirectoryWithExif:
     """Tests for process_directory with EXIF support."""
 
     def test_processes_exif_when_flag_set(
-        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        current_user_and_group: tuple[str, str],
     ) -> None:
         """Test that EXIF processing occurs when use_exif=True."""
         test_file = tmp_path / "photo.jpg"
@@ -1227,7 +1252,6 @@ class TestRunIntegration:
         self, tmp_path: Path, current_user_and_group: tuple[str, str]
     ) -> None:
         """Test that run() successfully processes a directory."""
-        import argparse
 
         test_dir = tmp_path / "test"
         test_dir.mkdir()
@@ -1254,7 +1278,6 @@ class TestRunIntegration:
 
     def test_run_with_nonexistent_directory(self) -> None:
         """Test that run() raises SystemExit for nonexistent directory."""
-        import argparse
 
         args = argparse.Namespace(
             directories=["/nonexistent/path/that/does/not/exist"],
@@ -1269,7 +1292,6 @@ class TestRunIntegration:
 
     def test_run_with_file_instead_of_directory(self, tmp_path: Path) -> None:
         """Test that run() raises SystemExit when path is a file."""
-        import argparse
 
         test_file = tmp_path / "file.txt"
         test_file.touch()
@@ -1289,7 +1311,6 @@ class TestRunIntegration:
         self, tmp_path: Path, current_user_and_group: tuple[str, str]
     ) -> None:
         """Test that run() processes multiple directories."""
-        import argparse
 
         # Create two directories with issues
         dir1 = tmp_path / "dir1"
@@ -1320,10 +1341,12 @@ class TestRunIntegration:
         assert (dir2 / "file.txt").exists()
 
     def test_run_with_dry_run_flag(
-        self, tmp_path: Path, capsys: CaptureFixture[Any], current_user_and_group: tuple[str, str]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        current_user_and_group: tuple[str, str],
     ) -> None:
         """Test that run() with --dry-run shows message and doesn't modify files."""
-        import argparse
 
         test_dir = tmp_path / "test"
         test_dir.mkdir()
@@ -1359,7 +1382,6 @@ class TestRunIntegration:
         self, tmp_path: Path, current_user_and_group: tuple[str, str]
     ) -> None:
         """Test that run() returns 1 when processing fails."""
-        import argparse
 
         test_dir = tmp_path / "test"
         test_dir.mkdir()
@@ -1387,7 +1409,6 @@ class TestRunIntegration:
         self, tmp_path: Path, current_user_and_group: tuple[str, str]
     ) -> None:
         """Test that run() fixes both permissions and filenames."""
-        import argparse
 
         test_dir = tmp_path / "test"
         test_dir.mkdir()
@@ -1423,7 +1444,6 @@ class TestRunIntegration:
         self, tmp_path: Path, current_user_and_group: tuple[str, str]
     ) -> None:
         """Test that run() resolves directory paths correctly."""
-        import argparse
 
         test_dir = tmp_path / "test"
         test_dir.mkdir()
@@ -1450,7 +1470,6 @@ class TestRunIntegration:
         self, tmp_path: Path, current_user_and_group: tuple[str, str]
     ) -> None:
         """Test that run() passes use_exif flag to process_directory."""
-        import argparse
 
         test_dir = tmp_path / "test"
         test_dir.mkdir()
@@ -1476,20 +1495,14 @@ class TestRunIntegration:
             exit_code = run(args)
 
             assert exit_code == os.EX_OK
-            # Verify process_directory was called with use_exif=True
-            assert mock_process.called
-            call_kwargs = mock_process.call_args[1] if mock_process.call_args[1] else {}
-            # Check positional argument (5th argument is use_exif)
-            if len(mock_process.call_args[0]) >= 5:
-                assert mock_process.call_args[0][4] is True
-            else:
-                assert call_kwargs.get("use_exif") is True
+            # process_directory is called positionally: (path, user, group, dry_run, use_exif)
+            mock_process.assert_called_once()
+            assert mock_process.call_args.args[4] is True
 
     def test_run_handles_mixed_success_and_failure(
         self, tmp_path: Path, current_user_and_group: tuple[str, str]
     ) -> None:
         """Test that run() returns error if any directory fails."""
-        import argparse
 
         dir1 = tmp_path / "dir1"
         dir1.mkdir()
@@ -1524,7 +1537,9 @@ class TestRunIntegration:
 class TestProcessExifTimestamps:
     """Tests for _process_exif_timestamps function."""
 
-    def test_processes_supported_files(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_processes_supported_files(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that supported files are processed."""
         jpg_file = tmp_path / "photo.jpg"
         jpg_file.touch()
@@ -1548,7 +1563,9 @@ class TestProcessExifTimestamps:
             assert "photo.jpg" in captured.out
             assert "photo.png" in captured.out
 
-    def test_prints_ok_when_all_correct(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_prints_ok_when_all_correct(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that OK message is printed when all files have correct timestamps."""
         jpg_file = tmp_path / "photo.jpg"
         jpg_file.touch()
@@ -1568,7 +1585,7 @@ class TestProcessExifTimestamps:
             assert "correct EXIF timestamps" in captured.out
 
     def test_prints_ok_when_no_media_files(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test that OK message is printed when no media files found."""
         txt_file = tmp_path / "document.txt"
@@ -1586,7 +1603,7 @@ class TestProcessExifTimestamps:
         assert "[OK]" in captured.out
         assert "No supported media files" in captured.out
 
-    def test_handles_exceptions(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_handles_exceptions(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that exceptions are handled and reported as errors."""
         jpg_file = tmp_path / "photo.jpg"
         jpg_file.touch()

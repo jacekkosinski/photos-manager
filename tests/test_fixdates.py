@@ -5,10 +5,9 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import pytest
-from _pytest.capture import CaptureFixture
 
 from photos_manager.fixdates import (
     get_newest_files,
@@ -97,7 +96,7 @@ class TestSetFilesTimestamps:
     """Tests for set_files_timestamps function."""
 
     def test_updates_file_timestamp_in_dry_run(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test that dry run mode prints changes without applying them."""
         # Create test file
@@ -142,7 +141,9 @@ class TestSetFilesTimestamps:
         # Verify timestamp was updated
         assert int(test_file.stat().st_mtime) == target_timestamp
 
-    def test_skips_nonexistent_files(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_skips_nonexistent_files(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that nonexistent files are skipped with warning."""
         json_file = tmp_path / "test.json"
         data = [
@@ -161,7 +162,7 @@ class TestSetFilesTimestamps:
         assert "not found" in captured.err or "not writable" in captured.err
 
     def test_skips_entries_with_missing_fields(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test that entries with missing fields are skipped."""
         json_file = tmp_path / "test.json"
@@ -202,7 +203,9 @@ class TestSetDirsTimestamps:
         # Directory should now have same timestamp as file
         assert int(subdir.stat().st_mtime) == target_timestamp
 
-    def test_dry_run_does_not_update(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_dry_run_does_not_update(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that dry run prints but doesn't update."""
         subdir = tmp_path / "photos"
         subdir.mkdir()
@@ -223,7 +226,9 @@ class TestSetDirsTimestamps:
         captured = capsys.readouterr()
         assert "Set timestamp for directory" in captured.out
 
-    def test_skips_nonexistent_directory(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_skips_nonexistent_directory(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that nonexistent directories are skipped."""
         newest_files = cast(
             "dict[str, dict[str, str | int]]",
@@ -266,7 +271,9 @@ class TestSetJsonTimestamps:
         assert int(json_file.stat().st_mtime) == target_timestamp
         assert int(subdir.stat().st_mtime) == target_timestamp
 
-    def test_dry_run_does_not_update(self, tmp_path: Path, capsys: CaptureFixture[Any]) -> None:
+    def test_dry_run_does_not_update(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that dry run doesn't update timestamps."""
         subdir = tmp_path / "photos"
         subdir.mkdir()
@@ -291,7 +298,7 @@ class TestSetJsonTimestamps:
         assert "Set timestamp" in captured.out
 
     def test_handles_missing_path_in_entry(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test handling of missing path in newest entry."""
         json_file = tmp_path / "test.json"
@@ -305,7 +312,7 @@ class TestSetJsonTimestamps:
         assert "Missing 'path'" in captured.err
 
     def test_handles_nonexistent_reference_file(
-        self, tmp_path: Path, capsys: CaptureFixture[Any]
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test handling of nonexistent reference file."""
         json_file = tmp_path / "test.json"
@@ -322,7 +329,9 @@ class TestSetJsonTimestamps:
 class TestRun:
     """Integration tests for run() function."""
 
-    def test_run_updates_timestamps(self, tmp_path: Path, capsys: CaptureFixture[str]) -> None:
+    def test_run_updates_timestamps(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
         """Test that run() updates directory timestamps based on JSON."""
         # Create test directory and files
         test_dir = tmp_path / "photos"
@@ -355,7 +364,7 @@ class TestRun:
         captured = capsys.readouterr()
         assert "timestamps set" in captured.out.lower() or "timestamp" in captured.out.lower()
 
-    def test_run_with_dry_run(self, tmp_path: Path, capsys: CaptureFixture[str]) -> None:
+    def test_run_with_dry_run(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that run() in dry-run mode doesn't modify anything."""
         # Create test directory
         test_dir = tmp_path / "photos"
@@ -390,7 +399,7 @@ class TestRun:
         # Verify mtime wasn't actually changed in dry-run mode
         assert test_dir.stat().st_mtime == original_dir_mtime
 
-    def test_run_with_all_flag(self, tmp_path: Path, capsys: CaptureFixture[str]) -> None:
+    def test_run_with_all_flag(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that run() with --all flag updates individual file timestamps."""
         # Create test files
         test_dir = tmp_path / "photos"
@@ -424,7 +433,7 @@ class TestRun:
         assert test_file.stat().st_mtime != old_time
 
     def test_run_with_multiple_json_files(
-        self, tmp_path: Path, capsys: CaptureFixture[str]
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test that run() processes multiple JSON files."""
         # Create two sets of files
@@ -467,7 +476,7 @@ class TestRun:
 
         assert exit_code == os.EX_OK
 
-    def test_run_with_nonexistent_json_file(self, capsys: CaptureFixture[str]) -> None:
+    def test_run_with_nonexistent_json_file(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that run() handles nonexistent JSON file gracefully."""
         args = argparse.Namespace(json_files=["/nonexistent/file.json"], dry_run=False, all=False)
 
