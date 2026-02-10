@@ -513,8 +513,11 @@ def validate_args(args: argparse.Namespace) -> bool:
     """
     # Check if at least one display flag is specified
     if not args.show_duplicates and not args.show_missing:
-        print("Error: At least one of -d/--show-duplicates or -m/--show-missing is required\n")
-        print("Use -h or --help for usage information")
+        print(
+            "Error: At least one of -d/--show-duplicates or -m/--show-missing is required\n",
+            file=sys.stderr,
+        )
+        print("Use -h or --help for usage information", file=sys.stderr)
         return False
 
     # Validate mutually exclusive options

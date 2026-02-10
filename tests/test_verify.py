@@ -38,6 +38,7 @@ from photos_manager.verify import (
 )
 
 
+@pytest.mark.unit
 class TestLoadVersionJson:
     """Tests for load_version_json function."""
 
@@ -63,6 +64,7 @@ class TestLoadVersionJson:
             load_version_json(str(tmp_path / ".version.json"))
 
 
+@pytest.mark.unit
 class TestFindVersionFile:
     """Tests for find_version_file function."""
 
@@ -82,6 +84,7 @@ class TestFindVersionFile:
         assert result is None
 
 
+@pytest.mark.unit
 class TestCalculateFileHash:
     """Tests for calculate_file_hash function."""
 
@@ -96,6 +99,7 @@ class TestCalculateFileHash:
         assert isinstance(result, str)
 
 
+@pytest.mark.unit
 class TestVerifyFileEntry:
     """Tests for verify_file_entry function."""
 
@@ -210,6 +214,7 @@ class TestVerifyFileEntry:
         assert any("Missing 'path'" in err for err in errors)
 
 
+@pytest.mark.unit
 class TestVerifyTimestamps:
     """Tests for verify_timestamps function."""
 
@@ -278,6 +283,7 @@ class TestVerifyTimestamps:
         assert any("Invalid date format" in err for err in errors)
 
 
+@pytest.mark.unit
 class TestVerifyDirectoryTimestamps:
     """Tests for verify_directory_timestamps function."""
 
@@ -328,6 +334,7 @@ class TestVerifyDirectoryTimestamps:
         assert any("timestamp mismatch" in err for err in errors)
 
 
+@pytest.mark.unit
 class TestVerifyJsonFileTimestamp:
     """Tests for verify_json_file_timestamp function."""
 
@@ -373,6 +380,7 @@ class TestVerifyJsonFileTimestamp:
         assert any("timestamp mismatch" in err for err in errors)
 
 
+@pytest.mark.unit
 class TestVerifyVersionFileTimestamp:
     """Tests for verify_version_file_timestamp function."""
 
@@ -444,6 +452,7 @@ class TestVerifyVersionFileTimestamp:
         assert any("No JSON files" in err for err in errors)
 
 
+@pytest.mark.unit
 class TestVerifyArchiveDirectoryTimestamp:
     """Tests for verify_archive_directory_timestamp function."""
 
@@ -531,6 +540,7 @@ class TestVerifyArchiveDirectoryTimestamp:
         assert any("No JSON files" in err for err in errors)
 
 
+@pytest.mark.unit
 class TestVerifyVersionFile:
     """Tests for verify_version_file function."""
 
@@ -658,6 +668,7 @@ class TestVerifyVersionFile:
         assert any("missing required field" in err for err in errors)
 
 
+@pytest.mark.unit
 class TestCollectFilesystemFiles:
     """Tests for collect_filesystem_files function."""
 
@@ -706,6 +717,7 @@ class TestCollectFilesystemFiles:
         assert len(regular_files) == 1
 
 
+@pytest.mark.unit
 class TestCollectExpectedFiles:
     """Tests for collect_expected_files function."""
 
@@ -745,6 +757,7 @@ class TestCollectExpectedFiles:
         assert "/archive/photo2.jpg" in expected_files
 
 
+@pytest.mark.unit
 class TestFindExtraFiles:
     """Tests for find_extra_files function."""
 
@@ -883,6 +896,7 @@ class TestFindExtraFiles:
         assert len(missing) == 0
 
 
+@pytest.mark.unit
 class TestFindZeroByteFiles:
     """Tests for find_zero_byte_files function."""
 
@@ -933,6 +947,7 @@ class TestFindZeroByteFiles:
         assert "/archive/empty.txt" in zero_files
 
 
+@pytest.mark.unit
 class TestFindDuplicateChecksums:
     """Tests for find_duplicate_checksums function."""
 
@@ -1021,6 +1036,7 @@ class TestFindDuplicateChecksums:
         assert len(md5_dups["md5_1"]) == 4
 
 
+@pytest.mark.unit
 class TestValidateDateFormat:
     """Tests for validate_date_format function."""
 
@@ -1070,6 +1086,7 @@ class TestValidateDateFormat:
         assert "T" in error
 
 
+@pytest.mark.unit
 class TestFindInvalidDates:
     """Tests for find_invalid_dates function."""
 
@@ -1117,6 +1134,7 @@ class TestFindInvalidDates:
         assert len(invalid) == 0
 
 
+@pytest.mark.unit
 class TestValidateVersionFileDates:
     """Tests for validate_version_file_dates function."""
 
@@ -1181,6 +1199,7 @@ class TestValidateVersionFileDates:
         assert len(errors) == 0
 
 
+@pytest.mark.unit
 class TestVerifyPermissions:
     """Tests for verify_permissions function."""
 
@@ -1332,6 +1351,7 @@ class TestVerifyPermissions:
         assert any(issue_type == "permissions" for issue_type, _ in errors[str(json_file)])
 
 
+@pytest.mark.unit
 class TestNormalizePaths:
     """Tests for normalize_paths function."""
 
@@ -1399,6 +1419,7 @@ class TestNormalizePaths:
         assert str(result[0]["path"]) == str(expected_path)
 
 
+@pytest.mark.integration
 class TestRun:
     """Integration tests for run() function."""
 

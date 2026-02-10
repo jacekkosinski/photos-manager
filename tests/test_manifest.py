@@ -11,6 +11,7 @@ from photos_manager.common import find_json_files_with_mtime
 from photos_manager.manifest import run, validate_and_process_json
 
 
+@pytest.mark.unit
 class TestFindJsonFilesWithMtime:
     """Tests for find_json_files_with_mtime function."""
 
@@ -74,6 +75,7 @@ class TestFindJsonFilesWithMtime:
             find_json_files_with_mtime(str(tmp_path))
 
 
+@pytest.mark.unit
 class TestValidateAndProcessJson:
     """Tests for validate_and_process_json function."""
 
@@ -156,6 +158,7 @@ class TestValidateAndProcessJson:
         assert "empty.json" in hashes
 
 
+@pytest.mark.integration
 class TestRun:
     """Integration tests for run() function."""
 

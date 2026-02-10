@@ -10,6 +10,7 @@ from photos_manager import __version__
 from photos_manager.cli import main
 
 
+@pytest.mark.integration
 class TestMainFunction:
     """Tests for main() function."""
 
@@ -58,6 +59,7 @@ class TestMainFunction:
         assert "verify" in captured.out
 
 
+@pytest.mark.integration
 class TestIndexSubcommand:
     """Tests for index subcommand."""
 
@@ -99,6 +101,7 @@ class TestIndexSubcommand:
             mock_run.assert_called_once()
 
 
+@pytest.mark.integration
 class TestManifestSubcommand:
     """Tests for manifest subcommand."""
 
@@ -140,6 +143,7 @@ class TestManifestSubcommand:
             mock_run.assert_called_once()
 
 
+@pytest.mark.integration
 class TestFixdatesSubcommand:
     """Tests for fixdates subcommand."""
 
@@ -181,6 +185,7 @@ class TestFixdatesSubcommand:
             mock_run.assert_called_once()
 
 
+@pytest.mark.integration
 class TestVerifySubcommand:
     """Tests for verify subcommand."""
 
@@ -222,6 +227,7 @@ class TestVerifySubcommand:
             mock_run.assert_called_once()
 
 
+@pytest.mark.integration
 class TestInvalidSubcommand:
     """Tests for invalid subcommand handling."""
 

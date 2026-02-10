@@ -16,6 +16,7 @@ from photos_manager.common import (
 )
 
 
+@pytest.mark.unit
 class TestLoadJson:
     """Tests for load_json function."""
 
@@ -78,6 +79,7 @@ class TestLoadJson:
         assert "is not a file" in str(exc_info.value)
 
 
+@pytest.mark.unit
 class TestCalculateChecksums:
     """Tests for calculate_checksums (lenient version)."""
 
@@ -108,10 +110,8 @@ class TestCalculateChecksums:
 
         sha1, md5 = calculate_checksums(str(test_file))
 
-        assert sha1 is not None
-        assert md5 is not None
-        assert len(sha1) == 40  # SHA1 hex length
-        assert len(md5) == 32  # MD5 hex length
+        assert sha1 == "4916d6bdb7f78e6803698cab32d1586ea457dfc8"
+        assert md5 == "e2c865db4162bed963bfaa9ef6ac18f0"
 
     def test_nonexistent_file_returns_none(self, tmp_path: Path) -> None:
         """Test that nonexistent file returns (None, None)."""
@@ -131,10 +131,8 @@ class TestCalculateChecksums:
 
         sha1, md5 = calculate_checksums(str(test_file))
 
-        assert sha1 is not None
-        assert md5 is not None
-        assert len(sha1) == 40
-        assert len(md5) == 32
+        assert sha1 == "999aa3be859f5b133f5168e57d8a12221df6cec1"
+        assert md5 == "752ef0e8f3ee573790c989f401cab9c4"
 
     def test_permission_error_returns_none(self, tmp_path: Path) -> None:
         """Test that permission error returns (None, None)."""
@@ -153,6 +151,7 @@ class TestCalculateChecksums:
             test_file.chmod(0o644)
 
 
+@pytest.mark.unit
 class TestCalculateChecksumsStrict:
     """Tests for calculate_checksums_strict (strict version)."""
 
@@ -199,6 +198,7 @@ class TestCalculateChecksumsStrict:
         assert md5 == "d41d8cd98f00b204e9800998ecf8427e"
 
 
+@pytest.mark.unit
 class TestFindJsonFiles:
     """Tests for find_json_files function."""
 
@@ -276,6 +276,7 @@ class TestFindJsonFiles:
         assert "is not a directory" in str(exc_info.value)
 
 
+@pytest.mark.unit
 class TestFindJsonFilesWithMtime:
     """Tests for find_json_files_with_mtime function."""
 

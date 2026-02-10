@@ -11,6 +11,7 @@ import pytest
 from photos_manager import dedup
 
 
+@pytest.mark.unit
 class TestScanDirectory:
     """Tests for scan_directory function."""
 
@@ -73,6 +74,7 @@ class TestScanDirectory:
             dedup.scan_directory(str(test_file))
 
 
+@pytest.mark.unit
 class TestBuildArchiveIndex:
     """Tests for build_archive_index function."""
 
@@ -122,6 +124,7 @@ class TestBuildArchiveIndex:
         assert 200 in size_index
 
 
+@pytest.mark.unit
 class TestFindDuplicates:
     """Tests for find_duplicates function."""
 
@@ -190,6 +193,7 @@ class TestFindDuplicates:
         assert len(missing) == 1
 
 
+@pytest.mark.unit
 class TestCompareFilenames:
     """Tests for compare_filenames function."""
 
@@ -214,6 +218,7 @@ class TestCompareFilenames:
         assert warning is None
 
 
+@pytest.mark.unit
 class TestCompareTimestamps:
     """Tests for compare_timestamps function."""
 
@@ -249,6 +254,7 @@ class TestCompareTimestamps:
         assert "Could not parse" in diff
 
 
+@pytest.mark.unit
 class TestFormatSize:
     """Tests for format_size function."""
 
@@ -265,6 +271,7 @@ class TestFormatSize:
         assert dedup.format_size(0) == "0"
 
 
+@pytest.mark.unit
 class TestGroupFiles:
     """Tests for group_files_by_directory function."""
 
@@ -315,6 +322,7 @@ class TestGroupFiles:
         assert "/scan/parent/child2" in groups
 
 
+@pytest.mark.unit
 class TestAssignDirectoryNumbers:
     """Tests for assign_directory_numbers function."""
 
@@ -369,6 +377,7 @@ class TestAssignDirectoryNumbers:
         assert mapping["/scan/dir2"] == "dir00011"
 
 
+@pytest.mark.unit
 class TestGenerateCommands:
     """Tests for command generation functions."""
 
@@ -453,6 +462,7 @@ class TestGenerateCommands:
         assert "mv -iv" in commands[1]
 
 
+@pytest.mark.unit
 class TestDisplayCommands:
     """Tests for display_commands function."""
 
@@ -478,6 +488,7 @@ class TestDisplayCommands:
         assert captured.out == ""
 
 
+@pytest.mark.unit
 class TestListDisplay:
     """Tests for list display functions."""
 
@@ -530,6 +541,7 @@ class TestListDisplay:
         assert captured.out == ""
 
 
+@pytest.mark.unit
 class TestDisplayFunctions:
     """Tests for display functions."""
 
@@ -670,6 +682,7 @@ class TestDisplayFunctions:
         assert "Timestamp warnings: 2" in captured.out
 
 
+@pytest.mark.unit
 class TestSetupParser:
     """Tests for setup_parser function."""
 
@@ -692,6 +705,7 @@ class TestSetupParser:
         assert args.tolerance == 5
 
 
+@pytest.mark.integration
 class TestMain:
     """Integration tests for main/run functions."""
 
@@ -720,7 +734,7 @@ class TestMain:
         assert result == 1
 
         captured = capsys.readouterr()
-        assert "At least one of" in captured.out
+        assert "At least one of" in captured.err
 
     def test_run_show_duplicates(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with -d flag showing duplicates."""

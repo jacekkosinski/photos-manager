@@ -10,6 +10,7 @@ import pytest
 from photos_manager.index import extract_numbers, get_file_info, run
 
 
+@pytest.mark.unit
 class TestGetFileInfo:
     """Tests for get_file_info function."""
 
@@ -62,6 +63,7 @@ class TestGetFileInfo:
 
         assert result == []
 
+    @pytest.mark.skipif(os.getuid() == 0, reason="chmod 0o000 has no effect as root")
     def test_skips_files_with_read_errors(self, tmp_path: Path) -> None:
         """Test that files with read errors are skipped."""
         good_file = tmp_path / "good.txt"
@@ -103,6 +105,7 @@ class TestGetFileInfo:
         assert result == []
 
 
+@pytest.mark.unit
 class TestExtractNumbers:
     """Tests for extract_numbers function."""
 
@@ -150,6 +153,7 @@ class TestExtractNumbers:
         assert filename == "photo_123.jpg"
 
 
+@pytest.mark.integration
 class TestRun:
     """Integration tests for run() function."""
 

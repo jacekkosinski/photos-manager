@@ -49,6 +49,7 @@ except ImportError:
     EXIF_LIBS_INSTALLED = False
 
 
+@pytest.mark.unit
 class TestIsHidden:
     """Tests for is_hidden function."""
 
@@ -71,6 +72,7 @@ class TestIsHidden:
         assert is_hidden(hidden_dir) is True
 
 
+@pytest.mark.unit
 class TestScanDirectory:
     """Tests for scan_directory function."""
 
@@ -123,6 +125,7 @@ class TestScanDirectory:
         assert link_item.is_symlink()
 
 
+@pytest.mark.unit
 class TestGetItemsDepthFirst:
     """Tests for get_items_depth_first function."""
 
@@ -140,6 +143,7 @@ class TestGetItemsDepthFirst:
         assert items[-1].name == "a"
 
 
+@pytest.mark.unit
 class TestCheckFilePermissions:
     """Tests for check_file_permissions function."""
 
@@ -166,6 +170,7 @@ class TestCheckFilePermissions:
         assert current == 0o777
 
 
+@pytest.mark.unit
 class TestCheckDirPermissions:
     """Tests for check_dir_permissions function."""
 
@@ -192,6 +197,7 @@ class TestCheckDirPermissions:
         assert current == 0o700
 
 
+@pytest.mark.unit
 class TestCheckOwnership:
     """Tests for check_ownership function."""
 
@@ -220,6 +226,7 @@ class TestCheckOwnership:
         assert is_ok is False
 
 
+@pytest.mark.unit
 class TestHasUppercase:
     """Tests for has_uppercase function."""
 
@@ -240,6 +247,7 @@ class TestHasUppercase:
         assert has_uppercase("12345.txt") is False
 
 
+@pytest.mark.unit
 class TestHasSpaces:
     """Tests for has_spaces function."""
 
@@ -256,6 +264,7 @@ class TestHasSpaces:
         assert has_spaces("my  file  name.jpg") is True
 
 
+@pytest.mark.unit
 class TestNeedsNormalization:
     """Tests for needs_normalization function."""
 
@@ -276,6 +285,7 @@ class TestNeedsNormalization:
         assert needs_normalization("my_file.jpg") is False
 
 
+@pytest.mark.unit
 class TestGetUniqueNormalizedPath:
     """Tests for get_unique_normalized_path function."""
 
@@ -335,6 +345,7 @@ class TestGetUniqueNormalizedPath:
         assert result.name == "test_2.txt"
 
 
+@pytest.mark.unit
 class TestFixFilePermissions:
     """Tests for fix_file_permissions function."""
 
@@ -365,6 +376,7 @@ class TestFixFilePermissions:
         assert "[FIX]" in captured.out
 
 
+@pytest.mark.unit
 class TestFixDirPermissions:
     """Tests for fix_dir_permissions function."""
 
@@ -395,6 +407,7 @@ class TestFixDirPermissions:
         assert "[FIX]" in captured.out
 
 
+@pytest.mark.unit
 class TestRenameToNormalized:
     """Tests for rename_to_normalized function."""
 
@@ -474,6 +487,7 @@ class TestRenameToNormalized:
         assert new_path.exists()
 
 
+@pytest.mark.unit
 class TestProcessDirectory:
     """Tests for process_directory function."""
 
@@ -548,6 +562,7 @@ class TestProcessDirectory:
         assert not test_file.exists()
 
 
+@pytest.mark.unit
 class TestErrorHandling:
     """Tests for error handling in prepare module."""
 
@@ -750,6 +765,7 @@ class TestErrorHandling:
         assert result is False
 
 
+@pytest.mark.unit
 class TestExifLibraryCheck:
     """Tests for EXIF library availability checks."""
 
@@ -767,6 +783,7 @@ class TestExifLibraryCheck:
             check_exif_libraries_available()  # Should not raise
 
 
+@pytest.mark.unit
 class TestFileTypeDetection:
     """Tests for get_file_type function."""
 
@@ -826,6 +843,7 @@ class TestFileTypeDetection:
         assert get_file_type(Path("VIDEO.MP4")) == "video"
 
 
+@pytest.mark.unit
 class TestExifDateParsing:
     """Tests for parse_exif_date function."""
 
@@ -863,6 +881,7 @@ class TestExifDateParsing:
         assert parse_exif_date("\x00\x00") is None
 
 
+@pytest.mark.unit
 class TestExifDateExtraction:
     """Tests for extract_exif_date_from_image function."""
 
@@ -974,6 +993,7 @@ class TestExifDateExtraction:
             assert result is None
 
 
+@pytest.mark.unit
 class TestExtractDateFromVideo:
     """Tests for extract_date_from_video function."""
 
@@ -986,6 +1006,7 @@ class TestExtractDateFromVideo:
         assert result is None
 
 
+@pytest.mark.unit
 class TestSetMtimeFromExif:
     """Tests for set_file_mtime_from_exif function."""
 
@@ -1101,6 +1122,7 @@ class TestSetMtimeFromExif:
             assert result is False
 
 
+@pytest.mark.unit
 class TestProcessDirectoryWithExif:
     """Tests for process_directory with EXIF support."""
 
@@ -1187,6 +1209,7 @@ class TestProcessDirectoryWithExif:
             assert result is False
 
 
+@pytest.mark.integration
 class TestRunWithExifFlag:
     """Tests for run() with --use-exif flag."""
 
@@ -1245,6 +1268,7 @@ class TestRunWithExifFlag:
             assert call_args[0][4] is True  # 5th positional argument is use_exif
 
 
+@pytest.mark.integration
 class TestRunIntegration:
     """Integration tests for run() function."""
 
@@ -1534,6 +1558,7 @@ class TestRunIntegration:
         assert exit_code == 1
 
 
+@pytest.mark.unit
 class TestProcessExifTimestamps:
     """Tests for _process_exif_timestamps function."""
 

@@ -11,6 +11,7 @@ import pytest
 from photos_manager import sync
 
 
+@pytest.mark.unit
 class TestBuildFileIndex:
     """Tests for build_file_index function."""
 
@@ -87,6 +88,7 @@ class TestBuildFileIndex:
         assert index[("abc123", "def456", 1000)]["path"] == "/archive/photo1.jpg"
 
 
+@pytest.mark.unit
 class TestComputeSyncPlan:
     """Tests for compute_sync_plan function."""
 
@@ -320,6 +322,7 @@ class TestComputeSyncPlan:
         assert touch_ops[0].reason == "timestamp correction after move"
 
 
+@pytest.mark.unit
 class TestOptimizeOperations:
     """Tests for optimize_operations function."""
 
@@ -451,6 +454,7 @@ class TestOptimizeOperations:
         assert len(copy_ops) == 1
 
 
+@pytest.mark.unit
 class TestComputeMetadataUpdates:
     """Tests for compute_metadata_updates function."""
 
@@ -634,6 +638,7 @@ class TestComputeMetadataUpdates:
                 assert current_depth >= next_depth
 
 
+@pytest.mark.unit
 class TestValidateArchiveDirectories:
     """Tests for validate_archive_directories function."""
 
@@ -684,6 +689,7 @@ class TestValidateArchiveDirectories:
         assert any("not a directory" in e.lower() or "directory" in e.lower() for e in errors)
 
 
+@pytest.mark.unit
 class TestOperationToCommand:
     """Tests for SyncOperation.to_command method."""
 
@@ -736,6 +742,7 @@ class TestOperationToCommand:
         assert "/dest/photo.jpg" in commands[0]
 
 
+@pytest.mark.unit
 class TestRewriteOperationPaths:
     """Tests for rewrite_operation_paths function."""
 
@@ -874,6 +881,7 @@ class TestRewriteOperationPaths:
         assert rewritten[0].dest_path == "/remote/dest/a.jpg"
 
 
+@pytest.mark.unit
 class TestGenerateSyncScript:
     """Tests for generate_sync_script function."""
 
@@ -922,6 +930,7 @@ class TestGenerateSyncScript:
             sync.generate_sync_script(operations, "/nonexistent/dir/sync.sh")
 
 
+@pytest.mark.unit
 class TestCheckForDangerousOperations:
     """Tests for check_for_dangerous_operations function."""
 
@@ -978,6 +987,7 @@ class TestCheckForDangerousOperations:
         assert len(warnings) == 0
 
 
+@pytest.mark.integration
 class TestExecuteSync:
     """Tests for execute_sync function."""
 
@@ -1031,6 +1041,7 @@ class TestExecuteSync:
         assert failed > 0
 
 
+@pytest.mark.unit
 class TestLoadArchive:
     """Tests for load_archive function."""
 
@@ -1096,6 +1107,7 @@ class TestLoadArchive:
         assert any("invalid" in e.lower() or "json" in e.lower() for e in errors)
 
 
+@pytest.mark.unit
 class TestMain:
     """Integration tests for the main run() function."""
 
@@ -1330,6 +1342,7 @@ class TestMain:
         assert exit_code == 1
 
 
+@pytest.mark.unit
 class TestLoadVersionData:
     """Tests for load_version_data function."""
 
@@ -1381,6 +1394,7 @@ class TestLoadVersionData:
         assert path is not None  # Path exists but data is None
 
 
+@pytest.mark.unit
 class TestCompareVersionFiles:
     """Tests for compare_version_files function."""
 
@@ -1457,6 +1471,7 @@ class TestCompareVersionFiles:
         assert len(deleted) == 0
 
 
+@pytest.mark.unit
 class TestComputeJsonOperations:
     """Tests for compute_json_operations function."""
 
@@ -1546,6 +1561,7 @@ class TestComputeJsonOperations:
         assert len(ops) == 0
 
 
+@pytest.mark.unit
 class TestComputeVersionOperation:
     """Tests for compute_version_operation function."""
 
@@ -1587,6 +1603,7 @@ class TestComputeVersionOperation:
         assert op is None
 
 
+@pytest.mark.unit
 class TestLoadArchiveWithFilter:
     """Tests for load_archive with json_filter parameter."""
 
@@ -1656,6 +1673,7 @@ class TestLoadArchiveWithFilter:
         assert len(json_files) == 0
 
 
+@pytest.mark.unit
 class TestVersionOptimization:
     """Integration tests for version-based optimization."""
 

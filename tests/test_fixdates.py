@@ -18,6 +18,7 @@ from photos_manager.fixdates import (
 )
 
 
+@pytest.mark.unit
 class TestGetNewestFiles:
     """Tests for get_newest_files function."""
 
@@ -92,6 +93,7 @@ class TestGetNewestFiles:
             get_newest_files(str(json_file))
 
 
+@pytest.mark.unit
 class TestSetFilesTimestamps:
     """Tests for set_files_timestamps function."""
 
@@ -176,6 +178,7 @@ class TestSetFilesTimestamps:
         assert "missing path or date" in captured.err
 
 
+@pytest.mark.unit
 class TestSetDirsTimestamps:
     """Tests for set_dirs_timestamps function."""
 
@@ -241,6 +244,7 @@ class TestSetDirsTimestamps:
         assert "does not exist" in captured.err
 
 
+@pytest.mark.unit
 class TestSetJsonTimestamps:
     """Tests for set_json_timestamps function."""
 
@@ -326,6 +330,7 @@ class TestSetJsonTimestamps:
         assert "does not exist" in captured.err
 
 
+@pytest.mark.integration
 class TestRun:
     """Integration tests for run() function."""
 
