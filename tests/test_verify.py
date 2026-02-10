@@ -13,7 +13,6 @@ from photos_manager.common import (
 )
 from photos_manager.common import (
     find_json_files,
-    load_json,
 )
 from photos_manager.verify import (
     calculate_file_hash,
@@ -38,37 +37,6 @@ from photos_manager.verify import (
     verify_version_file,
     verify_version_file_timestamp,
 )
-
-
-class TestLoadJson:
-    """Tests for load_json function."""
-
-    def test_loads_valid_json(self, tmp_path: Path) -> None:
-        """Test that valid JSON is loaded correctly."""
-        json_file = tmp_path / "test.json"
-        data = cast(
-            "list[dict[str, str | int]]",
-            [{"path": "/test.jpg", "sha1": "abc", "md5": "def", "size": 100}],
-        )
-        json_file.write_text(json.dumps(data))
-
-        result = load_json(str(json_file))
-
-        assert len(result) == 1
-        assert result[0]["path"] == "/test.jpg"
-
-    def test_raises_on_nonexistent_file(self, tmp_path: Path) -> None:
-        """Test that SystemExit is raised for nonexistent file."""
-        with pytest.raises(SystemExit, match="does not exist"):
-            load_json(str(tmp_path / "missing.json"))
-
-    def test_raises_on_invalid_json(self, tmp_path: Path) -> None:
-        """Test that SystemExit is raised for invalid JSON."""
-        json_file = tmp_path / "invalid.json"
-        json_file.write_text("not valid json")
-
-        with pytest.raises(SystemExit, match="Invalid JSON"):
-            load_json(str(json_file))
 
 
 class TestLoadVersionJson:
@@ -157,33 +125,6 @@ class TestFindVersionFile:
         result = find_version_file(str(tmp_path))
 
         assert result is None
-
-
-class TestCalculateChecksums:
-    """Tests for calculate_checksums function."""
-
-    def test_calculates_checksums_for_valid_file(self, tmp_path: Path) -> None:
-        """Test that checksums are correctly calculated."""
-        test_file = tmp_path / "test.txt"
-        test_content = b"Hello, World!"
-        test_file.write_bytes(test_content)
-
-        sha1, md5 = calculate_checksums(str(test_file))
-
-        assert len(sha1) == 40
-        assert len(md5) == 32
-        assert sha1 == "0a0a9f2a6772942557ab5355d76af442f8f65e01"
-        assert md5 == "65a8e27d8879283831b664bd8b7f0ad4"
-
-    def test_calculates_checksums_for_empty_file(self, tmp_path: Path) -> None:
-        """Test checksums for empty file."""
-        test_file = tmp_path / "empty.txt"
-        test_file.write_bytes(b"")
-
-        sha1, md5 = calculate_checksums(str(test_file))
-
-        assert sha1 == "da39a3ee5e6b4b0d3255bfef95601890afd80709"
-        assert md5 == "d41d8cd98f00b204e9800998ecf8427e"
 
 
 class TestCalculateFileHash:

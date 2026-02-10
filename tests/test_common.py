@@ -294,18 +294,22 @@ class TestFindJsonFilesWithMtime:
 
     def test_sorted_by_mtime_descending(self, tmp_path: Path) -> None:
         """Test that results are sorted by mtime, newest first."""
+        import os
         import time
+
+        base_time = time.time()
 
         file1 = tmp_path / "file1.json"
         file1.write_text("[]")
-        time.sleep(0.01)  # Ensure different mtimes
+        os.utime(file1, (base_time - 2, base_time - 2))
 
         file2 = tmp_path / "file2.json"
         file2.write_text("[]")
-        time.sleep(0.01)
+        os.utime(file2, (base_time - 1, base_time - 1))
 
         file3 = tmp_path / "file3.json"
         file3.write_text("[]")
+        os.utime(file3, (base_time, base_time))
 
         result = find_json_files_with_mtime(str(tmp_path))
 

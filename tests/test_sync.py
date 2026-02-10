@@ -3,7 +3,8 @@
 import argparse
 import json
 from datetime import datetime
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -13,7 +14,7 @@ from photos_manager import sync
 class TestBuildFileIndex:
     """Tests for build_file_index function."""
 
-    def test_build_index_single_file(self):
+    def test_build_index_single_file(self) -> None:
         """Test building index with single file."""
         data = [
             {
@@ -30,7 +31,7 @@ class TestBuildFileIndex:
         assert ("abc123", "def456", 1000) in index
         assert index[("abc123", "def456", 1000)]["path"] == "/archive/photo.jpg"
 
-    def test_build_index_multiple_files(self):
+    def test_build_index_multiple_files(self) -> None:
         """Test building index with multiple files."""
         data = [
             {
@@ -55,12 +56,12 @@ class TestBuildFileIndex:
         assert ("abc123", "def456", 1000) in index
         assert ("xyz789", "uvw012", 2000) in index
 
-    def test_build_index_empty_data(self):
+    def test_build_index_empty_data(self) -> None:
         """Test building index with empty data."""
         index = sync.build_file_index([])
         assert len(index) == 0
 
-    def test_build_index_duplicate_identity(self):
+    def test_build_index_duplicate_identity(self) -> None:
         """Test building index with duplicate file identity (keeps first)."""
         data = [
             {
@@ -89,7 +90,7 @@ class TestBuildFileIndex:
 class TestComputeSyncPlan:
     """Tests for compute_sync_plan function."""
 
-    def test_sync_plan_new_file(self):
+    def test_sync_plan_new_file(self) -> None:
         """Test sync plan with new file in source."""
         source_data = [
             {
@@ -111,7 +112,7 @@ class TestComputeSyncPlan:
         assert copy_ops[0].dest_path == "/dest/photos/new.jpg"
         assert "new file" in copy_ops[0].reason
 
-    def test_sync_plan_deleted_file(self):
+    def test_sync_plan_deleted_file(self) -> None:
         """Test sync plan with file deleted from source."""
         source_data = []
         dest_data = [
@@ -131,7 +132,7 @@ class TestComputeSyncPlan:
         assert len(delete_ops) == 1
         assert delete_ops[0].dest_path == "/dest/photos/deleted.jpg"
 
-    def test_sync_plan_moved_file(self):
+    def test_sync_plan_moved_file(self) -> None:
         """Test sync plan with file moved/renamed."""
         source_data = [
             {
@@ -161,7 +162,7 @@ class TestComputeSyncPlan:
         assert move_ops[0].dest_path == "/dest/photos/new_name.jpg"
         assert "rename" in move_ops[0].reason
 
-    def test_sync_plan_timestamp_mismatch(self):
+    def test_sync_plan_timestamp_mismatch(self) -> None:
         """Test sync plan with timestamp mismatch."""
         source_data = [
             {
@@ -190,7 +191,7 @@ class TestComputeSyncPlan:
         assert touch_ops[0].dest_path == "/dest/photos/photo.jpg"
         assert "timestamp" in touch_ops[0].reason
 
-    def test_sync_plan_content_changed(self):
+    def test_sync_plan_content_changed(self) -> None:
         """Test sync plan with file content changed (same path, different content)."""
         source_data = [
             {
@@ -221,7 +222,7 @@ class TestComputeSyncPlan:
         assert len(copy_ops) == 1
         assert "changed" in copy_ops[0].reason
 
-    def test_sync_plan_identical_archives(self):
+    def test_sync_plan_identical_archives(self) -> None:
         """Test sync plan with identical archives."""
         data = [
             {
@@ -238,7 +239,7 @@ class TestComputeSyncPlan:
         # Should have no operations (identical content, path, and timestamp)
         assert len(operations) == 0
 
-    def test_sync_plan_multiple_operations(self):
+    def test_sync_plan_multiple_operations(self) -> None:
         """Test sync plan with multiple operation types."""
         source_data = [
             {
@@ -281,13 +282,13 @@ class TestComputeSyncPlan:
         assert "move" in op_types  # For renamed.jpg
         assert "delete" in op_types  # For deleted.jpg
 
-    def test_sync_plan_empty_archives(self):
+    def test_sync_plan_empty_archives(self) -> None:
         """Test sync plan with empty archives."""
         operations, warnings = sync.compute_sync_plan([], [], "/source", "/dest")
         assert len(operations) == 0
         assert len(warnings) == 0
 
-    def test_sync_plan_moved_file_with_timestamp_fix(self):
+    def test_sync_plan_moved_file_with_timestamp_fix(self) -> None:
         """Test sync plan with moved file that needs timestamp correction."""
         source_data = [
             {
@@ -322,7 +323,7 @@ class TestComputeSyncPlan:
 class TestOptimizeOperations:
     """Tests for optimize_operations function."""
 
-    def test_optimize_adds_mkdir(self):
+    def test_optimize_adds_mkdir(self) -> None:
         """Test that optimize_operations adds mkdir for new directories."""
         operations = [
             sync.SyncOperation(
@@ -342,7 +343,7 @@ class TestOptimizeOperations:
         assert len(mkdir_ops) >= 1
         assert any("/dest/new_dir" in op.dest_path for op in mkdir_ops)
 
-    def test_optimize_sorts_operations(self):
+    def test_optimize_sorts_operations(self) -> None:
         """Test that operations are sorted by type priority."""
         operations = [
             sync.SyncOperation("touch", None, "/dest/file1.jpg", 123, "test"),
@@ -369,12 +370,12 @@ class TestOptimizeOperations:
 
         assert delete_idx < move_idx < copy_idx < touch_idx
 
-    def test_optimize_empty_operations(self):
+    def test_optimize_empty_operations(self) -> None:
         """Test optimize with empty operations list."""
         optimized = sync.optimize_operations([], [], "/dest")
         assert len(optimized) == 0
 
-    def test_optimize_no_new_directories(self):
+    def test_optimize_no_new_directories(self) -> None:
         """Test optimize when no new directories are needed."""
         operations = [
             sync.SyncOperation("touch", None, "/dest/existing/file.jpg", 123, "test"),
@@ -401,7 +402,7 @@ class TestOptimizeOperations:
         touch_ops = [op for op in optimized if op.op_type == "touch"]
         assert len(touch_ops) == 1
 
-    def test_optimize_multiple_files_same_directory(self):
+    def test_optimize_multiple_files_same_directory(self) -> None:
         """Test optimize with multiple files in same new directory."""
         operations = [
             sync.SyncOperation("copy", "/src/photo1.jpg", "/dest/newdir/photo1.jpg", 123, "test"),
@@ -415,7 +416,7 @@ class TestOptimizeOperations:
         # May have multiple mkdir for nested paths, but at least one
         assert len(mkdir_ops) >= 1
 
-    def test_optimize_sorts_paths_alphabetically(self):
+    def test_optimize_sorts_paths_alphabetically(self) -> None:
         """Test that operations with same priority are sorted by path."""
         operations = [
             sync.SyncOperation("copy", "/src/z.jpg", "/dest/z.jpg", 123, "test"),
@@ -431,7 +432,7 @@ class TestOptimizeOperations:
         # Should be sorted
         assert copy_paths == sorted(copy_paths)
 
-    def test_optimize_excludes_base_directory_mkdir(self):
+    def test_optimize_excludes_base_directory_mkdir(self) -> None:
         """Test that base destination directory is not included in mkdir operations."""
         # Operation that would create a file directly in dest_dir
         operations = [
@@ -453,7 +454,7 @@ class TestOptimizeOperations:
 class TestComputeMetadataUpdates:
     """Tests for compute_metadata_updates function."""
 
-    def test_metadata_updates_for_copy(self):
+    def test_metadata_updates_for_copy(self) -> None:
         """Test metadata updates after copy operation."""
         operations = [
             sync.SyncOperation(
@@ -477,7 +478,7 @@ class TestComputeMetadataUpdates:
         dir_ops = [op for op in metadata_ops if op.op_type == "update-dir-mtime"]
         assert len(dir_ops) >= 1
 
-    def test_metadata_updates_for_delete(self):
+    def test_metadata_updates_for_delete(self) -> None:
         """Test metadata updates after delete operation."""
         operations = [sync.SyncOperation("delete", None, "/dest/dir/photo.jpg", None, "test")]
         # source_data uses relative paths
@@ -497,12 +498,12 @@ class TestComputeMetadataUpdates:
         dir_ops = [op for op in metadata_ops if op.op_type == "update-dir-mtime"]
         assert len(dir_ops) >= 1  # Now expecting update since we have files in that dir
 
-    def test_metadata_updates_empty_operations(self):
+    def test_metadata_updates_empty_operations(self) -> None:
         """Test metadata updates with no operations."""
         metadata_ops = sync.compute_metadata_updates([], [], "/dest")
         assert len(metadata_ops) == 0
 
-    def test_metadata_updates_newest_file_in_directory(self):
+    def test_metadata_updates_newest_file_in_directory(self) -> None:
         """Test that directory mtime is set to newest file."""
         operations = [sync.SyncOperation("touch", None, "/dest/dir/photo.jpg", 1234567890, "test")]
         # source_data uses relative paths
@@ -531,7 +532,7 @@ class TestComputeMetadataUpdates:
         expected_mtime = int(datetime.fromisoformat("2024-01-02T12:00:00+01:00").timestamp())
         assert any(op.expected_mtime == expected_mtime for op in dir_ops)
 
-    def test_metadata_updates_base_directory(self):
+    def test_metadata_updates_base_directory(self) -> None:
         """Test that base destination directory gets mtime update."""
         operations = [
             sync.SyncOperation(
@@ -571,7 +572,7 @@ class TestComputeMetadataUpdates:
         assert base_dir_ops[0].expected_mtime == expected_mtime
         assert "subtree" in base_dir_ops[0].reason
 
-    def test_metadata_updates_parent_directories(self):
+    def test_metadata_updates_parent_directories(self) -> None:
         """Test that all parent directories get mtime updates."""
         operations = [
             sync.SyncOperation(
@@ -603,7 +604,7 @@ class TestComputeMetadataUpdates:
         for op in dir_ops:
             assert op.expected_mtime == expected_mtime
 
-    def test_metadata_updates_sorted_deepest_first(self):
+    def test_metadata_updates_sorted_deepest_first(self) -> None:
         """Test that directory mtime updates are sorted from deepest to shallowest."""
         source_data = [
             {
@@ -636,7 +637,7 @@ class TestComputeMetadataUpdates:
 class TestValidateArchiveDirectories:
     """Tests for validate_archive_directories function."""
 
-    def test_validate_valid_directories(self, tmp_path):
+    def test_validate_valid_directories(self, tmp_path: Path) -> None:
         """Test validation with valid source and destination directories."""
         source_dir = tmp_path / "source"
         dest_dir = tmp_path / "dest"
@@ -648,7 +649,7 @@ class TestValidateArchiveDirectories:
         assert valid
         assert len(errors) == 0
 
-    def test_validate_nonexistent_source(self, tmp_path):
+    def test_validate_nonexistent_source(self, tmp_path: Path) -> None:
         """Test validation with nonexistent source directory."""
         source_dir = tmp_path / "nonexistent"
         dest_dir = tmp_path / "dest"
@@ -660,7 +661,7 @@ class TestValidateArchiveDirectories:
         assert len(errors) > 0
         assert any("source" in e.lower() for e in errors)
 
-    def test_validate_nonexistent_dest(self, tmp_path):
+    def test_validate_nonexistent_dest(self, tmp_path: Path) -> None:
         """Test validation with nonexistent destination directory."""
         source_dir = tmp_path / "source"
         dest_dir = tmp_path / "nonexistent"
@@ -672,7 +673,7 @@ class TestValidateArchiveDirectories:
         assert len(errors) > 0
         assert any("destination" in e.lower() for e in errors)
 
-    def test_validate_file_instead_of_directory(self, tmp_path):
+    def test_validate_file_instead_of_directory(self, tmp_path: Path) -> None:
         """Test validation when path points to file instead of directory."""
         source_file = tmp_path / "source.txt"
         dest_dir = tmp_path / "dest"
@@ -688,7 +689,7 @@ class TestValidateArchiveDirectories:
 class TestOperationToCommand:
     """Tests for SyncOperation.to_command method."""
 
-    def test_mkdir_command(self):
+    def test_mkdir_command(self) -> None:
         """Test mkdir operation command generation."""
         op = sync.SyncOperation("mkdir", None, "/dest/newdir", None, "test")
         commands = op.to_command()
@@ -696,7 +697,7 @@ class TestOperationToCommand:
         assert len(commands) == 1
         assert "mkdir -p /dest/newdir" in commands[0]
 
-    def test_copy_command(self):
+    def test_copy_command(self) -> None:
         """Test copy operation command generation."""
         op = sync.SyncOperation("copy", "/src/photo.jpg", "/dest/photo.jpg", 1234567890, "test")
         commands = op.to_command()
@@ -706,7 +707,7 @@ class TestOperationToCommand:
         assert "/src/photo.jpg" in commands[0]
         assert "/dest/photo.jpg" in commands[0]
 
-    def test_move_command(self):
+    def test_move_command(self) -> None:
         """Test move operation command generation."""
         op = sync.SyncOperation("move", "/dest/old.jpg", "/dest/new.jpg", None, "test")
         commands = op.to_command()
@@ -716,7 +717,7 @@ class TestOperationToCommand:
         assert "/dest/old.jpg" in commands[0]
         assert "/dest/new.jpg" in commands[0]
 
-    def test_delete_command(self):
+    def test_delete_command(self) -> None:
         """Test delete operation command generation."""
         op = sync.SyncOperation("delete", None, "/dest/old.jpg", None, "test")
         commands = op.to_command()
@@ -725,7 +726,7 @@ class TestOperationToCommand:
         assert "rm" in commands[0]
         assert "/dest/old.jpg" in commands[0]
 
-    def test_touch_command(self):
+    def test_touch_command(self) -> None:
         """Test touch operation command generation."""
         # Timestamp: 2024-01-01 12:00:00 UTC
         mtime = 1704110400
@@ -740,7 +741,7 @@ class TestOperationToCommand:
 class TestRewriteOperationPaths:
     """Tests for rewrite_operation_paths function."""
 
-    def test_rewrite_copy_operation(self):
+    def test_rewrite_copy_operation(self) -> None:
         """Test rewriting copy operation paths."""
         operations = [
             sync.SyncOperation(
@@ -763,7 +764,7 @@ class TestRewriteOperationPaths:
         assert rewritten[0].expected_mtime == 1234567890
         assert rewritten[0].reason == "new file"
 
-    def test_rewrite_move_operation(self):
+    def test_rewrite_move_operation(self) -> None:
         """Test rewriting move operation paths (both source and dest)."""
         operations = [
             sync.SyncOperation(
@@ -782,7 +783,7 @@ class TestRewriteOperationPaths:
         assert rewritten[0].source_path == "/remote/dest/photos/old.jpg"
         assert rewritten[0].dest_path == "/remote/dest/photos/new.jpg"
 
-    def test_rewrite_mkdir_operation(self):
+    def test_rewrite_mkdir_operation(self) -> None:
         """Test rewriting mkdir operation paths."""
         operations = [
             sync.SyncOperation(
@@ -800,7 +801,7 @@ class TestRewriteOperationPaths:
         assert rewritten[0].source_path is None
         assert rewritten[0].dest_path == "/remote/dest/photos/newdir"
 
-    def test_rewrite_touch_operation(self):
+    def test_rewrite_touch_operation(self) -> None:
         """Test rewriting touch operation paths."""
         operations = [
             sync.SyncOperation(
@@ -818,7 +819,7 @@ class TestRewriteOperationPaths:
         assert rewritten[0].dest_path == "/remote/dest/photos/photo.jpg"
         assert rewritten[0].expected_mtime == 1234567890
 
-    def test_rewrite_delete_operation(self):
+    def test_rewrite_delete_operation(self) -> None:
         """Test rewriting delete operation paths."""
         operations = [
             sync.SyncOperation(
@@ -835,7 +836,7 @@ class TestRewriteOperationPaths:
         assert len(rewritten) == 1
         assert rewritten[0].dest_path == "/remote/dest/photos/old.jpg"
 
-    def test_rewrite_multiple_operations(self):
+    def test_rewrite_multiple_operations(self) -> None:
         """Test rewriting multiple operations of different types."""
         operations = [
             sync.SyncOperation("mkdir", None, "/local/dest/newdir", None, "test"),
@@ -856,12 +857,12 @@ class TestRewriteOperationPaths:
         assert rewritten[3].dest_path == "/remote/dest/d.jpg"
         assert rewritten[4].dest_path == "/remote/dest/e.jpg"
 
-    def test_rewrite_empty_operations(self):
+    def test_rewrite_empty_operations(self) -> None:
         """Test rewriting empty operations list."""
         rewritten = sync.rewrite_operation_paths([], "/local/dest", "/remote/dest")
         assert len(rewritten) == 0
 
-    def test_rewrite_preserves_original_list(self):
+    def test_rewrite_preserves_original_list(self) -> None:
         """Test that original operations list is not modified."""
         operations = [
             sync.SyncOperation("copy", "/src/a.jpg", "/local/dest/a.jpg", 123, "test"),
@@ -878,7 +879,7 @@ class TestRewriteOperationPaths:
 class TestGenerateSyncScript:
     """Tests for generate_sync_script function."""
 
-    def test_generate_script_basic(self, tmp_path):
+    def test_generate_script_basic(self, tmp_path: Path) -> None:
         """Test basic script generation with block comments."""
         output_path = tmp_path / "sync.sh"
         operations = [
@@ -900,7 +901,7 @@ class TestGenerateSyncScript:
         assert "# Create directories" in script_content
         assert "# Copy files" in script_content
 
-    def test_generate_script_is_executable(self, tmp_path):
+    def test_generate_script_is_executable(self, tmp_path: Path) -> None:
         """Test that generated script is executable."""
         output_path = tmp_path / "sync.sh"
         operations = [
@@ -913,7 +914,7 @@ class TestGenerateSyncScript:
         file_stat = output_path.stat()
         assert file_stat.st_mode & 0o111  # Check any execute bit is set
 
-    def test_generate_script_invalid_path(self):
+    def test_generate_script_invalid_path(self) -> None:
         """Test script generation with invalid output path."""
         operations = [
             sync.SyncOperation("mkdir", None, "/dest/newdir", None, "test"),
@@ -926,7 +927,7 @@ class TestGenerateSyncScript:
 class TestCheckForDangerousOperations:
     """Tests for check_for_dangerous_operations function."""
 
-    def test_check_safe_operations(self):
+    def test_check_safe_operations(self) -> None:
         """Test checking operations that are safe."""
         operations = [
             sync.SyncOperation("copy", "/src/a.jpg", "/dest/a.jpg", 123, "test"),
@@ -938,7 +939,7 @@ class TestCheckForDangerousOperations:
         assert not dangerous
         assert len(warnings) == 0
 
-    def test_check_mass_deletion_count(self):
+    def test_check_mass_deletion_count(self) -> None:
         """Test checking for mass deletion by count (>100 files)."""
         operations = [
             sync.SyncOperation("delete", None, f"/dest/file{i}.jpg", None, "test")
@@ -951,7 +952,7 @@ class TestCheckForDangerousOperations:
         assert len(warnings) > 0
         assert any("mass deletion" in w.lower() for w in warnings)
 
-    def test_check_mass_deletion_percentage(self):
+    def test_check_mass_deletion_percentage(self) -> None:
         """Test checking for mass deletion by percentage (>30%)."""
         operations = [
             sync.SyncOperation("delete", None, f"/dest/del{i}.jpg", None, "test") for i in range(40)
@@ -966,7 +967,7 @@ class TestCheckForDangerousOperations:
         assert len(warnings) > 0
         assert any("deletion" in w.lower() for w in warnings)
 
-    def test_check_no_deletions(self):
+    def test_check_no_deletions(self) -> None:
         """Test checking operations with no deletions."""
         operations = [
             sync.SyncOperation("copy", "/src/a.jpg", "/dest/a.jpg", 123, "test"),
@@ -982,7 +983,7 @@ class TestCheckForDangerousOperations:
 class TestExecuteSync:
     """Tests for execute_sync function."""
 
-    def test_execute_dry_run(self):
+    def test_execute_dry_run(self) -> None:
         """Test executing operations in dry-run mode."""
         operations = [
             sync.SyncOperation("mkdir", None, "/dest/newdir", None, "test"),
@@ -995,7 +996,7 @@ class TestExecuteSync:
         assert successful > 0
         assert failed == 0
 
-    def test_execute_empty_operations(self):
+    def test_execute_empty_operations(self) -> None:
         """Test executing empty operations list."""
         successful, failed = sync.execute_sync([], dry_run=True)
 
@@ -1003,7 +1004,7 @@ class TestExecuteSync:
         assert failed == 0
 
     @patch("os.system")
-    def test_execute_real_mode_success(self, mock_system):
+    def test_execute_real_mode_success(self, mock_system: MagicMock) -> None:
         """Test executing operations in real mode with success."""
         mock_system.return_value = 0  # Success
 
@@ -1018,7 +1019,7 @@ class TestExecuteSync:
         assert mock_system.called
 
     @patch("os.system")
-    def test_execute_real_mode_failure(self, mock_system):
+    def test_execute_real_mode_failure(self, mock_system: MagicMock) -> None:
         """Test executing operations in real mode with failure."""
         mock_system.return_value = 1  # Failure
 
@@ -1035,7 +1036,7 @@ class TestExecuteSync:
 class TestLoadArchive:
     """Tests for load_archive function."""
 
-    def test_load_archive_valid(self, tmp_path):
+    def test_load_archive_valid(self, tmp_path: Path) -> None:
         """Test loading a valid archive."""
         # Create archive structure
         archive_dir = tmp_path / "archive"
@@ -1072,7 +1073,7 @@ class TestLoadArchive:
         assert len(json_files) == 1
         assert version is not None
 
-    def test_load_archive_no_json_files(self, tmp_path):
+    def test_load_archive_no_json_files(self, tmp_path: Path) -> None:
         """Test loading archive with no JSON files."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
@@ -1082,7 +1083,7 @@ class TestLoadArchive:
         assert len(errors) > 0
         assert len(all_data) == 0
 
-    def test_load_archive_invalid_json(self, tmp_path):
+    def test_load_archive_invalid_json(self, tmp_path: Path) -> None:
         """Test loading archive with invalid JSON file."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
@@ -1100,7 +1101,7 @@ class TestLoadArchive:
 class TestMain:
     """Integration tests for the main run() function."""
 
-    def test_run_missing_arguments(self):
+    def test_run_missing_arguments(self) -> None:
         """Test run with missing required arguments."""
         parser = argparse.ArgumentParser()
         sync.setup_parser(parser)
@@ -1108,7 +1109,7 @@ class TestMain:
         with pytest.raises(SystemExit):
             parser.parse_args([])
 
-    def test_run_invalid_source_directory(self, tmp_path):
+    def test_run_invalid_source_directory(self, tmp_path: Path) -> None:
         """Test run with invalid source directory."""
         parser = argparse.ArgumentParser()
         sync.setup_parser(parser)
@@ -1121,7 +1122,7 @@ class TestMain:
 
         assert exit_code != 0
 
-    def test_run_invalid_dest_directory(self, tmp_path):
+    def test_run_invalid_dest_directory(self, tmp_path: Path) -> None:
         """Test run with invalid destination directory."""
         parser = argparse.ArgumentParser()
         sync.setup_parser(parser)
@@ -1134,7 +1135,7 @@ class TestMain:
 
         assert exit_code != 0
 
-    def test_run_dry_run_mode(self, tmp_path):
+    def test_run_dry_run_mode(self, tmp_path: Path) -> None:
         """Test run in dry-run mode with valid archives."""
         # Create source archive
         source_dir = tmp_path / "source"
@@ -1169,7 +1170,7 @@ class TestMain:
         # Should succeed in dry-run mode
         assert exit_code == 0
 
-    def test_run_no_delete_flag(self, tmp_path):
+    def test_run_no_delete_flag(self, tmp_path: Path) -> None:
         """Test run with --no-delete flag."""
         # Create archives
         source_dir = tmp_path / "source"
@@ -1200,7 +1201,7 @@ class TestMain:
         # Should succeed
         assert exit_code == 0
 
-    def test_run_with_output_script(self, tmp_path):
+    def test_run_with_output_script(self, tmp_path: Path) -> None:
         """Test run with --output flag to generate script."""
         # Create archives
         source_dir = tmp_path / "source"
@@ -1225,7 +1226,7 @@ class TestMain:
         assert exit_code == 0
         assert output_script.exists()
 
-    def test_run_verbose_mode(self, tmp_path):
+    def test_run_verbose_mode(self, tmp_path: Path) -> None:
         """Test run with --verbose flag."""
         # Create archives
         source_dir = tmp_path / "source"
@@ -1247,7 +1248,7 @@ class TestMain:
         # Should succeed
         assert exit_code == 0
 
-    def test_run_with_rewrite_dest(self, tmp_path):
+    def test_run_with_rewrite_dest(self, tmp_path: Path) -> None:
         """Test run with --rewrite-dest flag rewrites paths in output script."""
         # Create archives
         source_dir = tmp_path / "source"
@@ -1296,7 +1297,7 @@ class TestMain:
         assert str(dest_dir) not in script_content
 
     @patch("builtins.input")
-    def test_run_execute_mode_cancellation(self, mock_input, tmp_path):
+    def test_run_execute_mode_cancellation(self, mock_input: MagicMock, tmp_path: Path) -> None:
         """Test run with --execute flag but user cancels at prompt."""
         mock_input.return_value = "no"
 
@@ -1334,7 +1335,7 @@ class TestMain:
 class TestLoadVersionData:
     """Tests for load_version_data function."""
 
-    def test_load_version_data_valid(self, tmp_path):
+    def test_load_version_data_valid(self, tmp_path: Path) -> None:
         """Test loading valid .version.json file."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
@@ -1358,7 +1359,7 @@ class TestLoadVersionData:
         assert isinstance(files, dict)
         assert files["photos.json"] == "abc123"
 
-    def test_load_version_data_missing(self, tmp_path):
+    def test_load_version_data_missing(self, tmp_path: Path) -> None:
         """Test loading when .version.json is missing."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
@@ -1368,7 +1369,7 @@ class TestLoadVersionData:
         assert data is None
         assert path is None
 
-    def test_load_version_data_invalid_json(self, tmp_path):
+    def test_load_version_data_invalid_json(self, tmp_path: Path) -> None:
         """Test loading invalid .version.json file."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
@@ -1385,7 +1386,7 @@ class TestLoadVersionData:
 class TestCompareVersionFiles:
     """Tests for compare_version_files function."""
 
-    def test_compare_identical_versions(self):
+    def test_compare_identical_versions(self) -> None:
         """Test comparing identical version files."""
         source = {"files": {"a.json": "abc123", "b.json": "def456"}}
         dest = {"files": {"a.json": "abc123", "b.json": "def456"}}
@@ -1396,7 +1397,7 @@ class TestCompareVersionFiles:
         assert len(new) == 0
         assert len(deleted) == 0
 
-    def test_compare_changed_json(self):
+    def test_compare_changed_json(self) -> None:
         """Test detecting changed JSON files."""
         source = {"files": {"a.json": "abc123", "b.json": "new456"}}
         dest = {"files": {"a.json": "abc123", "b.json": "old456"}}
@@ -1407,7 +1408,7 @@ class TestCompareVersionFiles:
         assert len(new) == 0
         assert len(deleted) == 0
 
-    def test_compare_new_json(self):
+    def test_compare_new_json(self) -> None:
         """Test detecting new JSON files in source."""
         source = {"files": {"a.json": "abc123", "c.json": "new789"}}
         dest = {"files": {"a.json": "abc123"}}
@@ -1418,7 +1419,7 @@ class TestCompareVersionFiles:
         assert "c.json" in new
         assert len(deleted) == 0
 
-    def test_compare_deleted_json(self):
+    def test_compare_deleted_json(self) -> None:
         """Test detecting deleted JSON files."""
         source = {"files": {"a.json": "abc123"}}
         dest = {"files": {"a.json": "abc123", "old.json": "delete"}}
@@ -1429,7 +1430,7 @@ class TestCompareVersionFiles:
         assert len(new) == 0
         assert "old.json" in deleted
 
-    def test_compare_with_none_source(self):
+    def test_compare_with_none_source(self) -> None:
         """Test comparing when source version is None."""
         dest = {"files": {"a.json": "abc123"}}
 
@@ -1439,7 +1440,7 @@ class TestCompareVersionFiles:
         assert len(new) == 0
         assert "a.json" in deleted
 
-    def test_compare_with_none_dest(self):
+    def test_compare_with_none_dest(self) -> None:
         """Test comparing when dest version is None."""
         source = {"files": {"a.json": "abc123"}}
 
@@ -1449,7 +1450,7 @@ class TestCompareVersionFiles:
         assert "a.json" in new
         assert len(deleted) == 0
 
-    def test_compare_both_none(self):
+    def test_compare_both_none(self) -> None:
         """Test comparing when both versions are None."""
         changed, new, deleted = sync.compare_version_files(None, None)
 
@@ -1461,7 +1462,7 @@ class TestCompareVersionFiles:
 class TestComputeJsonOperations:
     """Tests for compute_json_operations function."""
 
-    def test_compute_json_ops_changed(self, tmp_path):
+    def test_compute_json_ops_changed(self, tmp_path: Path) -> None:
         """Test generating operations for changed JSON files."""
         source_dir = tmp_path / "source"
         source_dir.mkdir()
@@ -1486,7 +1487,7 @@ class TestComputeJsonOperations:
         assert "photos.json" in ops[0].source_path
         assert ops[0].reason == "JSON changed"
 
-    def test_compute_json_ops_new(self, tmp_path):
+    def test_compute_json_ops_new(self, tmp_path: Path) -> None:
         """Test generating operations for new JSON files."""
         source_dir = tmp_path / "source"
         source_dir.mkdir()
@@ -1509,7 +1510,7 @@ class TestComputeJsonOperations:
         assert ops[0].op_type == "copy"
         assert ops[0].reason == "new JSON"
 
-    def test_compute_json_ops_deleted(self, tmp_path):
+    def test_compute_json_ops_deleted(self, tmp_path: Path) -> None:
         """Test generating operations for deleted JSON files."""
         source_dir = tmp_path / "source"
         source_dir.mkdir()
@@ -1529,7 +1530,7 @@ class TestComputeJsonOperations:
         assert "old.json" in ops[0].dest_path
         assert ops[0].reason == "JSON not in source"
 
-    def test_compute_json_ops_empty(self, tmp_path):
+    def test_compute_json_ops_empty(self, tmp_path: Path) -> None:
         """Test with no JSON changes."""
         source_dir = tmp_path / "source"
         source_dir.mkdir()
@@ -1550,7 +1551,7 @@ class TestComputeJsonOperations:
 class TestComputeVersionOperation:
     """Tests for compute_version_operation function."""
 
-    def test_compute_version_op_exists(self, tmp_path):
+    def test_compute_version_op_exists(self, tmp_path: Path) -> None:
         """Test generating operation when version file exists."""
         source_dir = tmp_path / "source"
         source_dir.mkdir()
@@ -1569,7 +1570,7 @@ class TestComputeVersionOperation:
         assert str(dest_dir) in op.dest_path
         assert op.reason == "sync version file"
 
-    def test_compute_version_op_none_path(self, tmp_path):
+    def test_compute_version_op_none_path(self, tmp_path: Path) -> None:
         """Test when version path is None."""
         dest_dir = tmp_path / "dest"
         dest_dir.mkdir()
@@ -1578,7 +1579,7 @@ class TestComputeVersionOperation:
 
         assert op is None
 
-    def test_compute_version_op_missing_file(self, tmp_path):
+    def test_compute_version_op_missing_file(self, tmp_path: Path) -> None:
         """Test when version file doesn't exist."""
         dest_dir = tmp_path / "dest"
         dest_dir.mkdir()
@@ -1591,7 +1592,7 @@ class TestComputeVersionOperation:
 class TestLoadArchiveWithFilter:
     """Tests for load_archive with json_filter parameter."""
 
-    def test_load_archive_with_filter(self, tmp_path):
+    def test_load_archive_with_filter(self, tmp_path: Path) -> None:
         """Test loading archive with JSON filter."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
@@ -1638,7 +1639,7 @@ class TestLoadArchiveWithFilter:
         assert len(json_files) == 1
         assert "photos.json" in json_files[0]
 
-    def test_load_archive_filter_excludes_all(self, tmp_path):
+    def test_load_archive_filter_excludes_all(self, tmp_path: Path) -> None:
         """Test loading archive with filter that excludes all files."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
@@ -1660,7 +1661,7 @@ class TestLoadArchiveWithFilter:
 class TestVersionOptimization:
     """Integration tests for version-based optimization."""
 
-    def test_identical_archives_skip_comparison(self, tmp_path):
+    def test_identical_archives_skip_comparison(self, tmp_path: Path) -> None:
         """Test that identical archives skip detailed comparison."""
         source_dir = tmp_path / "source"
         source_dir.mkdir()

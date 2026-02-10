@@ -6,91 +6,14 @@ import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
-from unittest.mock import patch
 
 import pytest
 
 from photos_manager import dedup
-from photos_manager.common import calculate_checksums, load_json
 
 if TYPE_CHECKING:
     from _pytest.capture import CaptureFixture
     from _pytest.monkeypatch import MonkeyPatch
-
-
-class TestLoadJson:
-    """Tests for load_json function."""
-
-    def test_load_valid_json(self, tmp_path: Path) -> None:
-        """Test loading valid JSON file."""
-        json_file = tmp_path / "test.json"
-        test_data = [{"path": "/test.txt", "size": 100}]
-        json_file.write_text(json.dumps(test_data))
-
-        result = load_json(str(json_file))
-        assert result == test_data
-
-    def test_load_nonexistent_file(self) -> None:
-        """Test loading nonexistent file raises SystemExit."""
-        with pytest.raises(SystemExit, match="does not exist"):
-            load_json("/nonexistent/file.json")
-
-    def test_load_invalid_json(self, tmp_path: Path) -> None:
-        """Test loading invalid JSON raises SystemExit."""
-        json_file = tmp_path / "invalid.json"
-        json_file.write_text("{invalid json")
-
-        with pytest.raises(SystemExit, match="Invalid JSON"):
-            load_json(str(json_file))
-
-    def test_load_non_array_json(self, tmp_path: Path) -> None:
-        """Test loading JSON that's not an array raises SystemExit."""
-        json_file = tmp_path / "object.json"
-        json_file.write_text('{"key": "value"}')
-
-        with pytest.raises(SystemExit, match="does not contain a JSON array"):
-            load_json(str(json_file))
-
-
-class TestCalculateChecksums:
-    """Tests for calculate_checksums function."""
-
-    def test_calculate_checksums_success(self, tmp_path: Path) -> None:
-        """Test successful checksum calculation."""
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("test content")
-
-        sha1, md5 = calculate_checksums(str(test_file))
-        assert sha1 == "1eebdf4fdc9fc7bf283031b93f9aef3338de9052"
-        assert md5 == "9473fdd0d880a43c21b7778d34872157"
-
-    def test_calculate_checksums_large_file(self, tmp_path: Path) -> None:
-        """Test checksum calculation for file larger than buffer size."""
-        test_file = tmp_path / "large.bin"
-        # Create file larger than 64KB buffer
-        test_file.write_bytes(b"x" * 100000)
-
-        sha1, md5 = calculate_checksums(str(test_file))
-        assert sha1 is not None
-        assert md5 is not None
-        assert len(sha1) == 40
-        assert len(md5) == 32
-
-    def test_calculate_checksums_nonexistent_file(self) -> None:
-        """Test checksum calculation for nonexistent file returns None."""
-        sha1, md5 = calculate_checksums("/nonexistent/file.txt")
-        assert sha1 is None
-        assert md5 is None
-
-    def test_calculate_checksums_permission_error(self, tmp_path: Path) -> None:
-        """Test checksum calculation handles permission errors."""
-        test_file = tmp_path / "noperm.txt"
-        test_file.write_text("test")
-
-        with patch("photos_manager.common.Path.open", side_effect=PermissionError("Access denied")):
-            sha1, md5 = calculate_checksums(str(test_file))
-            assert sha1 is None
-            assert md5 is None
 
 
 class TestScanDirectory:

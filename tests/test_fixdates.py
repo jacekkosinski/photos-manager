@@ -10,7 +10,6 @@ from typing import Any, cast
 import pytest
 from _pytest.capture import CaptureFixture
 
-from photos_manager.common import load_json
 from photos_manager.fixdates import (
     get_newest_files,
     run,
@@ -18,36 +17,6 @@ from photos_manager.fixdates import (
     set_files_timestamps,
     set_json_timestamps,
 )
-
-
-class TestLoadJson:
-    """Tests for load_json function."""
-
-    def test_loads_valid_json(self, tmp_path: Path) -> None:
-        """Test that valid JSON is loaded correctly."""
-        json_file = tmp_path / "test.json"
-        data = [{"path": "/test.jpg", "date": "2025-01-01T12:00:00+0000", "size": 100}]
-        json_file.write_text(json.dumps(data))
-
-        result = load_json(str(json_file))
-
-        assert len(result) == 1
-        assert result[0]["path"] == "/test.jpg"
-
-    def test_raises_on_nonexistent_file(self, tmp_path: Path) -> None:
-        """Test that SystemExit is raised for nonexistent file."""
-        nonexistent = tmp_path / "missing.json"
-
-        with pytest.raises(SystemExit, match="does not exist"):
-            load_json(str(nonexistent))
-
-    def test_raises_on_invalid_json(self, tmp_path: Path) -> None:
-        """Test that SystemExit is raised for invalid JSON."""
-        json_file = tmp_path / "invalid.json"
-        json_file.write_text("not valid json{")
-
-        with pytest.raises(SystemExit, match="Invalid JSON"):
-            load_json(str(json_file))
 
 
 class TestGetNewestFiles:
