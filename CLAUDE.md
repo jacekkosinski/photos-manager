@@ -51,7 +51,7 @@ pre-commit install
 
 ### Testing
 
-The project has comprehensive test coverage with 508 tests.
+The project has comprehensive test coverage with 480 tests.
 
 ```bash
 # Run all tests with coverage
@@ -148,7 +148,8 @@ photos_manager/
 ├── sync.py            # Synchronization tool
 └── verify.py          # Archive integrity verifier
 
-tests/                 # 508 tests total
+tests/                 # 480 tests total
+├── conftest.py        # Shared fixtures (current_user_and_group, verify_args)
 ├── test_cli.py
 ├── test_common.py
 ├── test_dedup.py
@@ -186,7 +187,7 @@ To run manually: `pre-commit run --all-files`
 
 ## Testing Conventions
 
-- Tests use pytest with comprehensive coverage (508 tests)
+- Tests use pytest with comprehensive coverage (480 tests)
 - Each module has dedicated test file matching the module name
 - Test structure includes:
   - Unit tests for individual functions

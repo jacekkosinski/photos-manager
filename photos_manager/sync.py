@@ -1315,11 +1315,11 @@ def run(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments with fields:
             - source: Source archive directory
             - dest: Destination archive directory
-            - dry_run: Whether to preview changes only
-            - execute: Whether to actually execute operations
+            - execute: Whether to actually execute operations (default: dry-run preview)
             - no_delete: Whether to skip deletions
             - output: Optional output script path
             - verbose: Whether to show detailed information
+            - rewrite_dest: Optional path prefix to rewrite dest in output commands
 
     Returns:
         int: Exit code indicating success or failure

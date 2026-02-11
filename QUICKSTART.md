@@ -193,11 +193,11 @@ photos prepare /photos/incoming --user storage --group storage
 ### Synchronize archives
 
 ```bash
-# Generate sync commands (rsync) for incremental backup
+# Preview sync commands without executing (default: dry-run)
 photos sync /source/archive /dest/archive
 
-# Dry-run mode
-photos sync /source/archive /dest/archive --dry-run
+# Execute sync operations for real
+photos sync /source/archive /dest/archive --execute
 ```
 
 ### Find duplicates and missing files

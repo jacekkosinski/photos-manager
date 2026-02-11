@@ -48,7 +48,7 @@ def get_newest_files(
     Examples:
         >>> newest_per_dir, newest_overall = get_newest_files("archive.json")
         >>> newest_per_dir['/photos/2024']
-        {'path': '/photos/2024/img_999.jpg', 'date': '2024-12-31T23:59:59+0100', ...}
+        {'path': '/photos/2024/img_999.jpg', 'date': '2024-12-31T23:59:59+01:00', ...}
         >>> newest_overall['path']
         '/photos/2024/img_999.jpg'
     """
@@ -251,7 +251,7 @@ def set_json_timestamps(
         error messages are printed to stderr and the function returns early.
 
     Examples:
-        >>> newest = {'path': '/photos/img.jpg', 'date': '2024-12-31T23:59:59+0100', ...}
+        >>> newest = {'path': '/photos/img.jpg', 'date': '2024-12-31T23:59:59+01:00', ...}
         >>> set_json_timestamps("photos.json", "photos", newest, dry_run=True)
         Set timestamp for 'photos.json' to match file '/photos/img.jpg' (...)
         Set timestamp for directory 'photos' to match file '/photos/img.jpg' (...)

@@ -10,7 +10,7 @@ management.
 
 - 🚀 Modern Python 3.12
 - 📝 Type-safe with mypy strict mode
-- ✅ Comprehensive testing with pytest (508 tests, 86.15% coverage)
+- ✅ Comprehensive testing with pytest (480 tests, 86.24% coverage)
 - 📚 Google-style docstrings with interrogate validation
 - 🔧 Pre-commit hooks for code quality
 - 🎯 Linting and formatting with Ruff
@@ -108,7 +108,7 @@ photos index /path/to/photos --time-zone Europe/Warsaw
         "path": "/path/to/photos/image.jpg",
         "sha1": "a1b2c3d4e5f6...",
         "md5": "d4e5f6g7h8i9...",
-        "date": "2025-01-04T12:34:56+0100",
+        "date": "2025-01-04T12:34:56+01:00",
         "size": 1234567
     }
 ]
@@ -302,13 +302,14 @@ photos-manager-cli/
 │   ├── fixdates.py        # Update file timestamps from metadata
 │   ├── sync.py            # Synchronization tool
 │   └── verify.py          # Verify archive integrity
-├── tests/                 # 508 tests, 86.15% coverage
+├── tests/                 # 480 tests, 86.24% coverage
+│   ├── conftest.py        # Shared fixtures
 │   ├── test_cli.py
 │   ├── test_common.py
 │   ├── test_dedup.py
 │   ├── test_index.py
 │   ├── test_manifest.py
-│   ├── test_prepare.py    # 117 tests
+│   ├── test_prepare.py
 │   ├── test_fixdates.py
 │   ├── test_sync.py
 │   └── test_verify.py
@@ -402,7 +403,7 @@ poetry run interrogate -v --generate-badge . photos_manager/
 
 ### Testing
 
-The project has comprehensive test coverage with 508 tests covering all modules.
+The project has comprehensive test coverage with 480 tests covering all modules.
 
 ```bash
 # Run all tests
@@ -418,7 +419,7 @@ poetry run pytest tests/test_prepare.py
 poetry run pytest -v
 ```
 
-**Test Coverage:** 86.15% overall with 508 tests across all modules.
+**Test Coverage:** 86.24% overall with 480 tests across all modules.
 
 ### Documentation
 
