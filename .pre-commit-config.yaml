@@ -130,6 +130,20 @@ repos:
       - id: vulture
         args: [".", "--min-confidence", "80"]
 
+  # Duplicate code detection - finds copy-paste duplication across modules and tests
+  - repo: https://github.com/PyCQA/pylint
+    rev: v4.0.4
+    hooks:
+      - id: pylint
+        name: pylint (duplicate-code)
+        files: ^(photos_manager|tests)/
+        args:
+          - "--disable=all"
+          - "--enable=duplicate-code"
+          - "--min-similarity-lines=6"
+          - "--ignore-imports=yes"
+          - "--ignore-comments=yes"
+
   # Spell checker - catches typos in code and documentation
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
