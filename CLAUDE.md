@@ -24,7 +24,7 @@ pre-commit install                    # install hooks
 ## Key Commands
 
 ```bash
-poetry run pytest                     # all tests (480, 86.24% coverage)
+poetry run pytest                     # all tests (~471, ~86% coverage)
 poetry run pytest tests/test_X.py    # single file
 poetry run pytest -m unit            # unit tests only
 poetry run pytest -m integration     # integration tests only
@@ -41,7 +41,9 @@ All modules: strict mypy, Google-style docstrings (≥80%), line length 100,
 `pathlib.Path` over `os.path`.
 
 Each module has `run(args)` as CLI entry point: returns `os.EX_OK` on success,
-raises `SystemExit` on error.
+raises `SystemExit` on error. Some `run()` functions catch `SystemExit`
+internally to continue processing remaining items (e.g. fixdates, verify) —
+intentional.
 
 ```
 photos_manager/
@@ -99,3 +101,11 @@ with `git tag -a vX.Y.Z -m "bump: version X → Y"`.
 - `.version.json` files are excluded from manifest processing
 - `sync` is dry-run by default; use `--execute` to perform real operations
 - prepare handles case-insensitive filesystems (macOS) correctly
+- ruff/isort enforces aliased imports (`as foo`) in a separate block — do not
+  merge them with non-aliased imports from the same module
+- Stream routing: errors/warnings → stderr; progress and result summaries →
+  stdout
+- `validate_args()` helpers must use `raise SystemExit` uniformly, not
+  `return False`
+- `prepare.iter_directory()` — iterator over visible paths (renamed from
+  `scan_directory`)
