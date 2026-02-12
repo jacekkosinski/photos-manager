@@ -487,8 +487,8 @@ class TestRun:
 
         exit_code = run(args)
 
-        # Should complete but print error to stderr
-        assert exit_code == os.EX_OK
+        # Should complete but report error and return non-zero exit code
+        assert exit_code == 1
         captured = capsys.readouterr()
         assert captured.err != ""
         assert "non-existent" in captured.err.lower() or "unreadable" in captured.err.lower()

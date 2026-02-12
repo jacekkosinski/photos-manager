@@ -187,7 +187,6 @@ def run(args: argparse.Namespace) -> int:
     Returns:
         int: Exit code indicating success or failure
             - os.EX_OK (0): Successful execution
-            - 1 (SystemExit): Error occurred during processing
 
     Raises:
         SystemExit: If any of the following errors occur:

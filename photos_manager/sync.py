@@ -1290,7 +1290,7 @@ def _handle_execution(
         print(f"  Successful: {successful}")
         print(f"  Failed: {failed}")
 
-        return 0 if failed == 0 else 1
+        return os.EX_OK if failed == 0 else 1
     else:
         print("\nDRY RUN: No changes made.")
         print("To execute these operations, run with --execute flag.")

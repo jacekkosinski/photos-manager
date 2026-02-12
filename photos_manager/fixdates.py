@@ -343,8 +343,8 @@ def run(args: argparse.Namespace) -> int:
 
     Returns:
         int: Exit code indicating success or failure
-            - os.EX_OK (0): Successful execution
-            - 1 (SystemExit): Error occurred during processing
+            - os.EX_OK (0): All JSON files processed without errors
+            - 1: One or more files were skipped due to errors
 
     Raises:
         SystemExit: If JSON files are invalid, empty, missing required fields,
@@ -356,6 +356,7 @@ def run(args: argparse.Namespace) -> int:
         Set timestamp for directory '/photos' to match file ...
     """
     # Iterate over each JSON file
+    errors = 0
     for json_file in args.json_files:
         json_path = Path(json_file)
 
@@ -364,10 +365,12 @@ def run(args: argparse.Namespace) -> int:
                 f"Error: Skipping non-existent or unreadable JSON file '{json_file}'",
                 file=sys.stderr,
             )
+            errors += 1
             continue
 
         if json_path.stat().st_size == 0 or not json_path.is_file():
             print(f"Error: Skipping empty or invalid JSON file '{json_file}'", file=sys.stderr)
+            errors += 1
             continue
 
         dir_name = str(json_path.with_suffix(""))
@@ -377,6 +380,7 @@ def run(args: argparse.Namespace) -> int:
                 f"Error: Skipping non-existent or unreadable directory '{dir_name}'",
                 file=sys.stderr,
             )
+            errors += 1
             continue
 
         try:
@@ -389,6 +393,7 @@ def run(args: argparse.Namespace) -> int:
 
         except SystemExit as e:
             print(str(e), file=sys.stderr)
+            errors += 1
             continue
 
-    return os.EX_OK
+    return os.EX_OK if errors == 0 else 1
