@@ -1411,10 +1411,7 @@ def run(args: argparse.Namespace) -> int:
             if errors_in_file == 0:
                 print(f"  PASS: All {file_count} files verified successfully")
             else:
-                print(
-                    f"  FAIL: Found {errors_in_file} error(s) in {Path(json_file).name}",
-                    file=sys.stderr,
-                )
+                print(f"  FAIL: Found {errors_in_file} error(s) in {Path(json_file).name}")
 
         except SystemExit as e:
             print(f"  Error: {e}", file=sys.stderr)
@@ -1477,5 +1474,5 @@ def run(args: argparse.Namespace) -> int:
         print("  Result: PASS - All verifications passed")
         return os.EX_OK
 
-    print(f"  Result: FAIL - Verification failed with {total_errors} error(s)", file=sys.stderr)
+    print(f"  Result: FAIL - Verification failed with {total_errors} error(s)")
     return 1

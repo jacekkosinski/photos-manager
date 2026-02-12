@@ -956,7 +956,7 @@ def execute_sync(
                         print(f"[OK] {cmd}")
                         successful += 1
                     else:
-                        print(f"[FAIL] {cmd}", file=sys.stderr)
+                        print(f"[FAIL] {cmd}")
                         failed += 1
                 except Exception as e:
                     print(f"[ERROR] {cmd}: {e}", file=sys.stderr)
