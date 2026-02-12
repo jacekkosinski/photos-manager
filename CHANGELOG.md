@@ -1,3 +1,15 @@
+## v0.5.0 (2026-02-13)
+
+### Fix
+
+- correct return value inconsistencies in fixdates, sync, and index
+- correct docstring example, stream routing, and misleading test names
+
+### Refactor
+
+- fix PASS/FAIL stream routing in verify.py and sync.py
+- fix remaining code and test inconsistencies (A, B, C, D, F-M)
+
 ## v0.4.0 (2026-02-09)
 
 ### Feat
