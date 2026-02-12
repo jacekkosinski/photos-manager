@@ -1251,15 +1251,15 @@ def _handle_execution(
     # Check for dangerous operations
     dangerous, danger_warnings = check_for_dangerous_operations(operations)
     if danger_warnings:
-        print("\nWarnings:")
+        print("\nWarnings:", file=sys.stderr)
         for warning in danger_warnings:
-            print(f"  - {warning}")
+            print(f"  - {warning}", file=sys.stderr)
 
     # Print additional warnings
     if warnings:
-        print("\nAdditional warnings:")
+        print("\nAdditional warnings:", file=sys.stderr)
         for warning in warnings:
-            print(f"  - {warning}")
+            print(f"  - {warning}", file=sys.stderr)
 
     # Show detailed operations if verbose
     _print_verbose_operations(operations, args.verbose)
@@ -1275,8 +1275,8 @@ def _handle_execution(
     # Execute operations or show dry-run message
     if args.execute:
         if dangerous:
-            print("\n⚠️  WARNING: Dangerous operations detected!")
-            print("Review the operations carefully before proceeding.")
+            print("\nWARNING: Dangerous operations detected!", file=sys.stderr)
+            print("Review the operations carefully before proceeding.", file=sys.stderr)
 
             response = input("Continue with execution? (yes/no): ")
             if response.lower() != "yes":

@@ -348,7 +348,7 @@ def display_duplicates(
         if check_filenames:
             is_same, warning = compare_filenames(str(scanned["path"]), str(archive["path"]))
             if not is_same and warning:
-                print(f"         Warning: {warning}")
+                print(f"         Warning: {warning}", file=sys.stderr)
                 filename_warnings += 1
 
         if check_timestamps:
@@ -356,7 +356,7 @@ def display_duplicates(
                 str(scanned["date"]), str(archive["date"]), tolerance
             )
             if not is_within and diff:
-                print(f"         Warning: {diff}")
+                print(f"         Warning: {diff}", file=sys.stderr)
                 timestamp_warnings += 1
 
         print()
@@ -499,26 +499,21 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def validate_args(args: argparse.Namespace) -> bool:
+def validate_args(args: argparse.Namespace) -> None:
     """Validate command-line arguments.
 
     Args:
         args: Parsed command-line arguments
 
-    Returns:
-        True if validation passes, False if user error (not exception)
-
     Raises:
-        SystemExit: On validation errors
+        SystemExit: On any validation error
     """
     # Check if at least one display flag is specified
     if not args.show_duplicates and not args.show_missing:
-        print(
-            "Error: At least one of -d/--show-duplicates or -m/--show-missing is required\n",
-            file=sys.stderr,
+        raise SystemExit(
+            "Error: At least one of -d/--show-duplicates or -m/--show-missing is required\n"
+            "Use -h or --help for usage information"
         )
-        print("Use -h or --help for usage information", file=sys.stderr)
-        return False
 
     # Validate mutually exclusive options
     if args.move and args.copy:
@@ -537,8 +532,6 @@ def validate_args(args: argparse.Namespace) -> bool:
         raise SystemExit(f"Error: Directory not found: {args.directory}")
     if not Path(args.directory).is_dir():
         raise SystemExit(f"Error: Not a directory: {args.directory}")
-
-    return True
 
 
 def process_command_mode(
@@ -640,8 +633,7 @@ def run(args: argparse.Namespace) -> int:
         SystemExit: On validation or runtime errors
     """
     # Validate arguments
-    if not validate_args(args):
-        return 1
+    validate_args(args)
 
     # Determine if we should suppress progress messages
     suppress_progress = args.list or args.move or args.copy

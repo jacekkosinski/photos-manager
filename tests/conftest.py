@@ -33,7 +33,7 @@ def verify_args(tmp_path: Path) -> Callable[..., argparse.Namespace]:
         directory: str | None = None,
         all: bool = False,  # noqa: A002
         check_timestamps: bool = False,
-        tolerance: int = 2,
+        tolerance: int = 1,
         check_extra_files: bool = False,
         check_permissions: bool = False,
         owner: str | None = None,

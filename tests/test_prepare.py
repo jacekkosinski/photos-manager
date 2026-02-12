@@ -30,12 +30,12 @@ from photos_manager.prepare import (
     has_spaces,
     has_uppercase,
     is_hidden,
+    iter_directory,
     needs_normalization,
     parse_exif_date,
     process_directory,
     rename_to_normalized,
     run,
-    scan_directory,
     set_file_mtime_from_exif,
 )
 
@@ -73,8 +73,8 @@ class TestIsHidden:
 
 
 @pytest.mark.unit
-class TestScanDirectory:
-    """Tests for scan_directory function."""
+class TestIterDirectory:
+    """Tests for iter_directory function."""
 
     def test_scans_files_and_directories(self, tmp_path: Path) -> None:
         """Test that scan returns all files and directories."""
@@ -82,7 +82,7 @@ class TestScanDirectory:
         (tmp_path / "subdir").mkdir()
         (tmp_path / "subdir" / "nested.txt").touch()
 
-        items = list(scan_directory(tmp_path))
+        items = list(iter_directory(tmp_path))
 
         assert len(items) == 3
         paths = [str(p) for p in items]
@@ -95,7 +95,7 @@ class TestScanDirectory:
         (tmp_path / ".hidden").touch()
         (tmp_path / "visible.txt").touch()
 
-        items = list(scan_directory(tmp_path))
+        items = list(iter_directory(tmp_path))
 
         assert len(items) == 1
         assert items[0].name == "visible.txt"
@@ -106,7 +106,7 @@ class TestScanDirectory:
         (tmp_path / ".hidden_dir" / "file.txt").touch()
         (tmp_path / "visible_dir").mkdir()
 
-        items = list(scan_directory(tmp_path))
+        items = list(iter_directory(tmp_path))
 
         assert len(items) == 1
         assert items[0].name == "visible_dir"
@@ -118,7 +118,7 @@ class TestScanDirectory:
         link = tmp_path / "link.txt"
         link.symlink_to(target)
 
-        items = list(scan_directory(tmp_path))
+        items = list(iter_directory(tmp_path))
 
         assert len(items) == 2
         link_item = next(i for i in items if i.name == "link.txt")
@@ -566,13 +566,13 @@ class TestProcessDirectory:
 class TestErrorHandling:
     """Tests for error handling in prepare module."""
 
-    def test_scan_directory_permission_error(self, tmp_path: Path) -> None:
+    def test_iter_directory_permission_error(self, tmp_path: Path) -> None:
         """Test that PermissionError raises SystemExit."""
         with (
             patch.object(Path, "iterdir", side_effect=PermissionError("Access denied")),
             pytest.raises(SystemExit, match="Cannot access directory"),
         ):
-            list(scan_directory(tmp_path))
+            list(iter_directory(tmp_path))
 
     def test_check_ownership_unknown_uid(self, tmp_path: Path) -> None:
         """Test check_ownership handles unknown uid gracefully."""

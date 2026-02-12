@@ -350,7 +350,7 @@ def is_hidden(path: Path) -> bool:
     return path.name.startswith(".")
 
 
-def scan_directory(directory: Path) -> Iterator[Path]:
+def iter_directory(directory: Path) -> Iterator[Path]:
     """Recursively scan directory, skipping hidden files.
 
     Yields all files and directories under the given path, excluding
@@ -367,7 +367,7 @@ def scan_directory(directory: Path) -> Iterator[Path]:
         SystemExit: If the directory does not exist or is not accessible.
 
     Examples:
-        >>> list(scan_directory(Path("/tmp/photos")))
+        >>> list(iter_directory(Path("/tmp/photos")))
         [PosixPath('/tmp/photos/img.jpg'), PosixPath('/tmp/photos/subdir')]
     """
     try:
@@ -378,7 +378,7 @@ def scan_directory(directory: Path) -> Iterator[Path]:
                 yield item  # Yield symlink but don't follow
             elif item.is_dir():
                 yield item
-                yield from scan_directory(item)
+                yield from iter_directory(item)
             else:
                 yield item
     except PermissionError as e:
@@ -401,7 +401,7 @@ def get_items_depth_first(directory: Path) -> list[Path]:
         >>> get_items_depth_first(Path("/tmp/a"))
         [PosixPath('/tmp/a/b/c.txt'), PosixPath('/tmp/a/b'), PosixPath('/tmp/a/d.txt')]
     """
-    items = list(scan_directory(directory))
+    items = list(iter_directory(directory))
     # Sort by depth (number of parts), deepest first
     return sorted(items, key=lambda p: len(p.parts), reverse=True)
 

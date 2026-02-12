@@ -10,9 +10,7 @@ from typing import cast
 
 import pytest
 
-from photos_manager.common import (
-    calculate_checksums_strict as calculate_checksums,
-)
+from photos_manager.common import calculate_checksums_strict
 from photos_manager.verify import (
     calculate_file_hash,
     collect_expected_files,
@@ -1212,7 +1210,7 @@ class TestVerifyPermissions:
         test_file.write_bytes(b"Test")
 
         json_file = tmp_path / "archive.json"
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data: list[dict[str, str | int]] = [
             {
                 "path": str(test_file),
@@ -1437,7 +1435,7 @@ class TestRun:
         test_file.write_text("content")
 
         # Create JSON with metadata
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         mtime = test_file.stat().st_mtime
         data = [
             {
@@ -1505,7 +1503,7 @@ class TestRun:
         test_file.write_text("content")
 
         # Create JSON with correct checksums
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -1538,7 +1536,7 @@ class TestRun:
         test_file.write_text("content")
 
         # Create JSON with wrong size
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -1573,7 +1571,7 @@ class TestRun:
         test_file.write_text("content")
 
         # Create JSON
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -1621,7 +1619,7 @@ class TestRun:
         mtime = test_file.stat().st_mtime
         timestamp = datetime.fromtimestamp(mtime).astimezone().isoformat()
 
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -1676,7 +1674,7 @@ class TestRun:
         test_file = test_dir / "file.txt"
         test_file.write_text("test")
 
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -1710,7 +1708,7 @@ class TestRun:
         test_file = test_dir / "file.txt"
         test_file.write_text("test")
 
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -1771,7 +1769,7 @@ class TestRun:
         extra_file = test_dir / "extra.txt"
         extra_file.write_text("extra")
 
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -1813,7 +1811,7 @@ class TestRun:
         file2.write_text("content2")
 
         # Create first JSON
-        sha1_1, md5_1 = calculate_checksums(str(file1))
+        sha1_1, md5_1 = calculate_checksums_strict(str(file1))
         data1 = [
             {
                 "path": str(file1),
@@ -1826,7 +1824,7 @@ class TestRun:
         (test_dir / "metadata1.json").write_text(json.dumps(data1))
 
         # Create second JSON
-        sha1_2, md5_2 = calculate_checksums(str(file2))
+        sha1_2, md5_2 = calculate_checksums_strict(str(file2))
         data2 = [
             {
                 "path": str(file2),
@@ -1899,7 +1897,7 @@ class TestRun:
 
         # Create JSON with recent timestamp (mismatch)
         recent_time = datetime.now().astimezone().isoformat()
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -1946,7 +1944,7 @@ class TestRun:
         test_file = test_dir / "file.txt"
         test_file.write_text("content")
 
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -1990,7 +1988,7 @@ class TestRun:
         extra_regular.write_text("extra")
 
         # Document only one file
-        sha1, md5 = calculate_checksums(str(documented))
+        sha1, md5 = calculate_checksums_strict(str(documented))
         data = [
             {
                 "path": str(documented),
@@ -2051,7 +2049,7 @@ class TestRun:
         test_file = test_dir / "file.txt"
         test_file.write_text("content")
 
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -2089,7 +2087,7 @@ class TestRun:
         test_file = test_dir / "file.txt"
         test_file.write_text("content")
 
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -2137,7 +2135,7 @@ class TestRun:
         test_file = test_dir / "file.txt"
         test_file.write_text("content")
 
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),
@@ -2188,7 +2186,7 @@ class TestRun:
         # Set wrong permissions (not 644)
         test_file.chmod(0o600)
 
-        sha1, md5 = calculate_checksums(str(test_file))
+        sha1, md5 = calculate_checksums_strict(str(test_file))
         data = [
             {
                 "path": str(test_file),

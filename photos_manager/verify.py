@@ -1072,7 +1072,7 @@ def _verify_date_formats(all_data: list[dict[str, str | int]], version_file: str
     print("\nChecking date formats in metadata...")
     invalid_dates = find_invalid_dates(all_data)
     if invalid_dates:
-        print(f"  Found {len(invalid_dates)} file(s) with invalid date format:")
+        print(f"  Found {len(invalid_dates)} file(s) with invalid date format:", file=sys.stderr)
         for path, date_errors in sorted(invalid_dates.items()):
             for date_val, error_msg in date_errors:
                 print(f"    {path}:", file=sys.stderr)
@@ -1086,7 +1086,10 @@ def _verify_date_formats(all_data: list[dict[str, str | int]], version_file: str
         print("\nChecking date formats in version file...")
         version_date_errors = validate_version_file_dates(version_file)
         if version_date_errors:
-            print(f"  Found {len(version_date_errors)} invalid date(s) in version file:")
+            print(
+                f"  Found {len(version_date_errors)} invalid date(s) in version file:",
+                file=sys.stderr,
+            )
             for field_name, date_val, error_msg in version_date_errors:
                 print(f"    Field '{field_name}':", file=sys.stderr)
                 print(f"      Date: {date_val}", file=sys.stderr)

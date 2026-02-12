@@ -602,7 +602,7 @@ class TestDisplayFunctions:
         fw, tw = dedup.display_duplicates(duplicates, True, False, 1)
 
         captured = capsys.readouterr()
-        assert "Filename differs" in captured.out
+        assert "Filename differs" in captured.err
         assert fw == 1
         assert tw == 0
 
@@ -634,7 +634,7 @@ class TestDisplayFunctions:
         fw, tw = dedup.display_duplicates(duplicates, False, True, 1)
 
         captured = capsys.readouterr()
-        assert "Timestamp differs" in captured.out
+        assert "Timestamp differs" in captured.err
         assert fw == 0
         assert tw == 1
 
@@ -710,7 +710,7 @@ class TestSetupParser:
 class TestMain:
     """Integration tests for main/run functions."""
 
-    def test_run_no_flags(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_run_no_flags(self, tmp_path: Path) -> None:
         """Test run without -d or -m flags shows error."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
@@ -731,11 +731,9 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
-        assert result == 1
-
-        captured = capsys.readouterr()
-        assert "At least one of" in captured.err
+        with pytest.raises(SystemExit) as exc_info:
+            dedup.run(args)
+        assert "At least one of" in str(exc_info.value)
 
     def test_run_show_duplicates(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with -d flag showing duplicates."""
@@ -862,7 +860,7 @@ class TestMain:
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
-        assert "Filename differs" in captured.out
+        assert "Filename differs" in captured.err
         assert "Filename warnings: 1" in captured.out
 
     def test_run_with_timestamp_check(
@@ -913,7 +911,7 @@ class TestMain:
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
-        assert "Timestamp differs" in captured.out
+        assert "Timestamp differs" in captured.err
 
     def test_run_nonexistent_json(self, tmp_path: Path) -> None:
         """Test run with nonexistent JSON file."""
