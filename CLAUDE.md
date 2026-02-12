@@ -1,305 +1,101 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with
-code in this repository.
+Guidance for Claude Code when working in this repository.
 
-## Project Overview
+## Project
 
-Photos Manager CLI is a Python 3.12+ toolkit for managing photo archives with
-utilities for indexing, verification, synchronization, and preparation:
+Photos Manager CLI — Python 3.12+ toolkit for photo archive management.
 
-- **index** - Generate JSON metadata with checksums, sizes, and timestamps
-- **manifest** - Aggregate metadata into version summaries
-- **fixdates** - Restore timestamps from metadata
-- **verify** - Verify archive integrity against metadata
-- **prepare** - Fix permissions and normalize filenames
-- **sync** - Synchronize archives
-- **dedup** - Deduplicate files
+Tools: **index** (JSON metadata), **manifest** (version summaries), **fixdates**
+(restore timestamps), **verify** (integrity check), **prepare**
+(permissions/filenames), **sync** (synchronize), **dedup** (deduplicate).
 
-## Requirements
+JSON format per file: `path`, `sha1`, `md5`, `date` (ISO 8601 with `+HH:MM`),
+`size`.
 
-- Python 3.12+
-- Poetry (recommended) or pip
-- Optional: EXIF libraries (piexif, Pillow) for prepare --use-exif
-
-Quick install:
+## Setup
 
 ```bash
-# Install Poetry
-curl -sSL https://install.python-poetry.org | python3 -
-
-# Install with EXIF support
-poetry install --extras exif
+poetry install                        # install deps
+poetry install --extras exif          # with EXIF support
+pre-commit install                    # install hooks
 ```
 
-## Development Commands
-
-### Setup
+## Key Commands
 
 ```bash
-# Install dependencies (Poetry recommended)
-poetry install
-
-# Or using pip with virtual environment
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-
-# Install pre-commit hooks
-pre-commit install
-```
-
-### Testing
-
-The project has comprehensive test coverage with 480 tests.
-
-```bash
-# Run all tests with coverage
-poetry run pytest
-
-# Run specific test file
-poetry run pytest tests/test_prepare.py
-
-# Run specific test class
-poetry run pytest tests/test_prepare.py::TestRunIntegration -v
-
-# Run with verbose output
-poetry run pytest -v
-
-# Coverage report (HTML output in htmlcov/)
-poetry run pytest --cov --cov-report=html
-```
-
-### Code Quality
-
-```bash
-# Lint with Ruff
-poetry run ruff check .
-poetry run ruff check --fix .  # Auto-fix issues
-
-# Format code
-poetry run ruff format .
-
-# Type checking (strict mode)
-poetry run mypy photos_manager/
-
-# Check docstring coverage (must be >= 80%)
-poetry run interrogate -v photos_manager/
-
-# Run all quality checks at once
-make check-all
-```
-
-### Running Tools
-
-```bash
-# Using Poetry
-poetry run index /path/to/photos
-poetry run manifest /path/to/archive
-poetry run fixdates /path/to/photos.json
-poetry run verify /path/to/archive
-poetry run prepare /path/to/directory --dry-run
-poetry run sync /source/archive /dest/archive
-poetry run dedup archive.json /path/to/scan
-
-# Or after activating virtual environment
-poetry shell
-index /path/to/photos
-manifest /path/to/archive
-fixdates /path/to/photos.json --dry-run
-verify /path/to/archive --all
-prepare /path/to/directory --dry-run
-sync /source/archive /dest/archive
-dedup archive.json /path/to/scan -d -m
+poetry run pytest                     # all tests (480, 86.24% coverage)
+poetry run pytest tests/test_X.py    # single file
+poetry run pytest -m unit            # unit tests only
+poetry run pytest -m integration     # integration tests only
+poetry run ruff check --fix .        # lint + autofix
+poetry run ruff format .             # format
+poetry run mypy photos_manager/      # type check
+make check-all                       # all quality checks
+pre-commit run --all-files           # all hooks
 ```
 
 ## Architecture
 
-All utilities are standalone scripts following unified implementation style:
+All modules: strict mypy, Google-style docstrings (≥80%), line length 100,
+`pathlib.Path` over `os.path`.
 
-- Fully type-annotated with strict mypy compliance
-- Comprehensive Google-style docstrings
-- Complete argument validation with clear error messages
-- Designed to be called as CLI tools or imported as modules
-
-### Tool Workflow
-
-Typical archive management workflow:
-
-1. **index** - Scan directory, generate JSON metadata files
-1. **manifest** - Aggregate JSON files into .version.json manifest
-1. **verify** - Validate archive integrity against metadata
-1. **fixdates** - Restore timestamps from metadata (after copying from archive)
-
-JSON format: Each file entry contains `path`, `sha1`, `md5`, `date`, `size`.
-
-### Project Structure
+Each module has `run(args)` as CLI entry point: returns `os.EX_OK` on success,
+raises `SystemExit` on error.
 
 ```
 photos_manager/
-├── __init__.py
-├── cli.py             # Main CLI entry point
-├── common.py          # Shared utilities
-├── dedup.py           # Deduplication tool
-├── index.py           # Directory scanner and metadata generator
-├── manifest.py       # Version aggregator for JSON files
-├── prepare.py         # Directory preparation (permissions, naming)
-├── fixdates.py        # Timestamp updater based on metadata
-├── sync.py            # Synchronization tool
-└── verify.py          # Archive integrity verifier
+├── cli.py        # CLI entry point
+├── common.py     # shared utilities
+├── dedup.py / index.py / manifest.py / prepare.py
+├── fixdates.py / sync.py / verify.py
+└── __init__.py
 
-tests/                 # 480 tests total
-├── conftest.py        # Shared fixtures (current_user_and_group, verify_args)
-├── test_cli.py
-├── test_common.py
-├── test_dedup.py
-├── test_index.py
-├── test_manifest.py
-├── test_prepare.py
-├── test_fixdates.py
-├── test_sync.py
-└── test_verify.py
+tests/
+├── conftest.py   # shared fixtures: current_user_and_group, verify_args
+├── test_cli.py / test_common.py / test_dedup.py / test_fixdates.py
+├── test_index.py / test_manifest.py / test_prepare.py
+└── test_sync.py / test_verify.py
 ```
-
-## Code Style Requirements
-
-- **Python version**: 3.12+
-- **Type hints**: Required on all functions (strict mypy mode)
-- **Docstrings**: Google-style docstrings required (>= 80% coverage enforced by
-  interrogate)
-- **Line length**: 100 characters (Ruff)
-- **Import sorting**: Enforced by Ruff (isort rules)
-- **Path handling**: Use `pathlib.Path` instead of `os.path` (PTH rules)
-
-## Pre-commit Hooks
-
-Pre-commit hooks run automatically on every commit and check:
-
-- Ruff linting and formatting
-- mypy strict type checking
-- interrogate docstring coverage (>= 80%)
-- Xenon code complexity checks (Radon CI)
-- File checks (trailing whitespace, large files, etc.)
-- Poetry lock file validity
-- Security checks with bandit
-
-To run manually: `pre-commit run --all-files`
 
 ## Testing Conventions
 
-- Tests use pytest with comprehensive coverage (480 tests)
-- Each module has dedicated test file matching the module name
-- Test structure includes:
-  - Unit tests for individual functions
-  - Integration tests for `run()` CLI entry points
-  - Edge case and error handling tests
-- Coverage is tracked with pytest-cov (reports in htmlcov/)
-- Type checking is relaxed in tests (see mypy overrides in pyproject.toml)
+- Unit tests: `@pytest.mark.unit` — test individual functions
+- Integration tests: `@pytest.mark.integration` — test `run()` entry points
+- 4 EXIF tests skip when piexif/Pillow not installed (expected)
+- `chmod(0o000)` tests skip when running as root (`os.getuid() == 0`)
+- Coverage tracked in `htmlcov/`; mypy relaxed in tests (see pyproject.toml)
 
-## Git Commit Conventions
+## Git Commits
 
-All commits in this repository should follow these guidelines:
-
-- **Language**: Write commit messages in English
-- **Message length**: Provide detailed descriptions spanning multiple lines
-  (typically 5-15 lines) that explain:
-  - What changes were made
-  - Why the changes were necessary
-  - Impact on coverage, performance, or functionality (when applicable)
-- **Format**: Use conventional commit format (e.g., `feat:`, `fix:`, `test:`,
-  `refactor:`, `docs:`)
-- **NO AI attribution**: Do not include references to AI assistants, Claude, or
-  similar attribution in commit messages
-- **Co-Authored-By**: Do not add Co-Authored-By tags for AI assistants
+- English, conventional format: `feat:`, `fix:`, `test:`, `refactor:`, `docs:`,
+  `chore:`
+- Multi-line messages (5–15 lines): what, why, impact
+- No AI attribution, no Co-Authored-By tags
 
 ## Version Management
 
-This project uses **Commitizen** (`cz`) for automated version bumping and
-CHANGELOG generation.
-
-### Bumping Version
-
 ```bash
-# Bump version automatically based on conventional commits
-poetry run cz bump --changelog --increment MINOR   # 0.3.0 → 0.4.0
-poetry run cz bump --changelog --increment PATCH   # 0.3.0 → 0.3.1
-poetry run cz bump --changelog --increment MAJOR   # 0.3.0 → 1.0.0
-
-# Check current version
-poetry run cz version --project
+poetry run cz bump --changelog --increment MINOR  # bump + CHANGELOG + tag
+poetry run cz version --project                   # check current version
 ```
 
-The `cz bump` command will:
+Version must be in sync: `photos_manager/__init__.py` and `pyproject.toml`.
 
-1. Analyze commit history using conventional commit format
-1. Determine appropriate version increment
-1. Update version in `photos_manager/__init__.py` and `pyproject.toml`
-1. Generate/update `CHANGELOG.md` with changes since last version
-1. Create a git commit with message: `bump: version X.Y.Z → X.Y.Z+1`
-1. Create an annotated git tag with same message format
+If `cz bump` fails due to pre-commit: stage `CHANGELOG.md`, commit manually, tag
+with `git tag -a vX.Y.Z -m "bump: version X → Y"`.
 
-### Git Tag Format
+## Adding a New Tool
 
-All version tags follow the format:
+1. Create `photos_manager/new_tool.py` with `run()`, argparse, docstrings, type
+   hints
+1. Add entry point in `pyproject.toml` under `[project.scripts]`
+1. Create `tests/test_new_tool.py`
+1. Run `make check-all`
 
-```
-Tag name: v0.4.0
-Tag message: bump: version 0.3.0 → 0.4.0
-```
+## Gotchas
 
-This format is consistent across all releases (see `git tag -l -n9`).
-
-### Manual Version Update
-
-If `cz bump` fails (e.g., due to pre-commit hook formatting), you can:
-
-1. Let `cz bump` update the files (even if commit fails)
-1. Stage the mdformat-modified CHANGELOG.md: `git add CHANGELOG.md`
-1. Commit manually: `git commit -m "bump: version X → Y"`
-1. Create tag manually: `git tag -a vX.Y.Z -m "bump: version X → Y"`
-
-Always ensure version is synchronized in both:
-
-- `photos_manager/__init__.py` - `__version__ = "X.Y.Z"`
-- `pyproject.toml` - `version = "X.Y.Z"`
-
-## Common Gotchas
-
-- **prepare --use-exif**: Requires EXIF libraries. Install with
-  `pip install photos-manager-cli[exif]`
-- **Version files**: Use `.version.json` pattern - these are excluded from
-  manifest processing
-- **Skipped tests**: 4 EXIF tests skip when piexif/Pillow not installed (this is
-  expected)
-- **Permissions**: prepare module operations may require appropriate user/group
-  permissions
-- **Case sensitivity**: prepare module handles case-insensitive filesystems
-  (macOS) correctly
-
-## Common Patterns
-
-### Adding a new CLI utility
-
-1. Create `photos_manager/new_tool.py` with `run()` function
-1. Add CLI entry point in `pyproject.toml` under `[project.scripts]`
-1. Follow existing patterns from index.py or manifest.py:
-   - Use argparse for argument parsing
-   - Return `os.EX_OK` on success
-   - Raise `SystemExit` with error messages on failure
-   - Include comprehensive docstrings
-   - Use strict type hints
-1. Create `tests/test_new_tool.py` with unit tests
-1. Run `make check-all` before committing
-
-### Working with file metadata
-
-The JSON format produced by index contains:
-
-- `path`: Absolute file path (string)
-- `sha1`: SHA1 checksum (hex string)
-- `md5`: MD5 checksum (hex string)
-- `date`: ISO 8601 timestamp with timezone (string)
-- `size`: File size in bytes (integer)
-
-This structure is validated by manifest (expects all five fields) and used by
-fixdates (requires `path` and `date` fields).
+- `prepare --use-exif` requires `pip install photos-manager-cli[exif]`
+- `.version.json` files are excluded from manifest processing
+- `sync` is dry-run by default; use `--execute` to perform real operations
+- prepare handles case-insensitive filesystems (macOS) correctly
