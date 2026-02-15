@@ -15,7 +15,9 @@ repos:
   - repo: meta
     hooks:
       - id: check-hooks-apply
+        name: check hooks apply to the repository (pre-commit)
       - id: check-useless-excludes
+        name: check for useless excludes (pre-commit)
 
   # Ruff - ultra-fast Python linter and formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -23,15 +25,18 @@ repos:
     hooks:
       # Run the linter
       - id: ruff
+        name: lint python files (ruff)
         args: [--fix, --exit-non-zero-on-fix]
       # Run the formatter
       - id: ruff-format
+        name: format python files (ruff)
 
   # mypy - static type checker
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.1
     hooks:
       - id: mypy
+        name: check static types (mypy)
         additional_dependencies:
           - pydantic>=2.5.0
         args: [--strict, --ignore-missing-imports]
@@ -41,6 +46,7 @@ repos:
     rev: v2.4.1
     hooks:
       - id: tryceratops
+        name: check exception patterns (tryceratops)
         args:
           - --ignore=TRY003 # Allow long messages in exceptions
           - --ignore=TRY101 # Allow multiple try blocks (common in file operations)
@@ -52,6 +58,7 @@ repos:
     rev: 1.7.0
     hooks:
       - id: interrogate
+        name: check docstring coverage (interrogate)
         args: [--fail-under=80, --verbose, --color, --style=google]
         pass_filenames: false
 
@@ -61,35 +68,49 @@ repos:
     hooks:
       # Prevent giant files from being committed
       - id: check-added-large-files
+        name: check for added large files (pre-commit-hooks)
         args: [--maxkb=1000]
       # Check for files that would conflict in case-insensitive filesystems
       - id: check-case-conflict
+        name: check for case conflicts (pre-commit-hooks)
       # Check for merge conflicts
       - id: check-merge-conflict
+        name: check for merge conflicts (pre-commit-hooks)
       # Check for debugger imports and py37+ breakpoint() calls
       - id: debug-statements
+        name: check for debug statements (pre-commit-hooks)
       # Check whether files parse as valid python
       - id: check-ast
+        name: check python ast (pre-commit-hooks)
       # Check for valid Python docstrings
       - id: check-docstring-first
+        name: check docstring is first (pre-commit-hooks)
       # Check YAML files for parseable syntax
       - id: check-yaml
+        name: check yaml syntax (pre-commit-hooks)
         args: [--unsafe] # Allow custom tags
       # Check TOML files for parseable syntax
       - id: check-toml
+        name: check toml syntax (pre-commit-hooks)
       # Ensure files end with a newline
       - id: end-of-file-fixer
+        name: fix end of files (pre-commit-hooks)
       # Remove trailing whitespace
       - id: trailing-whitespace
+        name: trim trailing whitespace (pre-commit-hooks)
         args: [--markdown-linebreak-ext=md]
       # Prevent accidentally committing private keys
       - id: detect-private-key
+        name: detect private key (pre-commit-hooks)
       # Ensure executable scripts have shebangs
       - id: check-executables-have-shebangs
+        name: check that executables have shebangs (pre-commit-hooks)
       # Ensure scripts with shebangs are executable
       - id: check-shebang-scripts-are-executable
+        name: check that scripts with shebangs are executable (pre-commit-hooks)
       # Prevent mixed line endings (CRLF/LF)
       - id: mixed-line-ending
+        name: check for mixed line endings (pre-commit-hooks)
         args: [--fix=lf]
       # Prevent committing to main/master (disabled for initial setup)
       # - id: no-commit-to-branch
@@ -100,7 +121,9 @@ repos:
     rev: 2.3.2
     hooks:
       - id: poetry-check
+        name: validate pyproject.toml (poetry)
       - id: poetry-lock
+        name: update lock file (poetry)
         args: [--regenerate]
 
   # Security checks - bandit
@@ -108,6 +131,7 @@ repos:
     rev: 1.9.3
     hooks:
       - id: bandit
+        name: check security issues (bandit)
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
 
@@ -116,18 +140,21 @@ repos:
     rev: v8.30.0
     hooks:
       - id: gitleaks
+        name: detect hardcoded secrets (gitleaks)
 
   # pyproject.toml formatter - ensures consistent formatting
   - repo: https://github.com/tox-dev/pyproject-fmt
     rev: v2.15.1
     hooks:
       - id: pyproject-fmt
+        name: format pyproject.toml (pyproject-fmt)
 
   # Dead code detection - finds unused functions, classes, and variables
   - repo: https://github.com/jendrikseipp/vulture
     rev: v2.14
     hooks:
       - id: vulture
+        name: detect dead code (vulture)
         args: [".", "--min-confidence", "80"]
 
   # Duplicate code detection - finds copy-paste duplication across modules and tests
@@ -135,7 +162,7 @@ repos:
     rev: v4.0.4
     hooks:
       - id: pylint
-        name: pylint (duplicate-code)
+        name: detect duplicate code (pylint)
         files: ^(photos_manager|tests)/
         args:
           - "--disable=all"
@@ -149,7 +176,7 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
-        name: codespell
+        name: check spelling (codespell)
         # Config section is within pyproject.toml
         language: python
         types: [text]
@@ -162,6 +189,7 @@ repos:
     rev: 1.20.0
     hooks:
       - id: blacken-docs
+        name: format code in docs (blacken-docs)
         additional_dependencies:
           - black==22.12.0
 
@@ -171,8 +199,10 @@ repos:
     hooks:
       # Validates commit message format (commit-msg hook)
       - id: commitizen
+        name: validate commit message (commitizen)
       # Validates branch name after commit (post-commit hook)
       - id: commitizen-branch
+        name: validate branch name (commitizen)
         stages:
           - post-commit
 
@@ -181,6 +211,7 @@ repos:
     rev: v0.1
     hooks:
       - id: xenon
+        name: check code complexity (xenon)
         args:
           - --max-absolute=D # Maximum complexity for any function
           - --max-modules=B # Maximum average for modules
@@ -191,6 +222,7 @@ repos:
     rev: 0.7.21
     hooks:
       - id: mdformat
+        name: format markdown (mdformat)
         additional_dependencies:
           - mdformat-gfm # GitHub Flavored Markdown support
           - mdformat-tables # Better table formatting
@@ -201,6 +233,7 @@ repos:
     rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
+        name: format yaml (prettier)
         types_or: [yaml]
 
 # Configuration
