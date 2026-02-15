@@ -25,7 +25,17 @@ import argparse
 import sys
 from typing import cast
 
-from photos_manager import __version__, dedup, fixdates, index, manifest, prepare, sync, verify
+from photos_manager import (
+    __version__,
+    dedup,
+    fixdates,
+    index,
+    info,
+    manifest,
+    prepare,
+    sync,
+    verify,
+)
 
 
 def main() -> int:
@@ -131,6 +141,15 @@ def main() -> int:
     )
     dedup.setup_parser(dedup_parser)
     dedup_parser.set_defaults(func=dedup.run)
+
+    # info subcommand
+    info_parser = subparsers.add_parser(
+        "info",
+        help="Show archive statistics",
+        description="Show human-readable statistics from JSON index files",
+    )
+    info.setup_parser(info_parser)
+    info_parser.set_defaults(func=info.run)
 
     # Parse arguments and execute
     args = parser.parse_args()
