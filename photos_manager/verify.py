@@ -1440,7 +1440,7 @@ def run(args: argparse.Namespace) -> int:
     sha1_duplicates, md5_duplicates = find_duplicate_checksums(all_data)
 
     if sha1_duplicates:
-        print(f"  Found {len(sha1_duplicates)} duplicate SHA1 checksum(s):")
+        print(f"  Found {len(sha1_duplicates)} duplicate SHA1 checksum(s):", file=sys.stderr)
         for sha1, paths in sorted(sha1_duplicates.items()):
             print(f"    SHA1 {sha1} appears in {len(paths)} file(s):", file=sys.stderr)
             for path in sorted(paths):
@@ -1450,7 +1450,7 @@ def run(args: argparse.Namespace) -> int:
         print("  No duplicate SHA1 checksums found")
 
     if md5_duplicates:
-        print(f"  Found {len(md5_duplicates)} duplicate MD5 checksum(s):")
+        print(f"  Found {len(md5_duplicates)} duplicate MD5 checksum(s):", file=sys.stderr)
         for md5, paths in sorted(md5_duplicates.items()):
             print(f"    MD5 {md5} appears in {len(paths)} file(s):", file=sys.stderr)
             for path in sorted(paths):

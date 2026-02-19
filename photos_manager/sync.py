@@ -34,6 +34,9 @@ from photos_manager.verify import find_version_file
 # Type alias for file identity (sha1, md5, size)
 FileIdentity = tuple[str, str, int]
 
+# Maximum number of operations shown in verbose preview
+_VERBOSE_OPS_LIMIT = 20
+
 
 @dataclass
 class SyncOperation:
@@ -1048,7 +1051,7 @@ def _print_verbose_operations(operations: list[SyncOperation], verbose: bool) ->
         return
 
     print("\nOperations (in execution order):")
-    for i, op in enumerate(operations[:20], 1):  # Show first 20
+    for i, op in enumerate(operations[:_VERBOSE_OPS_LIMIT], 1):
         op_desc = f"[{op.op_type}] {op.dest_path}"
         if op.source_path:
             op_desc += f" (from {op.source_path})"
@@ -1056,8 +1059,8 @@ def _print_verbose_operations(operations: list[SyncOperation], verbose: bool) ->
         if verbose:
             print(f"     Reason: {op.reason}")
 
-    if len(operations) > 20:
-        print(f"  ... ({len(operations) - 20} more operations)")
+    if len(operations) > _VERBOSE_OPS_LIMIT:
+        print(f"  ... ({len(operations) - _VERBOSE_OPS_LIMIT} more operations)")
 
 
 def _validate_and_load_archives(
