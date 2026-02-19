@@ -21,7 +21,7 @@ repos:
 
   # Ruff - ultra-fast Python linter and formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.0
+    rev: v0.15.1
     hooks:
       # Run the linter
       - id: ruff
@@ -144,7 +144,7 @@ repos:
 
   # pyproject.toml formatter - ensures consistent formatting
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: v2.15.1
+    rev: v2.16.1
     hooks:
       - id: pyproject-fmt
         name: format pyproject.toml (pyproject-fmt)
@@ -195,7 +195,7 @@ repos:
 
   # Conventional commits - enforces commit message format
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.13.7 # automatically updated by Commitizen
+    rev: v4.13.8 # automatically updated by Commitizen
     hooks:
       # Validates commit message format (commit-msg hook)
       - id: commitizen
@@ -219,7 +219,7 @@ repos:
 
   # Markdown formatter - ensures consistent documentation formatting (Python-based)
   - repo: https://github.com/executablebooks/mdformat
-    rev: 0.7.21
+    rev: 0.7.21 # pinned: 1.0.0 incompatible with mdformat-gfm and mdformat-tables
     hooks:
       - id: mdformat
         name: format markdown (mdformat)
