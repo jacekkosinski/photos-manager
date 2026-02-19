@@ -43,13 +43,13 @@ optional-dependencies.dev = [
   "commitizen>=4,<5",
   "interrogate>=1.5,<2",
   "mkdocs-material>=9.5,<10",
-  "mypy>=1.8,<2",
+  "mypy>=1.19,<2",
   "pre-commit>=3.6,<4",
   "pytest>=8,<9",
   "pytest-asyncio>=0.23,<1",
   "pytest-cov>=4.1,<5",
   "pytest-mock>=3.12,<4",
-  "ruff>=0.7,<1",
+  "ruff>=0.15,<1",
   "xenon>=0.9,<1",
 ]
 optional-dependencies.exif = [
@@ -66,12 +66,8 @@ urls.Repository = "https://github.com/softflow-tech/photos-manager"
 scripts.photos = "photos_manager.cli:main"
 
 [tool.poetry]
-name = "photos-manager-cli"
 version = "0.5.0"  # NOTE: Keep in sync with photos_manager/__version__
-description = "Modern CLI tool for managing photos"
-authors = [ "Jacek Kosiński <jacek.kosinski@softflow.tech>" ]
 packages = [ { include = "photos_manager" } ]
-dependencies.python = "^3.12"
 
 [tool.setuptools]
 # No runtime dependencies - project uses only Python standard library

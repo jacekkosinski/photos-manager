@@ -70,7 +70,6 @@ site/
 .ruff_cache/
 
 # interrogate
-.interrogate_badge.svg
 interrogate_badge.svg
 
 # Project specific

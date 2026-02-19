@@ -1,4 +1,6 @@
-.PHONY: help install test lint format format-check type-check docs clean pre-commit coverage check-all complexity
+.PHONY: help install install-dev test test-verbose coverage lint lint-fix format format-check type-check \
+        docstring-check docstring-badge complexity pre-commit pre-commit-install \
+        docs-serve docs-build clean check-all build run ci update lock shell version
 
 # Default target
 .DEFAULT_GOAL := help
