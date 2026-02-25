@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from photos_manager.info import _gather_stats, _human_size, _time_ago, run
+from photos_manager.info import _date_span, _gather_stats, _human_size, _time_ago, run
 
 _Record = dict[str, str | int]
 
@@ -33,6 +33,56 @@ def _write_index(tmp_path: Path, name: str, records: list[_Record]) -> Path:
     f = tmp_path / name
     f.write_text(json.dumps(records), encoding="utf-8")
     return f
+
+
+@pytest.mark.unit
+class TestDateSpan:
+    """Tests for _date_span helper."""
+
+    @pytest.mark.parametrize(
+        "date_min,date_max,expected",
+        [
+            ("2024-01-01", "2024-01-01", "0 days"),
+            ("2024-01-01", "2024-01-02", "1 day"),
+            ("2024-01-01", "2024-01-15", "14 days"),
+            ("2024-01-01", "2024-01-31", "30 days"),
+        ],
+    )
+    def test_days(self, date_min: str, date_max: str, expected: str) -> None:
+        assert _date_span(date_min, date_max) == expected
+
+    @pytest.mark.parametrize(
+        "date_min,date_max,expected",
+        [
+            ("2024-01-01", "2024-02-01", "1 month"),
+            ("2024-01-01", "2024-03-01", "2 months"),
+            ("2024-01-01", "2024-12-01", "11 months"),
+        ],
+    )
+    def test_months_only(self, date_min: str, date_max: str, expected: str) -> None:
+        assert _date_span(date_min, date_max) == expected
+
+    @pytest.mark.parametrize(
+        "date_min,date_max,expected",
+        [
+            ("2023-01-01", "2024-01-01", "1 year"),
+            ("2022-01-01", "2024-01-01", "2 years"),
+        ],
+    )
+    def test_years_only(self, date_min: str, date_max: str, expected: str) -> None:
+        assert _date_span(date_min, date_max) == expected
+
+    @pytest.mark.parametrize(
+        "date_min,date_max,expected",
+        [
+            ("2023-01-01", "2024-02-01", "1 year, 1 month"),
+            ("2023-01-01", "2024-03-01", "1 year, 2 months"),
+            ("2018-03-01", "2024-11-01", "6 years, 8 months"),
+            ("2020-06-15", "2023-09-15", "3 years, 3 months"),
+        ],
+    )
+    def test_years_and_months(self, date_min: str, date_max: str, expected: str) -> None:
+        assert _date_span(date_min, date_max) == expected
 
 
 @pytest.mark.unit
