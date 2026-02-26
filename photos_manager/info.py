@@ -33,6 +33,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument("directory", type=Path, help="Archive directory")
     parser.add_argument(
+        "-s",
         "--stats",
         action="store_true",
         help="Show detailed stats by year and file extension",
