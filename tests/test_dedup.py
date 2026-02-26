@@ -75,6 +75,91 @@ class TestScanDirectory:
 
 
 @pytest.mark.unit
+class TestLoadPsv:
+    """Tests for load_psv function."""
+
+    def test_load_psv_happy_path(self, tmp_path: Path) -> None:
+        """Test loading a valid PSV file with 3 records."""
+        psv = tmp_path / "files.psv"
+        psv.write_text(
+            "/a/photo.jpg|sha1aaa|md5aaa|2023-01-01T00:00:00+00:00|1024\n"
+            "/b/video.mp4|sha1bbb|md5bbb|2023-02-01T00:00:00+00:00|2048\n"
+            "/c/doc.pdf|sha1ccc|md5ccc|2023-03-01T00:00:00+00:00|512\n"
+        )
+
+        result = dedup.load_psv(str(psv))
+
+        assert len(result) == 3
+        assert result[0] == {
+            "path": "/a/photo.jpg",
+            "sha1": "sha1aaa",
+            "md5": "md5aaa",
+            "date": "2023-01-01T00:00:00+00:00",
+            "size": 1024,
+        }
+        assert result[1]["path"] == "/b/video.mp4"
+        assert result[2]["size"] == 512
+
+    def test_load_psv_skips_blank_lines_and_comments(self, tmp_path: Path) -> None:
+        """Test that blank lines and # comments are skipped."""
+        psv = tmp_path / "files.psv"
+        psv.write_text(
+            "# This is a comment\n"
+            "\n"
+            "/a/file.jpg|sha1aaa|md5aaa|2023-01-01T00:00:00+00:00|100\n"
+            "   \n"
+            "# Another comment\n"
+            "/b/file.jpg|sha1bbb|md5bbb|2023-01-02T00:00:00+00:00|200\n"
+        )
+
+        result = dedup.load_psv(str(psv))
+
+        assert len(result) == 2
+        assert result[0]["path"] == "/a/file.jpg"
+        assert result[1]["path"] == "/b/file.jpg"
+
+    def test_load_psv_skips_malformed_line(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that malformed lines (wrong field count) are skipped with a warning."""
+        psv = tmp_path / "files.psv"
+        psv.write_text(
+            "/a/file.jpg|sha1aaa|md5aaa|2023-01-01T00:00:00+00:00|100\n"
+            "bad-line-with-no-pipes\n"
+            "/b/file.jpg|sha1bbb|md5bbb|2023-01-02T00:00:00+00:00|200\n"
+        )
+
+        result = dedup.load_psv(str(psv))
+
+        assert len(result) == 2
+        captured = capsys.readouterr()
+        assert "malformed" in captured.err
+        assert "line 2" in captured.err
+
+    def test_load_psv_skips_invalid_size(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that lines with non-integer size are skipped with a warning."""
+        psv = tmp_path / "files.psv"
+        psv.write_text(
+            "/a/file.jpg|sha1aaa|md5aaa|2023-01-01T00:00:00+00:00|100\n"
+            "/b/file.jpg|sha1bbb|md5bbb|2023-01-02T00:00:00+00:00|not-a-number\n"
+        )
+
+        result = dedup.load_psv(str(psv))
+
+        assert len(result) == 1
+        assert result[0]["path"] == "/a/file.jpg"
+        captured = capsys.readouterr()
+        assert "invalid size" in captured.err
+
+    def test_load_psv_missing_file(self) -> None:
+        """Test that a missing PSV file raises SystemExit."""
+        with pytest.raises(SystemExit, match="Could not open PSV file"):
+            dedup.load_psv("/nonexistent/files.psv")
+
+
+@pytest.mark.unit
 class TestBuildArchiveIndex:
     """Tests for build_archive_index function."""
 
@@ -698,7 +783,7 @@ class TestSetupParser:
         )
 
         assert args.json_file == "archive.json"
-        assert args.directory == "/scan/dir"
+        assert args.source == "/scan/dir"
         assert args.show_duplicates is True
         assert args.show_missing is True
         assert args.check_filenames is True
@@ -719,7 +804,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=False,
             show_missing=False,
             check_filenames=False,
@@ -764,7 +849,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -796,7 +881,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=False,
             show_missing=True,
             check_filenames=False,
@@ -844,7 +929,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=False,
             check_filenames=True,
@@ -895,7 +980,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -920,7 +1005,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file="/nonexistent.json",
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -942,7 +1027,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory="/nonexistent/dir",
+            source="/nonexistent/dir",
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -957,18 +1042,36 @@ class TestMain:
         with pytest.raises(SystemExit, match="not found"):
             dedup.run(args)
 
-    def test_run_not_directory(self, tmp_path: Path) -> None:
-        """Test run with file instead of directory."""
+    def test_run_psv_input(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test run with a PSV file as source."""
+        # Archive entry
+        json_data = [
+            {
+                "path": "/archive/photo.jpg",
+                "size": 1024,
+                "sha1": "aabbccdd" * 5,
+                "md5": "11223344" * 4,
+                "date": "2023-01-01T00:00:00+00:00",
+            }
+        ]
         json_file = tmp_path / "archive.json"
-        json_file.write_text("[]")
-        not_dir = tmp_path / "file.txt"
-        not_dir.write_text("content")
+        json_file.write_text(json.dumps(json_data))
+
+        sha1 = "aabbccdd" * 5
+        md5 = "11223344" * 4
+        # PSV file: one duplicate (matches archive) and one missing
+        psv_file = tmp_path / "files.psv"
+        lines = [
+            f"/scan/photo.jpg|{sha1}|{md5}|2023-01-01T00:00:00+00:00|1024",
+            "/scan/new.jpg|deadbeef00000000|cafebabe00000000|2023-06-01T00:00:00+00:00|2048",
+        ]
+        psv_file.write_text("\n".join(lines) + "\n")
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(not_dir),
+            source=str(psv_file),
             show_duplicates=True,
-            show_missing=False,
+            show_missing=True,
             check_filenames=False,
             check_timestamps=False,
             tolerance=1,
@@ -978,8 +1081,14 @@ class TestMain:
             start=1,
         )
 
-        with pytest.raises(SystemExit, match="Not a directory"):
-            dedup.run(args)
+        result = dedup.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        assert "Duplicates" in captured.out
+        assert "/scan/photo.jpg" in captured.out
+        assert "Missing from archive" in captured.out
+        assert "/scan/new.jpg" in captured.out
 
     def test_run_all_flags(self, tmp_path: Path) -> None:
         """Test run with all flags enabled."""
@@ -1009,7 +1118,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=True,
             check_filenames=True,
@@ -1054,7 +1163,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1092,7 +1201,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=False,
             show_missing=True,
             check_filenames=False,
@@ -1144,7 +1253,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=True,
             check_filenames=False,
@@ -1199,7 +1308,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=False,
             show_missing=True,
             check_filenames=False,
@@ -1251,7 +1360,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1283,7 +1392,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1309,7 +1418,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1335,7 +1444,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1365,7 +1474,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1396,7 +1505,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            directory=str(scan_dir),
+            source=str(scan_dir),
             show_duplicates=False,
             show_missing=True,
             check_filenames=False,

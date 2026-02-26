@@ -70,6 +70,50 @@ def scan_directory(directory: str) -> list[dict[str, str | int]]:
     return files
 
 
+def load_psv(file_path: str) -> list[dict[str, str | int]]:
+    """Load file metadata from a PSV file (path|sha1|md5|date|size).
+
+    Args:
+        file_path: Path to PSV file
+
+    Returns:
+        List of file metadata dictionaries with keys:
+        path (str), sha1 (str), md5 (str), date (str), size (int)
+
+    Raises:
+        SystemExit: If the file cannot be opened
+    """
+    files: list[dict[str, str | int]] = []
+    try:
+        with Path(file_path).open(encoding="utf-8") as fh:
+            for lineno, raw in enumerate(fh, 1):
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("|")
+                if len(parts) != 5:
+                    print(
+                        f"Warning: Skipping malformed line {lineno} in {file_path}: "
+                        f"expected 5 fields, got {len(parts)}",
+                        file=sys.stderr,
+                    )
+                    continue
+                path, sha1, md5, date, size_str = parts
+                try:
+                    size = int(size_str)
+                except ValueError:
+                    print(
+                        f"Warning: Skipping line {lineno} in {file_path}: "
+                        f"invalid size value {size_str!r}",
+                        file=sys.stderr,
+                    )
+                    continue
+                files.append({"path": path, "sha1": sha1, "md5": md5, "date": date, "size": size})
+    except OSError as e:
+        raise SystemExit(f"Error: Could not open PSV file {file_path}: {e}") from e
+    return files
+
+
 def build_archive_index(
     archive_data: list[dict[str, str | int]],
 ) -> tuple[dict[int, list[dict[str, str | int]]], dict[tuple[str, str], dict[str, str | int]]]:
@@ -439,8 +483,8 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Archive JSON metadata file (created by index)",
     )
     parser.add_argument(
-        "directory",
-        help="Directory to scan for duplicates and missing files",
+        "source",
+        help="Directory to scan, or PSV file with pre-computed metadata (path|sha1|md5|date|size)",
     )
     parser.add_argument(
         "-d",
@@ -528,10 +572,11 @@ def validate_args(args: argparse.Namespace) -> None:
     # Validate inputs
     if not Path(args.json_file).exists():
         raise SystemExit(f"Error: JSON file not found: {args.json_file}")
-    if not Path(args.directory).exists():
-        raise SystemExit(f"Error: Directory not found: {args.directory}")
-    if not Path(args.directory).is_dir():
-        raise SystemExit(f"Error: Not a directory: {args.directory}")
+    source = Path(args.source)
+    if not source.exists():
+        raise SystemExit(f"Error: Source not found: {args.source}")
+    if not source.is_dir() and not source.is_file():
+        raise SystemExit(f"Error: Source must be a directory or PSV file: {args.source}")
 
 
 def process_command_mode(
@@ -648,12 +693,20 @@ def run(args: argparse.Namespace) -> int:
     # Build indexes for efficient lookup
     size_index, checksum_index = build_archive_index(archive_data)
 
-    # Scan directory
-    if not suppress_progress:
-        print(f"\nScanning directory {args.directory}...")
-    scanned_files = scan_directory(args.directory)
-    if not suppress_progress:
-        print(f"Scanned {len(scanned_files)} files")
+    # Collect scanned files from directory or PSV file
+    source = Path(args.source)
+    if source.is_dir():
+        if not suppress_progress:
+            print(f"\nScanning directory {args.source}...")
+        scanned_files = scan_directory(args.source)
+        if not suppress_progress:
+            print(f"Scanned {len(scanned_files)} files")
+    else:
+        if not suppress_progress:
+            print(f"\nLoading file list from {args.source}...")
+        scanned_files = load_psv(args.source)
+        if not suppress_progress:
+            print(f"Loaded {len(scanned_files)} files")
 
     # Find duplicates and missing
     if not suppress_progress:
