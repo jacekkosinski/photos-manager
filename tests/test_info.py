@@ -95,9 +95,9 @@ class TestHumanSize:
         assert _human_size(1023) == "1023 B"
 
     def test_kilobytes(self) -> None:
-        assert _human_size(1024) == "1.0 KB"
-        assert _human_size(2048) == "2.0 KB"
-        assert _human_size(1024 * 1024 - 1).endswith("KB")
+        assert _human_size(1024) == "1.0 kB"
+        assert _human_size(2048) == "2.0 kB"
+        assert _human_size(1024 * 1024 - 1).endswith("kB")
 
     def test_megabytes(self) -> None:
         assert _human_size(1024**2) == "1.0 MB"

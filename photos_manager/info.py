@@ -58,7 +58,7 @@ def _human_size(size_bytes: int) -> str:
     if size_bytes < 1024:
         return f"{size_bytes} B"
     if size_bytes < 1024**2:
-        return f"{size_bytes / 1024:.1f} KB"
+        return f"{size_bytes / 1024:.1f} kB"
     if size_bytes < 1024**3:
         return f"{size_bytes / 1024**2:.1f} MB"
     if size_bytes < 1024**4:
@@ -221,7 +221,7 @@ def _print_table(
     rows: list[tuple[str, int, int]],
     denominator: int,
     top_n: int,
-    label_width: int = 10,
+    col_gap: int = 2,
 ) -> None:
     """Print a labelled table of (name, count, size) rows with an overflow hint.
 
@@ -230,13 +230,17 @@ def _print_table(
         rows: Pre-sorted list of (label, count, bytes) tuples.
         denominator: Total bytes used for percentage calculation.
         top_n: Maximum rows to display.
-        label_width: Left-pad width for the label column.
+        col_gap: Number of spaces between the label and count columns (default: 2).
     """
     print(heading)
     shown = rows[:top_n]
+    label_width = max((len(label) for label, _, _ in shown), default=0)
+    sep = " " * col_gap
     for label, count, size in shown:
         pct = size / denominator * 100 if denominator > 0 else 0.0
-        print(f"  {label:<{label_width}}  {count:>8d} files  {_human_size(size):>10}  {pct:>8.2f}%")
+        count_str = f"{count:,}".replace(",", " ")
+        size_str = _human_size(size)
+        print(f"  {label:<{label_width}}{sep}{count_str:>8} files  {size_str:>10}  {pct:>8.2f}%")
     if len(rows) > top_n:
         print(f"  \u2026 and {len(rows) - top_n} more")
 
@@ -269,16 +273,19 @@ def _print_stats(
     index_file_count: int = stats["index_file_count"]
 
     denom = grand_total_size or 1
+    ic_str = f"{index_file_count:,}".replace(",", " ")
+    tf_str = f"{total_files:,}".replace(",", " ")
     print(
-        f"{'Index files:':<14}{index_file_count:>8d}  "
+        f"{'Index files:':<14}{ic_str:>8}  "
         f"{_human_size(index_files_size):>10}  {index_files_size / denom * 100:>8.2f}%"
     )
     print(
-        f"{'Total files:':<14}{total_files:>8d}  "
+        f"{'Total files:':<14}{tf_str:>8}  "
         f"{_human_size(total_size):>10}  {total_size / denom * 100:>8.2f}%"
     )
     grand_count = index_file_count + total_files
-    print(f"{'Grand total:':<14}{grand_count:>8d}  {_human_size(grand_total_size):>10}")
+    gc_str = f"{grand_count:,}".replace(",", " ")
+    print(f"{'Grand total:':<14}{gc_str:>8}  {_human_size(grand_total_size):>10}")
     print()
 
     date_min: str | None = stats["date_min"]
@@ -291,9 +298,21 @@ def _print_stats(
     per_index: list[tuple[str, int, int]] = stats["per_index"]
     if per_index:
         print("Index files:")
+        rows: list[tuple[str, str, str, str]] = []
         for filename, count, photo_bytes in per_index:
             pct = photo_bytes / grand_total_size * 100 if grand_total_size > 0 else 0.0
-            print(f"  {filename}  {count:>8d} files  {_human_size(photo_bytes):>10}  {pct:>8.2f}%")
+            count_str = f"{count:,}".replace(",", " ")
+            pct_str = f"{pct:.2f}%"
+            rows.append((filename, count_str, _human_size(photo_bytes), pct_str))
+        name_w = max(len(r[0]) for r in rows)
+        count_w = max(len(r[1]) for r in rows)
+        size_w = max(len(r[2]) for r in rows)
+        pct_w = max(len(r[3]) for r in rows)
+        for filename, count_str, size_str, pct_str in rows:
+            print(
+                f"  {filename:<{name_w}}    {count_str:>{count_w}} files"
+                f"    {size_str:>{size_w}}    {pct_str:>{pct_w}}"
+            )
 
     if show_detailed:
         print()
@@ -304,7 +323,7 @@ def _print_stats(
                 [(yr, c, s) for yr, (c, s) in sorted(by_year.items())],
                 total_size,
                 top_n,
-                label_width=4,
+                col_gap=3,
             )
         print()
         by_ext: dict[str, tuple[int, int]] = stats["by_extension"]
