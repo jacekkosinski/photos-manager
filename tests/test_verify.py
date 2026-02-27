@@ -684,7 +684,7 @@ class TestCollectFilesystemFiles:
         json2 = tmp_path / "subdir" / "data.json"
         json2.write_text("{}")
 
-        regular_files, json_files = collect_filesystem_files(str(tmp_path))
+        regular_files, json_files, empty_dirs = collect_filesystem_files(str(tmp_path))
 
         assert str(file1) in regular_files
         assert str(file2) in regular_files
@@ -692,13 +692,15 @@ class TestCollectFilesystemFiles:
         assert str(json2) in json_files
         assert len(regular_files) == 2
         assert len(json_files) == 2
+        assert len(empty_dirs) == 0
 
     def test_handles_empty_directory(self, tmp_path: Path) -> None:
         """Test that function handles empty directory."""
-        regular_files, json_files = collect_filesystem_files(str(tmp_path))
+        regular_files, json_files, empty_dirs = collect_filesystem_files(str(tmp_path))
 
         assert len(regular_files) == 0
         assert len(json_files) == 0
+        assert len(empty_dirs) == 0
 
     def test_excludes_directories(self, tmp_path: Path) -> None:
         """Test that function only collects files, not directories."""
@@ -707,11 +709,38 @@ class TestCollectFilesystemFiles:
         file1 = tmp_path / "file.txt"
         file1.write_text("content")
 
-        regular_files, _ = collect_filesystem_files(str(tmp_path))
+        regular_files, _, _empty_dirs = collect_filesystem_files(str(tmp_path))
 
         assert str(file1) in regular_files
         assert str(subdir) not in regular_files
         assert len(regular_files) == 1
+
+    def test_detects_empty_subdirectories(self, tmp_path: Path) -> None:
+        """Test that function detects subdirectories with no files."""
+        empty_subdir = tmp_path / "empty"
+        empty_subdir.mkdir()
+        nested_empty = tmp_path / "parent" / "child"
+        nested_empty.mkdir(parents=True)
+        file1 = tmp_path / "photo.jpg"
+        file1.write_text("content")
+
+        regular_files, _, empty_dirs = collect_filesystem_files(str(tmp_path))
+
+        assert str(empty_subdir) in empty_dirs
+        assert str(nested_empty) in empty_dirs
+        assert str(tmp_path / "parent") in empty_dirs
+        assert len(regular_files) == 1
+
+    def test_non_empty_subdirectory_not_reported(self, tmp_path: Path) -> None:
+        """Test that subdirectory with files is not reported as empty."""
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "photo.jpg").write_text("content")
+
+        _regular_files, _, empty_dirs = collect_filesystem_files(str(tmp_path))
+
+        assert str(subdir) not in empty_dirs
+        assert len(empty_dirs) == 0
 
 
 @pytest.mark.unit
@@ -779,13 +808,14 @@ class TestFindExtraFiles:
             {"path": str(file2), "size": 8},
         ]
 
-        extra_json, extra_regular, missing = find_extra_files(
+        extra_json, extra_regular, missing, empty_dirs = find_extra_files(
             str(tmp_path), str(version_file), [str(json_file)], metadata
         )
 
         assert len(extra_json) == 0
         assert len(extra_regular) == 0
         assert len(missing) == 0
+        assert len(empty_dirs) == 0
 
     def test_finds_extra_json_files(self, tmp_path: Path) -> None:
         """Test that function finds extra JSON files not in version file."""
@@ -805,7 +835,7 @@ class TestFindExtraFiles:
 
         metadata: list[dict[str, str | int]] = [{"path": str(file1), "size": 7}]
 
-        extra_json, extra_regular, missing = find_extra_files(
+        extra_json, extra_regular, missing, empty_dirs = find_extra_files(
             str(tmp_path), str(version_file), [str(json_file)], metadata
         )
 
@@ -813,6 +843,7 @@ class TestFindExtraFiles:
         assert len(extra_json) == 1
         assert len(extra_regular) == 0
         assert len(missing) == 0
+        assert len(empty_dirs) == 0
 
     def test_finds_extra_regular_files(self, tmp_path: Path) -> None:
         """Test that function finds extra regular files not in metadata."""
@@ -832,7 +863,7 @@ class TestFindExtraFiles:
 
         metadata: list[dict[str, str | int]] = [{"path": str(file1), "size": 7}]
 
-        extra_json, extra_regular, missing = find_extra_files(
+        extra_json, extra_regular, missing, empty_dirs = find_extra_files(
             str(tmp_path), str(version_file), [str(json_file)], metadata
         )
 
@@ -840,6 +871,7 @@ class TestFindExtraFiles:
         assert len(extra_json) == 0
         assert len(extra_regular) == 1
         assert len(missing) == 0
+        assert len(empty_dirs) == 0
 
     def test_finds_missing_files(self, tmp_path: Path) -> None:
         """Test that function finds files in metadata but missing from filesystem."""
@@ -862,7 +894,7 @@ class TestFindExtraFiles:
             {"path": str(missing_file), "size": 100},
         ]
 
-        extra_json, extra_regular, missing = find_extra_files(
+        extra_json, extra_regular, missing, empty_dirs = find_extra_files(
             str(tmp_path), str(version_file), [str(json_file)], metadata
         )
 
@@ -870,6 +902,7 @@ class TestFindExtraFiles:
         assert len(extra_json) == 0
         assert len(extra_regular) == 0
         assert len(missing) == 1
+        assert len(empty_dirs) == 0
 
     def test_handles_no_version_file(self, tmp_path: Path) -> None:
         """Test that function works without version file."""
@@ -883,11 +916,40 @@ class TestFindExtraFiles:
 
         metadata: list[dict[str, str | int]] = [{"path": str(file1), "size": 7}]
 
-        extra_json, extra_regular, missing = find_extra_files(
+        extra_json, extra_regular, missing, empty_dirs = find_extra_files(
             str(tmp_path), None, [str(json_file)], metadata
         )
 
         # JSON file should not be in extra since it's in the list
+        assert len(extra_json) == 0
+        assert len(extra_regular) == 0
+        assert len(missing) == 0
+        assert len(empty_dirs) == 0
+
+    def test_finds_empty_directories(self, tmp_path: Path) -> None:
+        """Test that function finds empty directories not referenced by metadata."""
+        # Create a documented file
+        file1 = tmp_path / "photo.jpg"
+        file1.write_text("content")
+
+        # Create an empty subdirectory
+        empty_dir = tmp_path / "empty_subdir"
+        empty_dir.mkdir()
+
+        # Create JSON metadata and version file
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("{}")
+        version_file = tmp_path / ".version.json"
+        version_file.write_text("{}")
+
+        metadata: list[dict[str, str | int]] = [{"path": str(file1), "size": 7}]
+
+        extra_json, extra_regular, missing, empty_dirs = find_extra_files(
+            str(tmp_path), str(version_file), [str(json_file)], metadata
+        )
+
+        assert str(empty_dir) in empty_dirs
+        assert len(empty_dirs) == 1
         assert len(extra_json) == 0
         assert len(extra_regular) == 0
         assert len(missing) == 0
@@ -2034,6 +2096,55 @@ class TestRun:
         captured = capsys.readouterr()
         assert "extra" in captured.err.lower()
         assert "missing" in captured.err.lower()
+
+    def test_run_detects_empty_directories(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        verify_args: Callable[..., argparse.Namespace],
+    ) -> None:
+        """Test that run() with --check-extra-files detects empty directories."""
+        test_dir = tmp_path / "archive"
+        test_dir.mkdir()
+
+        # Create a documented file
+        test_file = test_dir / "photo.jpg"
+        test_file.write_text("content")
+
+        # Create an empty subdirectory
+        empty_dir = test_dir / "empty_subdir"
+        empty_dir.mkdir()
+
+        sha1, md5 = calculate_checksums_strict(str(test_file))
+        data = [
+            {
+                "path": str(test_file),
+                "sha1": sha1,
+                "md5": md5,
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 7,
+            }
+        ]
+        json_file = test_dir / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        version_data = {
+            "version": "photos-0.000-1",
+            "total_bytes": 7,
+            "file_count": 1,
+            "last_modified": "2025-01-01T00:00:00+00:00",
+            "last_verified": "2025-01-01T00:00:00+00:00",
+            "files": {"archive.json": calculate_file_hash(str(json_file))},
+        }
+        version_file = test_dir / ".version.json"
+        version_file.write_text(json.dumps(version_data))
+
+        args = verify_args(directory=str(test_dir), check_extra_files=True)
+        exit_code = run(args)
+
+        assert exit_code != os.EX_OK
+        captured = capsys.readouterr()
+        assert "empty director" in captured.err.lower()
 
     def test_run_with_check_extra_files_but_no_version_file(
         self,

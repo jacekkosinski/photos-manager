@@ -11,6 +11,7 @@ This script verifies the integrity of photo archives by checking:
 - Version file integrity (.version.json)
 - Extra files in filesystem not present in metadata (with --check-extra-files)
 - Extra JSON files not listed in .version.json (with --check-extra-files)
+- Empty directories not referenced by any metadata (with --check-extra-files)
 
 The script scans a directory for JSON metadata files (excluding *version.json)
 and optionally a .version.json file for comprehensive verification.
@@ -519,11 +520,11 @@ def verify_archive_directory_timestamp(
     )
 
 
-def collect_filesystem_files(directory: str) -> tuple[set[str], set[str]]:
+def collect_filesystem_files(directory: str) -> tuple[set[str], set[str], set[str]]:
     """Collect all files from filesystem in given directory.
 
     Recursively walks the directory tree and collects all file paths,
-    separating JSON files from regular files.
+    separating JSON files from regular files, and detecting empty directories.
 
     Args:
         directory: Path to the directory to scan.
@@ -532,25 +533,35 @@ def collect_filesystem_files(directory: str) -> tuple[set[str], set[str]]:
         Tuple containing:
             - set[str]: Regular files (non-JSON) found in filesystem
             - set[str]: JSON files found in filesystem
+            - set[str]: Empty directories (no files anywhere in subtree)
 
     Examples:
-        >>> regular, json_files = collect_filesystem_files("/path/to/archive")
+        >>> regular, json_files, empty_dirs = collect_filesystem_files("/path/to/archive")
         >>> len(regular) >= 0
         True
     """
     regular_files: set[str] = set()
     json_files: set[str] = set()
+    all_dirs: set[str] = set()
+    dirs_with_files: set[str] = set()
     base_path = Path(directory).resolve()
 
-    for root, _, files in os.walk(base_path):
+    for root, dirs, files in os.walk(base_path):
+        root_path = Path(root)
+        for d in dirs:
+            all_dirs.add(str(root_path / d))
         for file in files:
-            file_path = str(Path(root) / file)
+            file_path = str(root_path / file)
             if file.endswith(".json"):
                 json_files.add(file_path)
             else:
                 regular_files.add(file_path)
+            current = root_path
+            while current != base_path:
+                dirs_with_files.add(str(current))
+                current = current.parent
 
-    return regular_files, json_files
+    return regular_files, json_files, all_dirs - dirs_with_files
 
 
 def collect_expected_files(all_data: list[dict[str, str | int]]) -> set[str]:
@@ -578,12 +589,12 @@ def find_extra_files(
     version_file: str | None,
     json_files: list[str],
     all_data: list[dict[str, str | int]],
-) -> tuple[set[str], set[str], set[str]]:
-    """Find extra files in filesystem not present in metadata.
+) -> tuple[set[str], set[str], set[str], set[str]]:
+    """Find extra files and empty directories in filesystem not present in metadata.
 
     Compares files in the filesystem with files listed in .version.json
-    and JSON metadata to identify any extra files that shouldn't be in
-    the archive.
+    and JSON metadata to identify any extra files or empty directories
+    that shouldn't be in the archive.
 
     Args:
         directory: Path to the archive directory.
@@ -596,13 +607,14 @@ def find_extra_files(
             - set[str]: Extra JSON files not in .version.json
             - set[str]: Extra regular files not in metadata
             - set[str]: Files in metadata but missing from filesystem
+            - set[str]: Empty directories (no files anywhere in subtree)
 
     Examples:
         >>> result = find_extra_files("/archive", ".version.json", ["a.json"], data)
         >>> len(result[0]) == 0
         True
     """
-    filesystem_regular, filesystem_json = collect_filesystem_files(directory)
+    filesystem_regular, filesystem_json, empty_dirs = collect_filesystem_files(directory)
     expected_files = collect_expected_files(all_data)
 
     expected_json = set(json_files)
@@ -613,7 +625,7 @@ def find_extra_files(
     extra_regular_files = filesystem_regular - expected_files
     missing_files = expected_files - filesystem_regular
 
-    return extra_json_files, extra_regular_files, missing_files
+    return extra_json_files, extra_regular_files, missing_files, empty_dirs
 
 
 def verify_version_file(
@@ -1024,7 +1036,7 @@ def _verify_extra_files_check(
         return 1
 
     print("\nChecking for extra files in archive...")
-    extra_json, extra_regular, missing = find_extra_files(
+    extra_json, extra_regular, missing, empty_dirs = find_extra_files(
         directory, version_file, json_files, all_data
     )
 
@@ -1048,7 +1060,13 @@ def _verify_extra_files_check(
             print(f"    - {file_path}", file=sys.stderr)
             total_errors += 1
 
-    if not extra_json and not extra_regular and not missing:
+    if empty_dirs:
+        print(f"  Found {len(empty_dirs)} empty directory(ies):", file=sys.stderr)
+        for dir_path in sorted(empty_dirs):
+            print(f"    - {dir_path}", file=sys.stderr)
+            total_errors += 1
+
+    if not extra_json and not extra_regular and not missing and not empty_dirs:
         print("  No extra or missing files found - archive is clean")
 
     return total_errors
