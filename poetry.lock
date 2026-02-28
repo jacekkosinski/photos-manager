@@ -1363,26 +1363,6 @@ pygments = ">=2.7.2"
 dev = ["argcomplete", "attrs (>=19.2)", "hypothesis (>=3.56)", "mock", "requests", "setuptools", "xmlschema"]
 
 [[package]]
-name = "pytest-asyncio"
-version = "0.26.0"
-description = "Pytest support for asyncio"
-optional = true
-python-versions = ">=3.9"
-groups = ["main"]
-markers = "extra == \"dev\""
-files = [
-    {file = "pytest_asyncio-0.26.0-py3-none-any.whl", hash = "sha256:7b51ed894f4fbea1340262bdae5135797ebbe21d8638978e35d31c6d19f72fb0"},
-    {file = "pytest_asyncio-0.26.0.tar.gz", hash = "sha256:c4df2a697648241ff39e7f0e4a73050b03f123f760673956cf0d72a4990e312f"},
-]
-
-[package.dependencies]
-pytest = ">=8.2,<9"
-
-[package.extras]
-docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1)"]
-testing = ["coverage (>=6.2)", "hypothesis (>=5.7.1)"]
-
-[[package]]
 name = "pytest-cov"
 version = "4.1.0"
 description = "Pytest plugin for measuring coverage."
@@ -1813,10 +1793,10 @@ radon = ">=4,<7"
 requests = ">=2.0,<3.0"
 
 [extras]
-dev = ["commitizen", "interrogate", "mkdocs-material", "mypy", "pre-commit", "pytest", "pytest-asyncio", "pytest-cov", "pytest-mock", "ruff", "xenon"]
+dev = ["commitizen", "interrogate", "mkdocs-material", "mypy", "pre-commit", "pytest", "pytest-cov", "pytest-mock", "ruff", "xenon"]
 exif = ["piexif", "pillow", "pillow-heif"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12"
-content-hash = "1727111235ccea50fd64d11f4ac4a95fc2f04903b3d68080399d8f27b0affb60"
+content-hash = "2c450523eaaf5a084928a7a36feabd2771f5a0aab6da37dc4f1a1f6710948dca"

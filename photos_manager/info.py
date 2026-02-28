@@ -361,13 +361,12 @@ def run(args: argparse.Namespace) -> int:
     directory: Path = args.directory
 
     if not directory.is_dir():
-        raise SystemExit(f"error: not a directory: {directory}")
+        raise SystemExit(f"Error: not a directory: {directory}")
 
-    # Look for a .version.json manifest (e.g. archive.version.json)
-    version_files = list(directory.glob("*.version.json"))
+    # Look for a .version.json manifest
+    version_path = directory / ".version.json"
     version_info: dict[str, Any] | None = None
-    if version_files:
-        version_path = version_files[0]
+    if version_path.exists():
         try:
             with version_path.open("r", encoding="utf-8") as fh:
                 raw = json.load(fh)
@@ -380,11 +379,7 @@ def run(args: argparse.Namespace) -> int:
     try:
         json_file_paths = common.find_json_files(str(directory))
     except SystemExit:
-        print(
-            f"Warning: No JSON index files found in '{directory}'",
-            file=sys.stderr,
-        )
-        raise SystemExit(f"error: no JSON index files found in '{directory}'") from None
+        raise SystemExit(f"Error: no JSON index files found in '{directory}'") from None
 
     json_files = [Path(p) for p in json_file_paths]
 

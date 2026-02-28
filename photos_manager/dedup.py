@@ -45,9 +45,9 @@ def scan_directory(directory: str) -> list[dict[str, str | int]]:
             file_path = Path(root) / filename
 
             try:
-                stat = file_path.stat()
-                size: int = stat.st_size
-                mtime = datetime.fromtimestamp(stat.st_mtime).astimezone()
+                stat_result = file_path.stat()
+                size: int = stat_result.st_size
+                mtime = datetime.fromtimestamp(stat_result.st_mtime).astimezone()
                 date = mtime.isoformat()
 
                 sha1, md5 = calculate_checksums(str(file_path))
@@ -63,7 +63,7 @@ def scan_directory(directory: str) -> list[dict[str, str | int]]:
                         "size": size,
                     }
                 )
-            except (OSError, PermissionError) as e:
+            except OSError as e:
                 print(f"Warning: Could not process {file_path}: {e}", file=sys.stderr)
                 continue
 

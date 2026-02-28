@@ -325,7 +325,7 @@ class TestRun:
             "last_modified": "2025-12-30T12:34:56+00:00",
             "last_verified": "2025-12-30T13:45:23+00:00",
         }
-        (tmp_path / "archive.version.json").write_text(json.dumps(version_data))
+        (tmp_path / ".version.json").write_text(json.dumps(version_data))
 
         result = run(info_args())
 
@@ -413,7 +413,6 @@ class TestRun:
             run(info_args(directory=empty_dir))
 
         assert "no JSON index files" in str(exc_info.value)
-        assert "Warning:" in capsys.readouterr().err
 
     def test_run_invalid_directory(
         self, tmp_path: Path, info_args: Callable[..., argparse.Namespace]

@@ -15,7 +15,7 @@ install: ## Install dependencies using Poetry
 	poetry install
 
 install-dev: ## Install all dependencies including dev
-	poetry install --with dev
+	poetry install --extras dev
 
 test: ## Run tests with pytest
 	poetry run pytest

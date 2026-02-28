@@ -699,7 +699,7 @@ class TestOperationToCommand:
         commands = op.to_command()
 
         assert len(commands) == 1
-        assert "mkdir -p /dest/newdir" in commands[0]
+        assert commands[0] == "mkdir -p /dest/newdir"
 
     def test_copy_command(self) -> None:
         """Test copy operation command generation."""
@@ -740,6 +740,15 @@ class TestOperationToCommand:
         assert len(commands) == 1
         assert "touch -t" in commands[0]
         assert "/dest/photo.jpg" in commands[0]
+
+    def test_paths_with_spaces_are_quoted(self) -> None:
+        """Test that paths with special characters are shell-quoted."""
+        op = sync.SyncOperation("copy", "/src/my photo.jpg", "/dest/my photo.jpg", None, "test")
+        commands = op.to_command()
+
+        assert len(commands) == 1
+        assert "'/src/my photo.jpg'" in commands[0]
+        assert "'/dest/my photo.jpg'" in commands[0]
 
 
 @pytest.mark.unit

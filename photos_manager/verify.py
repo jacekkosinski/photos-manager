@@ -207,6 +207,7 @@ def verify_file_entry(
             errors.append(
                 f"Size mismatch for {file_path}: expected {expected_size}, got {actual_size}"
             )
+            return False, errors
     except OSError as e:
         errors.append(f"Cannot stat file {file_path}: {e}")
         return False, errors
