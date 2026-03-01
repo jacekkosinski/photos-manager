@@ -511,30 +511,34 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Compare timestamps and warn if different",
     )
     parser.add_argument(
+        "-T",
         "--tolerance",
         type=int,
         default=1,
         help="Timestamp tolerance in seconds (default: 1)",
     )
     parser.add_argument(
+        "-l",
         "--list",
         action="store_true",
         help="Output one file path per line (no details, no summary)",
     )
     parser.add_argument(
+        "-M",
         "--move",
         type=str,
         metavar="TARGET_DIR",
         help="Generate mv commands to move files to target directory structure",
     )
     parser.add_argument(
+        "-C",
         "--copy",
         type=str,
         metavar="TARGET_DIR",
         help="Generate cp commands to copy files to target directory structure",
     )
     parser.add_argument(
-        "-s",
+        "-S",
         "--start",
         type=int,
         default=1,

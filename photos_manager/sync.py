@@ -998,6 +998,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Actually execute sync operations (default: dry-run preview only)",
     )
     parser.add_argument(
+        "-k",
         "--no-delete",
         action="store_true",
         help="Skip deletion operations",

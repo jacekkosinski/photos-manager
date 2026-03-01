@@ -146,20 +146,23 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument("directory", type=str, help="Path to the source directory")
     parser.add_argument(
-        "--merge", required=False, metavar="JSON", help="Path to the JSON file to merge"
+        "-m", "--merge", required=False, metavar="JSON", help="Path to the JSON file to merge"
     )
     parser.add_argument(
+        "-z",
         "--time-zone",
         default="Europe/Warsaw",
         metavar="TZ",
         help="Time zone for modification time (default: Europe/Warsaw)",
     )
     parser.add_argument(
+        "-N",
         "--sort-by-number",
         action="store_true",
         help="Sort files numerically by number in second directory and filename",
     )
     parser.add_argument(
+        "-D",
         "--sort-by-dir",
         action="store_true",
         help="Sort files first by directory name and then by modification timestamp",

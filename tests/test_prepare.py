@@ -1233,7 +1233,7 @@ class TestRunWithExifFlag:
         args = MagicMock()
         args.use_exif = False
         args.dry_run = True
-        args.user = "storage"
+        args.owner = "storage"
         args.group = "storage"
         args.directories = [str(test_dir)]
 
@@ -1251,7 +1251,7 @@ class TestRunWithExifFlag:
         args = MagicMock()
         args.use_exif = True
         args.dry_run = True
-        args.user = "storage"
+        args.owner = "storage"
         args.group = "storage"
         args.directories = [str(test_dir)]
 
@@ -1289,7 +1289,7 @@ class TestRunIntegration:
         args = argparse.Namespace(
             directories=[str(test_dir)],
             dry_run=False,
-            user=current_user,
+            owner=current_user,
             group=current_group,
             use_exif=False,
         )
@@ -1305,7 +1305,7 @@ class TestRunIntegration:
         args = argparse.Namespace(
             directories=["/nonexistent/path/that/does/not/exist"],
             dry_run=False,
-            user="storage",
+            owner="storage",
             group="storage",
             use_exif=False,
         )
@@ -1322,7 +1322,7 @@ class TestRunIntegration:
         args = argparse.Namespace(
             directories=[str(test_file)],
             dry_run=False,
-            user="storage",
+            owner="storage",
             group="storage",
             use_exif=False,
         )
@@ -1351,7 +1351,7 @@ class TestRunIntegration:
         args = argparse.Namespace(
             directories=[str(dir1), str(dir2)],
             dry_run=False,
-            user=current_user,
+            owner=current_user,
             group=current_group,
             use_exif=False,
         )
@@ -1384,7 +1384,7 @@ class TestRunIntegration:
         args = argparse.Namespace(
             directories=[str(test_dir)],
             dry_run=True,
-            user=current_user,
+            owner=current_user,
             group=current_group,
             use_exif=False,
         )
@@ -1417,7 +1417,7 @@ class TestRunIntegration:
         args = argparse.Namespace(
             directories=[str(test_dir)],
             dry_run=False,
-            user=current_user,
+            owner=current_user,
             group=current_group,
             use_exif=False,
         )
@@ -1446,7 +1446,7 @@ class TestRunIntegration:
         args = argparse.Namespace(
             directories=[str(test_dir)],
             dry_run=False,
-            user=current_user,
+            owner=current_user,
             group=current_group,
             use_exif=False,
         )
@@ -1480,7 +1480,7 @@ class TestRunIntegration:
         args = argparse.Namespace(
             directories=[str(test_dir)],
             dry_run=True,
-            user=current_user,
+            owner=current_user,
             group=current_group,
             use_exif=False,
         )
@@ -1505,7 +1505,7 @@ class TestRunIntegration:
         args = argparse.Namespace(
             directories=[str(test_dir)],
             dry_run=True,
-            user=current_user,
+            owner=current_user,
             group=current_group,
             use_exif=True,
         )
@@ -1538,7 +1538,7 @@ class TestRunIntegration:
         args = argparse.Namespace(
             directories=[str(dir1), str(dir2)],
             dry_run=False,
-            user=current_user,
+            owner=current_user,
             group=current_group,
             use_exif=False,
         )

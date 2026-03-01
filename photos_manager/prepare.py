@@ -928,16 +928,19 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Show what would be done without making changes",
     )
     parser.add_argument(
-        "--user",
+        "-u",
+        "--owner",
         default="storage",
         help="Expected owner username (default: storage)",
     )
     parser.add_argument(
+        "-g",
         "--group",
         default="storage",
         help="Expected group name (default: storage)",
     )
     parser.add_argument(
+        "-E",
         "--use-exif",
         action="store_true",
         help="Set file modification times from EXIF metadata (requires EXIF libraries)",
@@ -954,7 +957,7 @@ def run(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments containing:
             - directories: List of directory paths to process
             - dry_run: If True, only show what would be done
-            - user: Expected owner username
+            - owner: Expected owner username
             - group: Expected group name
             - use_exif: If True, set file mtimes from EXIF metadata
 
@@ -977,7 +980,7 @@ def run(args: argparse.Namespace) -> int:
     all_success = True
     for directory in args.directories:
         path = Path(directory).resolve()
-        success = process_directory(path, args.user, args.group, args.dry_run, args.use_exif)
+        success = process_directory(path, args.owner, args.group, args.dry_run, args.use_exif)
         if not success:
             all_success = False
 

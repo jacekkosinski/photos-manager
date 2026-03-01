@@ -1291,6 +1291,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Verify file and directory timestamps match metadata",
     )
     parser.add_argument(
+        "-T",
         "--tolerance",
         type=int,
         default=1,
@@ -1309,12 +1310,14 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Verify file permissions (644) and directory permissions (755)",
     )
     parser.add_argument(
+        "-u",
         "--owner",
         type=str,
         default="storage",
         help="Expected owner username for all files and directories (default: storage)",
     )
     parser.add_argument(
+        "-g",
         "--group",
         type=str,
         default="storage",

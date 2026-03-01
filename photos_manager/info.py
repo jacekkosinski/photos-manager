@@ -39,6 +39,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Show detailed stats by year and file extension",
     )
     parser.add_argument(
+        "-N",
         "--top-n",
         type=int,
         default=10,
