@@ -28,7 +28,7 @@ Usage:
 The version string follows the format "PREFIX-SIZE-COUNT" where:
 - PREFIX is the archive name (default: "photos", configurable with --prefix)
 - SIZE is the total content size in terabytes (3 decimal places)
-- COUNT is the last three digits of the total file count (modulo 1000)
+- COUNT is the last three digits of the total file count (modulo 1000, zero-padded to 3 digits)
 
 Example output:
     {
@@ -213,7 +213,7 @@ def run(args: argparse.Namespace) -> int:
     Output:
         Writes JSON object with structure:
             {
-                "version": "{prefix}-{TB:.3f}-{count%1000}",
+                "version": "{prefix}-{TB:.3f}-{count%1000:03d}",
                 "total_bytes": int,
                 "file_count": int,
                 "last_modified": str,   # ISO 8601 timestamp
@@ -238,7 +238,7 @@ def run(args: argparse.Namespace) -> int:
     total_tb = total_bytes / BYTES_PER_TB
     last_three_digits = file_count % 1000
     prefix = args.prefix
-    version = f"{prefix}-{total_tb:.3f}-{last_three_digits}"
+    version = f"{prefix}-{total_tb:.3f}-{last_three_digits:03d}"
 
     youngest_mtime = datetime.fromtimestamp(json_files_with_mtimes[0][0]).astimezone()
     last_modified = youngest_mtime.isoformat(timespec="seconds")

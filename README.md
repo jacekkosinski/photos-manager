@@ -217,11 +217,11 @@ photos manifest /path/to/dups --prefix duplicates
 }
 ```
 
-**Version string format:** `{prefix}-{TB:.3f}-{count%1000}`
+**Version string format:** `{prefix}-{TB:.3f}-{count%1000:03d}`
 
 - prefix: Archive name (default: `photos`, configurable with `-P`/`--prefix`)
 - TB: Total size in terabytes (3 decimal places)
-- count%1000: Last three digits of total file count
+- count%1000: Last three digits of total file count (zero-padded to 3 digits)
 
 ### verify - Verify Archive Integrity
 
