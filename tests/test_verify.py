@@ -591,7 +591,7 @@ class TestVerifyVersionFile:
 
         version_file = tmp_path / ".version.json"
         version_data = {
-            "version": "photos-0.000-0",
+            "version": "photos-0.000-000",
             "total_bytes": 0,
             "file_count": 0,
             "files": {"archive.json": "wrong_hash_1234567890123456789012345678"},
@@ -616,7 +616,7 @@ class TestVerifyVersionFile:
 
         version_file = tmp_path / ".version.json"
         version_data = {
-            "version": "photos-0.000-1",
+            "version": "photos-0.000-001",
             "total_bytes": 999,  # Wrong total
             "file_count": 1,
             "files": {"archive.json": actual_hash},
@@ -641,7 +641,7 @@ class TestVerifyVersionFile:
 
         version_file = tmp_path / ".version.json"
         version_data = {
-            "version": "photos-0.000-99",
+            "version": "photos-0.000-099",
             "total_bytes": 100,
             "file_count": 99,  # Wrong count
             "files": {"archive.json": actual_hash},
@@ -656,7 +656,7 @@ class TestVerifyVersionFile:
     def test_detects_missing_required_field(self, tmp_path: Path) -> None:
         """Test that missing required fields are detected."""
         version_file = tmp_path / ".version.json"
-        version_data = {"version": "photos-0.000-0"}  # Missing required fields
+        version_data = {"version": "photos-0.000-000"}  # Missing required fields
         version_file.write_text(json.dumps(version_data))
 
         success, errors = verify_version_file(str(version_file), [], [])
@@ -1201,7 +1201,7 @@ class TestValidateVersionFileDates:
         """Test that function accepts valid dates in version file."""
         version_file = tmp_path / ".version.json"
         version_data = {
-            "version": "photos-0.000-1",
+            "version": "photos-0.000-001",
             "total_bytes": 1024,
             "file_count": 1,
             "last_modified": "2024-01-01T12:00:00+02:00",
@@ -1218,7 +1218,7 @@ class TestValidateVersionFileDates:
         """Test that function finds invalid last_modified date."""
         version_file = tmp_path / ".version.json"
         version_data = {
-            "version": "photos-0.000-1",
+            "version": "photos-0.000-001",
             "total_bytes": 1024,
             "file_count": 1,
             "last_modified": "2024-01-01T12:00:00+0200",
@@ -1236,7 +1236,7 @@ class TestValidateVersionFileDates:
         """Test that function finds invalid last_verified date."""
         version_file = tmp_path / ".version.json"
         version_data = {
-            "version": "photos-0.000-1",
+            "version": "photos-0.000-001",
             "total_bytes": 1024,
             "file_count": 1,
             "last_verified": "2024-01-02T12:00:00+0200",
@@ -1669,7 +1669,7 @@ class TestRun:
 
         # Create version file
         version_data = {
-            "version": "photos-0.000-1",
+            "version": "photos-0.000-001",
             "total_bytes": 7,
             "file_count": 1,
             "last_modified": "2025-01-01T00:00:00+00:00",
@@ -1696,7 +1696,7 @@ class TestRun:
         capsys: pytest.CaptureFixture[str],
         verify_args: Callable[..., argparse.Namespace],
     ) -> None:
-        """Test that run() with --check-timestamps verifies mtimes."""
+        """Test that run() verifies mtimes when timestamp checking is enabled."""
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -1722,7 +1722,7 @@ class TestRun:
 
         # Create version file (required for timestamp verification)
         version_data = {
-            "version": "photos-0.000-1",
+            "version": "photos-0.000-001",
             "total_bytes": 7,
             "file_count": 1,
             "last_modified": timestamp,
@@ -1863,7 +1863,7 @@ class TestRun:
         capsys: pytest.CaptureFixture[str],
         verify_args: Callable[..., argparse.Namespace],
     ) -> None:
-        """Test that run() with --check-extra-files detects extra files."""
+        """Test that run() detects extra files when extra-file checking is enabled."""
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
@@ -2034,7 +2034,7 @@ class TestRun:
 
         # Create version file (required for timestamp checks)
         version_data = {
-            "version": "photos-0.000-1",
+            "version": "photos-0.000-001",
             "total_bytes": 7,
             "file_count": 1,
             "last_modified": recent_time,
@@ -2142,7 +2142,7 @@ class TestRun:
 
         # Create version file
         version_data = {
-            "version": "photos-0.000-2",
+            "version": "photos-0.000-002",
             "total_bytes": 13,
             "file_count": 2,
             "last_modified": "2025-01-01T00:00:00+00:00",
@@ -2176,7 +2176,7 @@ class TestRun:
         capsys: pytest.CaptureFixture[str],
         verify_args: Callable[..., argparse.Namespace],
     ) -> None:
-        """Test that run() with --check-extra-files detects empty directories."""
+        """Test that run() detects empty directories when extra-file checking is enabled."""
         test_dir = tmp_path / "archive"
         test_dir.mkdir()
 
@@ -2202,7 +2202,7 @@ class TestRun:
         json_file.write_text(json.dumps(data))
 
         version_data = {
-            "version": "photos-0.000-1",
+            "version": "photos-0.000-001",
             "total_bytes": 7,
             "file_count": 1,
             "last_modified": "2025-01-01T00:00:00+00:00",
@@ -2294,7 +2294,7 @@ class TestRun:
 
         # Create version file with WRONG hash
         version_data = {
-            "version": "photos-0.000-1",
+            "version": "photos-0.000-001",
             "total_bytes": 7,
             "file_count": 1,
             "last_modified": "2025-01-01T00:00:00+00:00",
@@ -2345,7 +2345,7 @@ class TestRun:
 
         # Create version file with WRONG totals
         version_data = {
-            "version": "photos-0.000-1",
+            "version": "photos-0.000-001",
             "total_bytes": 999,  # Wrong!
             "file_count": 99,  # Wrong!
             "last_modified": "2025-01-01T00:00:00+00:00",
@@ -2373,7 +2373,7 @@ class TestRun:
         capsys: pytest.CaptureFixture[str],
         verify_args: Callable[..., argparse.Namespace],
     ) -> None:
-        """Test that run() with --check-permissions verifies file permissions."""
+        """Test that run() verifies file permissions when permission checking is enabled."""
 
         test_dir = tmp_path / "archive"
         test_dir.mkdir()

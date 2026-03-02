@@ -99,4 +99,4 @@ shell: ## Open a Poetry shell
 	poetry shell
 
 version: ## Show current version
-	poetry run photos version
+	poetry run photos --version

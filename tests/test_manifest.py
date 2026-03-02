@@ -130,6 +130,31 @@ class TestRun:
         assert version_data["total_bytes"] == 1000
         assert version_data["file_count"] == 1
 
+    def test_run_version_count_zero_padded(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that version string count component is zero-padded to 3 digits."""
+        data = [
+            {
+                "path": "/test/file.txt",
+                "sha1": "abc123",
+                "md5": "def456",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 1000,
+            }
+        ]
+        json_file = tmp_path / "test.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(directory=str(tmp_path), output_file=None, prefix="photos")
+
+        run(args)
+
+        captured = capsys.readouterr()
+        version_data = json.loads(captured.out)
+        # file_count=1, 1%1000=1, should be zero-padded to "001"
+        assert version_data["version"].endswith("-001")
+
     def test_run_with_output_file(self, tmp_path: Path) -> None:
         """Test that run() writes to specified output file."""
         # Create test JSON file
@@ -270,3 +295,51 @@ class TestRun:
             run(args)
 
         assert "Invalid JSON" in str(exc_info.value)
+
+    def test_run_with_custom_prefix(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() uses custom prefix in version string."""
+        data = [
+            {
+                "path": "/test/file.txt",
+                "sha1": "abc123",
+                "md5": "def456",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 1000,
+            }
+        ]
+        json_file = tmp_path / "test.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(directory=str(tmp_path), output_file=None, prefix="upload")
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        version_data = json.loads(captured.out)
+        assert version_data["version"].startswith("upload-")
+
+    def test_run_default_prefix(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that run() uses default 'photos' prefix."""
+        data = [
+            {
+                "path": "/test/file.txt",
+                "sha1": "abc123",
+                "md5": "def456",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 1000,
+            }
+        ]
+        json_file = tmp_path / "test.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(directory=str(tmp_path), output_file=None, prefix="photos")
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        version_data = json.loads(captured.out)
+        assert version_data["version"].startswith("photos-")

@@ -36,8 +36,8 @@ def verify_args(tmp_path: Path) -> Callable[..., argparse.Namespace]:
         tolerance: int = 1,
         check_extra_files: bool = True,
         check_permissions: bool = True,
-        owner: str | None = None,
-        group: str | None = None,
+        owner: str = "storage",
+        group: str = "storage",
     ) -> argparse.Namespace:
         return argparse.Namespace(
             directory=directory if directory is not None else str(tmp_path),

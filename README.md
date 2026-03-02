@@ -10,7 +10,7 @@ management.
 
 - 🚀 Modern Python 3.12
 - 📝 Type-safe with mypy strict mode
-- ✅ Comprehensive testing with pytest (480 tests, 86.24% coverage)
+- ✅ Comprehensive testing with pytest (535 tests, 87% coverage)
 - 📚 Google-style docstrings with interrogate validation
 - 🔧 Pre-commit hooks for code quality
 - 🎯 Linting and formatting with Ruff
@@ -424,7 +424,7 @@ photos-manager-cli/
 │   ├── info.py            # Show archive statistics
 │   ├── sync.py            # Synchronization tool
 │   └── dedup.py           # Deduplication tool
-├── tests/                 # 480 tests, 86.24% coverage
+├── tests/                 # 535 tests, 87% coverage
 │   ├── conftest.py        # Shared fixtures
 │   ├── test_cli.py
 │   ├── test_common.py
@@ -433,6 +433,7 @@ photos-manager-cli/
 │   ├── test_fixdates.py
 │   ├── test_manifest.py
 │   ├── test_verify.py
+│   ├── test_info.py
 │   ├── test_sync.py
 │   └── test_dedup.py
 ├── pyproject.toml         # Project configuration
@@ -465,18 +466,6 @@ photos index /path/to/photos
 photos fixdates /path/to/photos.json
 photos manifest /path/to/archive
 photos verify /path/to/archive --all
-```
-
-#### Individual Commands (Legacy)
-
-For backward compatibility, individual commands are still available:
-
-```bash
-prepare /path/to/incoming
-index /path/to/photos
-fixdates /path/to/photos.json
-manifest /path/to/archive
-verify /path/to/archive --all
 ```
 
 #### Standalone Binary
@@ -528,7 +517,7 @@ poetry run interrogate -v --generate-badge . photos_manager/
 
 ### Testing
 
-The project has comprehensive test coverage with 480 tests covering all modules.
+The project has comprehensive test coverage with 535 tests covering all modules.
 
 ```bash
 # Run all tests
@@ -544,7 +533,7 @@ poetry run pytest tests/test_prepare.py
 poetry run pytest -v
 ```
 
-**Test Coverage:** 86.24% overall with 480 tests across all modules.
+**Test Coverage:** 87% overall with 535 tests across all modules.
 
 ### Documentation
 

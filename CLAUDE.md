@@ -25,7 +25,7 @@ pre-commit install                    # install hooks
 ## Key Commands
 
 ```bash
-poetry run pytest                     # all tests (~471, ~86% coverage)
+poetry run pytest                     # all tests (~535, ~87% coverage)
 poetry run pytest tests/test_X.py    # single file
 poetry run pytest -m unit            # unit tests only
 poetry run pytest -m integration     # integration tests only
@@ -58,7 +58,7 @@ tests/
 ├── conftest.py   # shared fixtures: current_user_and_group, verify_args
 ├── test_cli.py / test_common.py / test_prepare.py / test_index.py
 ├── test_fixdates.py / test_manifest.py / test_verify.py
-└── test_sync.py / test_dedup.py
+├── test_info.py / test_sync.py / test_dedup.py
 ```
 
 ## Testing Conventions
@@ -90,9 +90,9 @@ with `git tag -a vX.Y.Z -m "bump: version X → Y"`.
 
 ## Adding a New Tool
 
-1. Create `photos_manager/new_tool.py` with `run()`, argparse, docstrings, type
-   hints
-1. Add entry point in `pyproject.toml` under `[project.scripts]`
+1. Create `photos_manager/new_tool.py` with `run()`, `setup_parser()`,
+   docstrings, type hints
+1. Register as subcommand in `photos_manager/cli.py`
 1. Create `tests/test_new_tool.py`
 1. Run `make check-all`
 

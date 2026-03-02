@@ -11,7 +11,7 @@ Hidden files (starting with .) are skipped. Symbolic links are checked but not f
 Usage:
     photos prepare /path/to/directory
     photos prepare /path/to/dir1 /path/to/dir2 --dry-run
-    photos prepare /path/to/directory --user storage --group storage
+    photos prepare /path/to/directory --owner storage --group storage
 """
 
 import argparse

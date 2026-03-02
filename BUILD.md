@@ -366,6 +366,9 @@ After building, test the binary:
 ./dist/photos fixdates --help
 ./dist/photos manifest --help
 ./dist/photos verify --help
+./dist/photos info --help
+./dist/photos sync --help
+./dist/photos dedup --help
 
 # Run actual commands
 ./dist/photos index /path/to/test/directory

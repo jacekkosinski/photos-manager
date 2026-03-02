@@ -106,7 +106,8 @@ photos-manager-cli/
 │   ├── info.py          # Show archive statistics
 │   ├── sync.py          # Synchronization tool
 │   └── dedup.py         # Deduplication tool
-├── tests/               # Test files (508 tests)
+├── tests/               # Test files (535 tests)
+│   ├── conftest.py      # Shared fixtures
 │   ├── test_cli.py
 │   ├── test_common.py
 │   ├── test_prepare.py
@@ -114,6 +115,7 @@ photos-manager-cli/
 │   ├── test_fixdates.py
 │   ├── test_manifest.py
 │   ├── test_verify.py
+│   ├── test_info.py
 │   ├── test_sync.py
 │   └── test_dedup.py
 ├── Makefile             # Development commands
@@ -135,8 +137,8 @@ photos prepare /photos/incoming
 # With EXIF timestamp restoration (requires: pip install photos-manager-cli[exif])
 photos prepare /photos/incoming --use-exif
 
-# Custom user/group
-photos prepare /photos/incoming --user storage --group storage
+# Custom owner/group
+photos prepare /photos/incoming --owner storage --group storage
 ```
 
 ### Archive a photo collection
