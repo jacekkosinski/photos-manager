@@ -133,7 +133,7 @@ photos manifest /photos --output /photos/.version.json
 photos verify /photos
 
 # 4. Full verification with checksums (time-consuming)
-photos verify /photos --all --check-timestamps
+photos verify /photos --all
 ```
 
 ### Restore timestamps after copying from archive

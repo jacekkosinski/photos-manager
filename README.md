@@ -187,17 +187,17 @@ photos fixdates archive1.json archive2.json --all
 Verify archive integrity by checking files against JSON metadata.
 
 ```bash
-# Basic verification (existence and size only)
+# Full verification (timestamps, extra files, permissions checked by default)
 photos verify /path/to/archive
 
 # Full verification with checksums (time-consuming)
 photos verify /path/to/archive --all
 
-# Verify with timestamps
-photos verify /path/to/archive --check-timestamps
+# Skip timestamp verification
+photos verify /path/to/archive -t
 
-# Full verification with all checks
-photos verify /path/to/archive --all --check-timestamps --tolerance 2
+# Full verification with custom timestamp tolerance
+photos verify /path/to/archive --all --tolerance 2
 ```
 
 **What it verifies:**
@@ -206,11 +206,12 @@ photos verify /path/to/archive --all --check-timestamps --tolerance 2
 - **File sizes**: Actual file sizes match metadata
 - **Checksums** (with `--all`): SHA1 and MD5 hashes match metadata
   (time-consuming)
-- **Timestamps** (with `--check-timestamps`): File mtimes match metadata
-- **Directory timestamps** (with `--check-timestamps`): Directory mtimes match
-  newest file
-- **JSON timestamps** (with `--check-timestamps`): JSON file mtimes match newest
-  entry
+- **Timestamps**: File mtimes match metadata (disable with `-t`)
+- **Directory timestamps**: Directory mtimes match newest file (disable with
+  `-t`)
+- **JSON timestamps**: JSON file mtimes match newest entry (disable with `-t`)
+- **Extra files**: Files on disk not in metadata (disable with `-e`)
+- **Permissions**: File/directory permissions and ownership (disable with `-p`)
 - **Version file**: If .version.json exists, verifies totals and file hashes
 
 **Use cases:**
@@ -249,7 +250,7 @@ photos manifest /photos --output /photos/.version.json
 photos verify /photos/archive
 
 # Full verification with checksums
-photos verify /photos/archive --all --check-timestamps
+photos verify /photos/archive --all
 
 # After the verification, you can also regenerate metadata to compare
 photos index /photos/backup --output current.json

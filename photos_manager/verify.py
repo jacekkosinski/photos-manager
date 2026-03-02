@@ -6,12 +6,17 @@ This script verifies the integrity of photo archives by checking:
 - File modification timestamps (mtime) match metadata
 - Directory timestamps match newest file
 - JSON file timestamps match newest entry
-- Archive directory timestamp matches newest JSON file (with --check-timestamps)
+- Archive directory timestamp matches newest JSON file
 - SHA1 and MD5 checksums (with --all flag, time-consuming)
 - Version file integrity (.version.json)
-- Extra files in filesystem not present in metadata (with --check-extra-files)
-- Extra JSON files not listed in .version.json (with --check-extra-files)
-- Empty directories not referenced by any metadata (with --check-extra-files)
+- Extra files in filesystem not present in metadata
+- Extra JSON files not listed in .version.json
+- Empty directories not referenced by any metadata
+- File/directory permissions and ownership
+
+Timestamp, extra-file, and permission checks are enabled by default.
+Use -t, -e, -p (or --no-check-timestamps, --no-check-extra-files,
+--no-check-permissions) to disable them.
 
 The script scans a directory for JSON metadata files (excluding *version.json)
 and optionally a .version.json file for comprehensive verification.
@@ -19,9 +24,7 @@ and optionally a .version.json file for comprehensive verification.
 Usage:
     photos verify /path/to/archive
     photos verify /path/to/archive --all
-    photos verify /path/to/archive --check-timestamps
-    photos verify /path/to/archive --all --check-timestamps
-    photos verify /path/to/archive --check-extra-files
+    photos verify /path/to/archive -t -e -p    # skip timestamp/extra/permission checks
 """
 
 import argparse

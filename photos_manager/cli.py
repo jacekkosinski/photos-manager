@@ -3,21 +3,23 @@
 
 This is the main entry point for the photos-manager CLI suite, providing
 a unified interface to all photo management commands:
-- index: Generate JSON file with file metadata
-- manifest: Generate archive version information
-- fixdates: Fix file and directory dates to match JSON metadata
-- verify: Verify archive integrity
-- sync: Synchronize source and destination archives
 - prepare: Prepare directories for archiving (fix permissions, ownership, filenames)
+- index: Generate JSON file with file metadata
+- fixdates: Fix file and directory dates to match JSON metadata
+- manifest: Generate archive version information
+- verify: Verify archive integrity
+- info: Show archive statistics
+- sync: Synchronize source and destination archives
 - dedup: Find duplicate and missing files by comparing with archive
 
 Usage:
-    photos index /path/to/directory
-    photos manifest /path/to/archive
-    photos fixdates archive.json
-    photos verify /path/to/archive
-    photos sync /source/archive /dest/archive
     photos prepare /path/to/directory --dry-run
+    photos index /path/to/directory
+    photos fixdates archive.json
+    photos manifest /path/to/archive
+    photos verify /path/to/archive
+    photos info /path/to/archive
+    photos sync /source/archive /dest/archive
     photos dedup archive.json /path/to/scan -d -m
 """
 
@@ -54,7 +56,7 @@ def main() -> int:
         $ photos index /path/to/photos
         $ photos manifest /path/to/archive --output version.json
         $ photos fixdates archive.json --all
-        $ photos verify /path/to/archive --all --check-timestamps
+        $ photos verify /path/to/archive --all
     """
     # Create main parser
     parser = argparse.ArgumentParser(
@@ -79,6 +81,15 @@ def main() -> int:
         help="Command to execute",
     )
 
+    # prepare subcommand
+    prepare_parser = subparsers.add_parser(
+        "prepare",
+        help="Prepare directories for archiving",
+        description="Check and fix permissions, ownership, and filenames for archiving",
+    )
+    prepare.setup_parser(prepare_parser)
+    prepare_parser.set_defaults(func=prepare.run)
+
     # index subcommand
     index_parser = subparsers.add_parser(
         "index",
@@ -87,15 +98,6 @@ def main() -> int:
     )
     index.setup_parser(index_parser)
     index_parser.set_defaults(func=index.run)
-
-    # manifest subcommand
-    manifest_parser = subparsers.add_parser(
-        "manifest",
-        help="Generate archive manifest information",
-        description="Generate manifest information from JSON files",
-    )
-    manifest.setup_parser(manifest_parser)
-    manifest_parser.set_defaults(func=manifest.run)
 
     # fixdates subcommand
     fixdates_parser = subparsers.add_parser(
@@ -106,6 +108,15 @@ def main() -> int:
     fixdates.setup_parser(fixdates_parser)
     fixdates_parser.set_defaults(func=fixdates.run)
 
+    # manifest subcommand
+    manifest_parser = subparsers.add_parser(
+        "manifest",
+        help="Generate archive manifest information",
+        description="Generate manifest information from JSON files",
+    )
+    manifest.setup_parser(manifest_parser)
+    manifest_parser.set_defaults(func=manifest.run)
+
     # verify subcommand
     verify_parser = subparsers.add_parser(
         "verify",
@@ -114,6 +125,15 @@ def main() -> int:
     )
     verify.setup_parser(verify_parser)
     verify_parser.set_defaults(func=verify.run)
+
+    # info subcommand
+    info_parser = subparsers.add_parser(
+        "info",
+        help="Show archive statistics",
+        description="Show human-readable statistics from JSON index files",
+    )
+    info.setup_parser(info_parser)
+    info_parser.set_defaults(func=info.run)
 
     # sync subcommand
     sync_parser = subparsers.add_parser(
@@ -124,15 +144,6 @@ def main() -> int:
     sync.setup_parser(sync_parser)
     sync_parser.set_defaults(func=sync.run)
 
-    # prepare subcommand
-    prepare_parser = subparsers.add_parser(
-        "prepare",
-        help="Prepare directories for archiving",
-        description="Check and fix permissions, ownership, and filenames for archiving",
-    )
-    prepare.setup_parser(prepare_parser)
-    prepare_parser.set_defaults(func=prepare.run)
-
     # dedup subcommand
     dedup_parser = subparsers.add_parser(
         "dedup",
@@ -141,15 +152,6 @@ def main() -> int:
     )
     dedup.setup_parser(dedup_parser)
     dedup_parser.set_defaults(func=dedup.run)
-
-    # info subcommand
-    info_parser = subparsers.add_parser(
-        "info",
-        help="Show archive statistics",
-        description="Show human-readable statistics from JSON index files",
-    )
-    info.setup_parser(info_parser)
-    info_parser.set_defaults(func=info.run)
 
     # Parse arguments and execute
     args = parser.parse_args()
