@@ -1286,9 +1286,11 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "-t",
-        "--check-timestamps",
-        action="store_true",
-        help="Verify file and directory timestamps match metadata",
+        "--no-check-timestamps",
+        dest="check_timestamps",
+        action="store_false",
+        default=True,
+        help="Disable timestamp verification (enabled by default)",
     )
     parser.add_argument(
         "-T",
@@ -1299,15 +1301,19 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "-e",
-        "--check-extra-files",
-        action="store_true",
-        help="Check for extra files in filesystem not present in metadata",
+        "--no-check-extra-files",
+        dest="check_extra_files",
+        action="store_false",
+        default=True,
+        help="Disable extra files check (enabled by default)",
     )
     parser.add_argument(
         "-p",
-        "--check-permissions",
-        action="store_true",
-        help="Verify file permissions (644) and directory permissions (755)",
+        "--no-check-permissions",
+        dest="check_permissions",
+        action="store_false",
+        default=True,
+        help="Disable permission verification (enabled by default)",
     )
     parser.add_argument(
         "-u",
@@ -1335,19 +1341,19 @@ def run(args: argparse.Namespace) -> int:
     optionally a .version.json file, then performs verification:
     1. Verifies all files exist and are accessible
     2. Verifies file sizes match metadata
-    3. Optionally verifies file timestamps (with check_timestamps flag)
-    4. Optionally verifies SHA1 and MD5 checksums (with all flag, time-consuming)
-    5. Optionally verifies directory timestamps (with check_timestamps flag)
-    6. Optionally verifies JSON file timestamps (with check_timestamps flag)
-    7. Optionally verifies archive directory timestamp matches newest JSON file
-       (with check_timestamps flag)
+    3. Verifies file timestamps (disable with --no-check-timestamps)
+    4. Optionally verifies SHA1 and MD5 checksums (with -a flag, time-consuming)
+    5. Verifies directory timestamps (disable with --no-check-timestamps)
+    6. Verifies JSON file timestamps (disable with --no-check-timestamps)
+    7. Verifies archive directory timestamp matches newest JSON file
+       (disable with --no-check-timestamps)
     8. If .version.json found, verifies version integrity
-    9. Optionally checks for extra files in filesystem (with check_extra_files flag)
+    9. Checks for extra files in filesystem (disable with --no-check-extra-files)
     10. Checks for zero-byte files in metadata
     11. Checks for duplicate SHA1 and MD5 checksums
     12. Validates date formats in metadata (ISO 8601 with colon in timezone)
     13. Validates date formats in .version.json file
-    14. Optionally verifies file/directory permissions and ownership (with check_permissions flag)
+    14. Verifies file/directory permissions and ownership (disable with --no-check-permissions)
 
     Args:
         args: Parsed command-line arguments with fields:
@@ -1391,8 +1397,6 @@ def run(args: argparse.Namespace) -> int:
 
     if args.all:
         print("WARNING: Full checksum verification enabled (this may take a while)")
-    if args.check_timestamps:
-        print("Timestamp verification enabled")
 
     total_files = 0
     total_errors = 0

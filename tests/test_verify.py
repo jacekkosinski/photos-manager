@@ -1511,7 +1511,12 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = verify_args(directory=str(test_dir))
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1543,7 +1548,12 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = verify_args(directory=str(test_dir))
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1578,7 +1588,13 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = verify_args(directory=str(test_dir), all=True)
+        args = verify_args(
+            directory=str(test_dir),
+            all=True,
+            check_timestamps=False,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1611,7 +1627,12 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = verify_args(directory=str(test_dir))
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1658,7 +1679,12 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = verify_args(directory=str(test_dir))
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1706,7 +1732,11 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = verify_args(directory=str(test_dir), check_timestamps=True)
+        args = verify_args(
+            directory=str(test_dir),
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1749,7 +1779,12 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = verify_args(directory=str(test_dir))
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1783,7 +1818,12 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = verify_args(directory=str(test_dir))
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1806,7 +1846,12 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text("[]")
 
-        args = verify_args(directory=str(test_dir))
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1844,7 +1889,11 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = verify_args(directory=str(test_dir), check_extra_files=True)
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1898,7 +1947,12 @@ class TestRun:
         ]
         (test_dir / "metadata2.json").write_text(json.dumps(data2))
 
-        args = verify_args(directory=str(test_dir))
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1932,7 +1986,13 @@ class TestRun:
         json_file = test_dir / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = verify_args(directory=str(test_dir), all=True)
+        args = verify_args(
+            directory=str(test_dir),
+            all=True,
+            check_timestamps=False,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -1984,7 +2044,12 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = verify_args(directory=str(test_dir), check_timestamps=True, tolerance=1)
+        args = verify_args(
+            directory=str(test_dir),
+            tolerance=1,
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -2021,7 +2086,11 @@ class TestRun:
 
         # No version file created
 
-        args = verify_args(directory=str(test_dir), check_timestamps=True)
+        args = verify_args(
+            directory=str(test_dir),
+            check_extra_files=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -2087,7 +2156,11 @@ class TestRun:
         extra_json = test_dir / "extra_metadata.json"
         extra_json.write_text("[]")
 
-        args = verify_args(directory=str(test_dir), check_extra_files=True)
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -2139,7 +2212,11 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = verify_args(directory=str(test_dir), check_extra_files=True)
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_permissions=False,
+        )
         exit_code = run(args)
 
         assert exit_code != os.EX_OK
@@ -2175,7 +2252,11 @@ class TestRun:
 
         # No version file
 
-        args = verify_args(directory=str(test_dir), check_extra_files=True)
+        args = verify_args(
+            directory=str(test_dir),
+            check_timestamps=False,
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -2223,7 +2304,10 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = verify_args(directory=str(test_dir))
+        args = verify_args(
+            directory=str(test_dir),
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -2271,7 +2355,10 @@ class TestRun:
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
 
-        args = verify_args(directory=str(test_dir))
+        args = verify_args(
+            directory=str(test_dir),
+            check_permissions=False,
+        )
 
         exit_code = run(args)
 
@@ -2312,7 +2399,8 @@ class TestRun:
 
         args = verify_args(
             directory=str(test_dir),
-            check_permissions=True,
+            check_timestamps=False,
+            check_extra_files=False,
             owner="nonexistent_user",
             group="nonexistent_group",
         )

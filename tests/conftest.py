@@ -32,10 +32,10 @@ def verify_args(tmp_path: Path) -> Callable[..., argparse.Namespace]:
     def _make(
         directory: str | None = None,
         all: bool = False,  # noqa: A002
-        check_timestamps: bool = False,
+        check_timestamps: bool = True,
         tolerance: int = 1,
-        check_extra_files: bool = False,
-        check_permissions: bool = False,
+        check_extra_files: bool = True,
+        check_permissions: bool = True,
         owner: str | None = None,
         group: str | None = None,
     ) -> argparse.Namespace:
