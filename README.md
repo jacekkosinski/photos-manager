@@ -335,16 +335,23 @@ photos dedup archive.json /path/to/scan -d -f -t
 #### 1. Create archive metadata from scratch
 
 ```bash
-# Step 1: Scan photos directory and generate metadata
+# Step 1: Prepare directory (fix permissions, ownership, filenames)
+photos prepare /photos/2024 --dry-run
+photos prepare /photos/2024
+
+# Step 2: Scan photos directory and generate metadata
 photos index /photos/2024 --time-zone Europe/Warsaw
 
-# Step 2: Generate version info from all JSON files
+# Step 3: Generate version info from all JSON files
 photos manifest /photos --output /photos/.version.json
 ```
 
 #### 2. Add new photos to existing archive
 
 ```bash
+# Prepare new photos
+photos prepare /photos/2025
+
 # Scan new photos and merge with existing metadata
 photos index /photos/2025 --merge /photos/2024.json
 
@@ -361,9 +368,8 @@ photos verify /photos/archive
 # Full verification with checksums
 photos verify /photos/archive --all
 
-# After the verification, you can also regenerate metadata to compare
-photos index /photos/backup --output current.json
-diff original.json current.json
+# Show archive statistics
+photos info /photos/archive --stats
 ```
 
 #### 4. Restore timestamps after copying from archive
