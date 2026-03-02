@@ -25,7 +25,8 @@ Usage:
     photos manifest /path/to/archive --output custom.json
     photos manifest /path/to/archive -o version.json
 
-The version string follows the format "photos-SIZE-COUNT" where:
+The version string follows the format "PREFIX-SIZE-COUNT" where:
+- PREFIX is the archive name (default: "photos", configurable with --prefix)
 - SIZE is the total content size in terabytes (3 decimal places)
 - COUNT is the last three digits of the total file count (modulo 1000)
 
@@ -168,6 +169,12 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Output file path (if not specified, writes to stdout)",
     )
+    parser.add_argument(
+        "-P",
+        "--prefix",
+        default=VERSION_PREFIX,
+        help=f"Archive name prefix for version string (default: {VERSION_PREFIX})",
+    )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -181,7 +188,7 @@ def run(args: argparse.Namespace) -> int:
         2. Recursively finds all JSON files in the archive directory
         3. Validates and processes each JSON file
         4. Calculates aggregate statistics (total size, file count)
-        5. Generates version string in format "photos-SIZE-COUNT"
+        5. Generates version string in format "PREFIX-SIZE-COUNT"
         6. Captures timestamps (last modification, verification time)
         7. Writes version information as formatted JSON to output file or stdout
 
@@ -189,6 +196,7 @@ def run(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments with fields:
             - directory: Path to archive directory
             - output_file: Optional output file path (None for stdout)
+            - prefix: Archive name prefix for version string (default: 'photos')
 
     Returns:
         int: Exit code indicating success or failure
@@ -205,7 +213,7 @@ def run(args: argparse.Namespace) -> int:
     Output:
         Writes JSON object with structure:
             {
-                "version": "photos-{TB:.3f}-{count%1000}",
+                "version": "{prefix}-{TB:.3f}-{count%1000}",
                 "total_bytes": int,
                 "file_count": int,
                 "last_modified": str,   # ISO 8601 timestamp
@@ -229,7 +237,8 @@ def run(args: argparse.Namespace) -> int:
 
     total_tb = total_bytes / BYTES_PER_TB
     last_three_digits = file_count % 1000
-    version = f"photos-{total_tb:.3f}-{last_three_digits}"
+    prefix = args.prefix
+    version = f"{prefix}-{total_tb:.3f}-{last_three_digits}"
 
     youngest_mtime = datetime.fromtimestamp(json_files_with_mtimes[0][0]).astimezone()
     last_modified = youngest_mtime.isoformat(timespec="seconds")

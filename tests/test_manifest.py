@@ -112,7 +112,7 @@ class TestRun:
         json_file = tmp_path / "test.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(directory=str(tmp_path), output_file=None)
+        args = argparse.Namespace(directory=str(tmp_path), output_file=None, prefix="photos")
 
         exit_code = run(args)
 
@@ -146,7 +146,9 @@ class TestRun:
         json_file.write_text(json.dumps(data))
 
         output_file = tmp_path / "custom.version.json"
-        args = argparse.Namespace(directory=str(tmp_path), output_file=str(output_file))
+        args = argparse.Namespace(
+            directory=str(tmp_path), output_file=str(output_file), prefix="photos"
+        )
 
         exit_code = run(args)
 
@@ -159,7 +161,9 @@ class TestRun:
 
     def test_run_with_nonexistent_directory(self) -> None:
         """Test that run() raises SystemExit for nonexistent directory."""
-        args = argparse.Namespace(directory="/nonexistent/directory", output_file=None)
+        args = argparse.Namespace(
+            directory="/nonexistent/directory", output_file=None, prefix="photos"
+        )
 
         with pytest.raises(SystemExit) as exc_info:
             run(args)
@@ -172,7 +176,7 @@ class TestRun:
         test_dir = tmp_path / "empty"
         test_dir.mkdir()
 
-        args = argparse.Namespace(directory=str(test_dir), output_file=None)
+        args = argparse.Namespace(directory=str(test_dir), output_file=None, prefix="photos")
 
         with pytest.raises(SystemExit) as exc_info:
             run(args)
@@ -200,7 +204,9 @@ class TestRun:
         (tmp_path / "old.version.json").write_text(json.dumps(version_data))
 
         output_file = tmp_path / ".version.json"
-        args = argparse.Namespace(directory=str(tmp_path), output_file=str(output_file))
+        args = argparse.Namespace(
+            directory=str(tmp_path), output_file=str(output_file), prefix="photos"
+        )
 
         exit_code = run(args)
 
@@ -239,7 +245,9 @@ class TestRun:
         (tmp_path / "file2.json").write_text(json.dumps(data2))
 
         output_file = tmp_path / ".version.json"
-        args = argparse.Namespace(directory=str(tmp_path), output_file=str(output_file))
+        args = argparse.Namespace(
+            directory=str(tmp_path), output_file=str(output_file), prefix="photos"
+        )
 
         exit_code = run(args)
 
@@ -256,7 +264,7 @@ class TestRun:
         invalid_file = tmp_path / "invalid.json"
         invalid_file.write_text("{invalid json}")
 
-        args = argparse.Namespace(directory=str(tmp_path), output_file=None)
+        args = argparse.Namespace(directory=str(tmp_path), output_file=None, prefix="photos")
 
         with pytest.raises(SystemExit) as exc_info:
             run(args)
