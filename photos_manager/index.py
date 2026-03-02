@@ -259,6 +259,7 @@ def run(args: argparse.Namespace) -> int:
         with output_path.open("w", encoding="utf-8") as json_file:
             json.dump(sorted_file_info, json_file, ensure_ascii=False, indent=4)
             json_file.write("\n")
+        output_path.chmod(0o644)
         print(f"File information written to {output_json}")
     except OSError as exception:
         raise SystemExit(

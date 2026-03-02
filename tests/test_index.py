@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -191,6 +192,30 @@ class TestRun:
         assert "md5" in data[0]
         assert "date" in data[0]
         assert "size" in data[0]
+
+    def test_run_output_file_has_644_permissions(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test that output JSON file has 644 permissions."""
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        (test_dir / "test.txt").write_text("Hello")
+
+        monkeypatch.chdir(tmp_path)
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            time_zone="UTC",
+            sort_by_number=False,
+            sort_by_dir=False,
+            merge=None,
+        )
+
+        run(args)
+
+        output_file = tmp_path / "photos.json"
+        mode = output_file.stat().st_mode & 0o777
+        assert mode == 0o644, f"Expected 644, got {stat.filemode(output_file.stat().st_mode)}"
 
     def test_run_with_invalid_directory(self) -> None:
         """Test that run() raises SystemExit for invalid directory."""

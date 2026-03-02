@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -209,6 +210,30 @@ class TestRun:
         run(args)
 
         assert output_file.stat().st_mtime == known_mtime
+
+    def test_run_output_file_has_644_permissions(self, tmp_path: Path) -> None:
+        """Test that output file has 644 permissions."""
+        data = [
+            {
+                "path": "/test/file.txt",
+                "sha1": "abc123",
+                "md5": "def456",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 500,
+            }
+        ]
+        json_file = tmp_path / "test.json"
+        json_file.write_text(json.dumps(data))
+
+        output_file = tmp_path / ".version.json"
+        args = argparse.Namespace(
+            directory=str(tmp_path), output_file=str(output_file), prefix="photos"
+        )
+
+        run(args)
+
+        mode = output_file.stat().st_mode & 0o777
+        assert mode == 0o644, f"Expected 644, got {stat.filemode(output_file.stat().st_mode)}"
 
     def test_run_with_nonexistent_directory(self) -> None:
         """Test that run() raises SystemExit for nonexistent directory."""

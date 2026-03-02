@@ -260,6 +260,7 @@ def run(args: argparse.Namespace) -> int:
         try:
             output_path = Path(args.output_file)
             output_path.write_text(output_json, encoding="utf-8")
+            output_path.chmod(0o644)
             mtime = json_files_with_mtimes[0][0]
             os.utime(output_path, (mtime, mtime))
         except OSError as exception:
