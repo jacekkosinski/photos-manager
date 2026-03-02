@@ -1366,10 +1366,9 @@ class TestRunIntegration:
     def test_run_with_dry_run_flag(
         self,
         tmp_path: Path,
-        capsys: pytest.CaptureFixture[str],
         current_user_and_group: tuple[str, str],
     ) -> None:
-        """Test that run() with --dry-run shows message and doesn't modify files."""
+        """Test that run() with --dry-run doesn't modify files."""
 
         test_dir = tmp_path / "test"
         test_dir.mkdir()
@@ -1392,10 +1391,6 @@ class TestRunIntegration:
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
-
-        # Verify DRY-RUN message in output
-        captured = capsys.readouterr()
-        assert "DRY-RUN" in captured.out
 
         # Verify no actual changes were made
         assert test_file.exists()  # Original uppercase file still exists

@@ -984,7 +984,4 @@ def run(args: argparse.Namespace) -> int:
         if not success:
             all_success = False
 
-    if args.dry_run:
-        print("\nMode: DRY-RUN (use without -n to apply fixes)")
-
     return os.EX_OK if all_success else 1
