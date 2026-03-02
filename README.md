@@ -83,6 +83,40 @@ photos manifest --help
 photos verify --help
 ```
 
+### prepare - Prepare Directory for Archiving
+
+Check and fix file permissions, ownership, and filenames before archiving.
+
+```bash
+# Preview changes without applying them
+photos prepare /path/to/directory --dry-run
+
+# Apply fixes (permissions, ownership, filenames)
+photos prepare /path/to/directory
+
+# Process multiple directories
+photos prepare /photos/incoming /photos/new --dry-run
+
+# Custom owner/group
+photos prepare /path/to/directory --owner storage --group storage
+
+# Restore file timestamps from EXIF metadata (requires: pip install photos-manager-cli[exif])
+photos prepare /path/to/directory --use-exif
+```
+
+**What it fixes:**
+
+- **File permissions**: Sets files to 644
+- **Directory permissions**: Sets directories to 755
+- **Ownership**: Sets owner and group (default: `storage:storage`)
+- **Filenames**: Converts to lowercase, replaces spaces with underscores
+
+**Notes:**
+
+- Hidden files (starting with `.`) are skipped
+- Symbolic links are checked but not followed
+- Use `--dry-run` to preview all changes before applying
+
 ### index - Generate File Metadata
 
 Generate a JSON file containing metadata (checksums, sizes, timestamps) for all
@@ -222,6 +256,79 @@ photos verify /path/to/archive --all --tolerance 2
 - Verify backup integrity after restore
 - Check for missing or modified files
 - Validate archive consistency before/after migration
+
+### info - Show Archive Statistics
+
+Display a human-readable summary of archive contents from JSON index files,
+without touching or re-hashing files.
+
+```bash
+# Basic summary (file count, total size, date range)
+photos info /path/to/archive
+
+# Detailed stats with breakdown by year and file extension
+photos info /path/to/archive --stats
+
+# Show more rows in year/extension tables
+photos info /path/to/archive --stats --top-n 20
+```
+
+### sync - Synchronize Archives
+
+Compare source and destination archives and generate minimal operations to
+synchronize them. Matches files by content (SHA1, MD5, size) to detect
+moves/renames and prioritize moves over copy+delete.
+
+```bash
+# Preview sync operations (default: dry-run)
+photos sync /source/archive /dest/archive
+
+# Execute sync operations
+photos sync /source/archive /dest/archive --execute
+
+# Save sync commands to a shell script
+photos sync /source/archive /dest/archive --output sync.sh
+
+# Skip deletion operations
+photos sync /source/archive /dest/archive --no-delete --execute
+
+# Rewrite destination path for remote execution
+photos sync /source /dest --rewrite-dest /remote/dest --output sync.sh
+```
+
+**Notes:**
+
+- Dry-run by default — use `--execute` to perform real operations
+- Requires `.version.json` and JSON metadata in both archives
+
+### dedup - Find Duplicates and Missing Files
+
+Compare files in a directory against archive metadata to identify duplicates
+(files already in archive) and missing files (files in archive but not in the
+scanned directory). Matches by file size, then SHA1 and MD5 checksums.
+
+```bash
+# Find duplicates (files that exist in archive)
+photos dedup archive.json /path/to/scan -d
+
+# Find missing files (files in archive but not in scan directory)
+photos dedup archive.json /path/to/scan -m
+
+# Both duplicates and missing
+photos dedup archive.json /path/to/scan -d -m
+
+# Output one path per line (for piping)
+photos dedup archive.json /path/to/scan -d -l
+
+# Generate move commands for duplicates
+photos dedup archive.json /path/to/scan -d -M /path/to/duplicates
+
+# Compare from pre-computed PSV file (path|sha1|md5|date|size)
+photos dedup archive.json scan_results.psv -d -m
+
+# Also check filenames and timestamps
+photos dedup archive.json /path/to/scan -d -f -t
+```
 
 ### Common Workflows
 
