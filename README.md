@@ -195,6 +195,10 @@ photos manifest /path/to/archive
 # Save to file
 photos manifest /path/to/archive --output version.json
 photos manifest /path/to/archive -o .version.json
+
+# Custom archive name prefix (default: "photos")
+photos manifest /path/to/uploads --prefix upload
+photos manifest /path/to/dups --prefix duplicates
 ```
 
 **Output format:**
@@ -213,8 +217,9 @@ photos manifest /path/to/archive -o .version.json
 }
 ```
 
-**Version string format:** `photos-{TB:.3f}-{count%1000}`
+**Version string format:** `{prefix}-{TB:.3f}-{count%1000}`
 
+- prefix: Archive name (default: `photos`, configurable with `-P`/`--prefix`)
 - TB: Total size in terabytes (3 decimal places)
 - count%1000: Last three digits of total file count
 
