@@ -142,8 +142,8 @@ photos index /path/to/photos --time-zone Europe/Warsaw
 [
     {
         "path": "/path/to/photos/image.jpg",
-        "sha1": "a1b2c3d4e5f6...",
-        "md5": "d4e5f6g7h8i9...",
+        "sha1": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
+        "md5": "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9",
         "date": "2025-01-04T12:34:56+01:00",
         "size": 1234567
     }
@@ -207,8 +207,8 @@ photos manifest /path/to/archive -o .version.json
     "last_modified": "2025-01-04T12:34:56+01:00",
     "last_verified": "2025-01-04T13:45:23+01:00",
     "files": {
-        "archive1.json": "a1b2c3d4e5f6...",
-        "archive2.json": "f6e5d4c3b2a1..."
+        "archive1.json": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
+        "archive2.json": "f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7"
     }
 }
 ```
