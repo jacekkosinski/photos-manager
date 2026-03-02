@@ -27,11 +27,12 @@ poetry run pre-commit install
 ```bash
 # Using Poetry - unified CLI (recommended)
 poetry run photos --help
-poetry run photos index --help
-poetry run photos manifest --help
-poetry run photos fixdates --help
-poetry run photos verify --help
 poetry run photos prepare --help
+poetry run photos index --help
+poetry run photos fixdates --help
+poetry run photos manifest --help
+poetry run photos verify --help
+poetry run photos info --help
 poetry run photos sync --help
 poetry run photos dedup --help
 
@@ -97,28 +98,46 @@ photos-manager-cli/
 │   ├── __init__.py      # Package initialization
 │   ├── cli.py          # Main CLI entry point
 │   ├── common.py        # Shared utilities
-│   ├── dedup.py         # Deduplication tool
-│   ├── index.py        # Generate file metadata JSON
-│   ├── manifest.py     # Generate archive manifest
 │   ├── prepare.py       # Fix permissions and filenames
+│   ├── index.py         # Generate file metadata JSON
 │   ├── fixdates.py      # Update file timestamps
+│   ├── manifest.py      # Generate archive manifest
+│   ├── verify.py        # Verify archive integrity
+│   ├── info.py          # Show archive statistics
 │   ├── sync.py          # Synchronization tool
-│   └── verify.py        # Verify archive integrity
+│   └── dedup.py         # Deduplication tool
 ├── tests/               # Test files (508 tests)
 │   ├── test_cli.py
 │   ├── test_common.py
-│   ├── test_dedup.py
-│   ├── test_index.py
-│   ├── test_manifest.py
 │   ├── test_prepare.py
+│   ├── test_index.py
 │   ├── test_fixdates.py
+│   ├── test_manifest.py
+│   ├── test_verify.py
 │   ├── test_sync.py
-│   └── test_verify.py
+│   └── test_dedup.py
 ├── Makefile             # Development commands
 └── pyproject.toml       # Project configuration
 ```
 
 ## 7. Common Use Cases
+
+### Prepare directory for archiving
+
+```bash
+# Fix permissions, normalize filenames (lowercase, no spaces)
+# Preview changes first
+photos prepare /photos/incoming --dry-run
+
+# Apply fixes
+photos prepare /photos/incoming
+
+# With EXIF timestamp restoration (requires: pip install photos-manager-cli[exif])
+photos prepare /photos/incoming --use-exif
+
+# Custom user/group
+photos prepare /photos/incoming --user storage --group storage
+```
 
 ### Archive a photo collection
 
@@ -134,22 +153,6 @@ photos verify /photos
 
 # 4. Full verification with checksums (time-consuming)
 photos verify /photos --all
-```
-
-### Restore timestamps after copying from archive
-
-```bash
-# After copying files from backup, timestamps may be wrong
-# Use fixdates to restore original timestamps
-
-# Preview changes first
-photos fixdates /photos/2024.json --dry-run
-
-# Update directory timestamps only (fast)
-photos fixdates /photos/2024.json
-
-# Update all file and directory timestamps
-photos fixdates /photos/2024.json --all
 ```
 
 ### Merge multiple photo directories
@@ -173,21 +176,20 @@ photos index /photos --sort-by-number
 # Results will be sorted: 1, 2, 3... instead of 1, 10, 11, 2, 20...
 ```
 
-### Prepare directory for archiving
+### Restore timestamps after copying from archive
 
 ```bash
-# Fix permissions, normalize filenames (lowercase, no spaces)
+# After copying files from backup, timestamps may be wrong
+# Use fixdates to restore original timestamps
+
 # Preview changes first
-photos prepare /photos/incoming --dry-run
+photos fixdates /photos/2024.json --dry-run
 
-# Apply fixes
-photos prepare /photos/incoming
+# Update directory timestamps only (fast)
+photos fixdates /photos/2024.json
 
-# With EXIF timestamp restoration (requires: pip install photos-manager-cli[exif])
-photos prepare /photos/incoming --use-exif
-
-# Custom user/group
-photos prepare /photos/incoming --user storage --group storage
+# Update all file and directory timestamps
+photos fixdates /photos/2024.json --all
 ```
 
 ### Synchronize archives

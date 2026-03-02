@@ -6,9 +6,10 @@ Guidance for Claude Code when working in this repository.
 
 Photos Manager CLI — Python 3.12+ toolkit for photo archive management.
 
-Tools: **index** (JSON metadata), **manifest** (version summaries), **fixdates**
-(restore timestamps), **verify** (integrity check), **prepare**
-(permissions/filenames), **sync** (synchronize), **dedup** (deduplicate).
+Tools: **prepare** (permissions/filenames), **index** (JSON metadata),
+**fixdates** (restore timestamps), **manifest** (version summaries), **verify**
+(integrity check), **info** (archive statistics), **sync** (synchronize),
+**dedup** (deduplicate).
 
 JSON format per file: `path`, `sha1`, `md5`, `date` (ISO 8601 with `+HH:MM`),
 `size`.
@@ -49,15 +50,15 @@ intentional.
 photos_manager/
 ├── cli.py        # CLI entry point
 ├── common.py     # shared utilities
-├── dedup.py / index.py / manifest.py / prepare.py
-├── fixdates.py / sync.py / verify.py
+├── prepare.py / index.py / fixdates.py / manifest.py
+├── verify.py / info.py / sync.py / dedup.py
 └── __init__.py
 
 tests/
 ├── conftest.py   # shared fixtures: current_user_and_group, verify_args
-├── test_cli.py / test_common.py / test_dedup.py / test_fixdates.py
-├── test_index.py / test_manifest.py / test_prepare.py
-└── test_sync.py / test_verify.py
+├── test_cli.py / test_common.py / test_prepare.py / test_index.py
+├── test_fixdates.py / test_manifest.py / test_verify.py
+└── test_sync.py / test_dedup.py
 ```
 
 ## Testing Conventions

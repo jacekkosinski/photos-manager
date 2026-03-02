@@ -361,9 +361,10 @@ After building, test the binary:
 ./dist/photos --help
 
 # Test each subcommand
+./dist/photos prepare --help
 ./dist/photos index --help
-./dist/photos manifest --help
 ./dist/photos fixdates --help
+./dist/photos manifest --help
 ./dist/photos verify --help
 
 # Run actual commands

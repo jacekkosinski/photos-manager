@@ -60,11 +60,12 @@ photos <command> [options]
 
 **Available commands:**
 
-- `index` - Generate JSON file with file metadata
-- `manifest` - Generate archive version information
-- `fixdates` - Update file timestamps based on metadata
-- `verify` - Verify archive integrity
 - `prepare` - Fix permissions and normalize filenames
+- `index` - Generate JSON file with file metadata
+- `fixdates` - Update file timestamps based on metadata
+- `manifest` - Generate archive version information
+- `verify` - Verify archive integrity
+- `info` - Show archive statistics
 - `sync` - Synchronize archives
 - `dedup` - Deduplicate files
 
@@ -75,9 +76,10 @@ photos <command> [options]
 photos --help
 
 # Get help for specific command
+photos prepare --help
 photos index --help
-photos manifest --help
 photos fixdates --help
+photos manifest --help
 photos verify --help
 ```
 
@@ -114,40 +116,6 @@ photos index /path/to/photos --time-zone Europe/Warsaw
 ]
 ```
 
-### manifest - Generate Archive Version Info
-
-Generate version metadata from a collection of JSON files (created by index).
-
-```bash
-# Basic usage - output to stdout
-photos manifest /path/to/archive
-
-# Save to file
-photos manifest /path/to/archive --output version.json
-photos manifest /path/to/archive -o .version.json
-```
-
-**Output format:**
-
-```json
-{
-    "version": "photos-2.456-234",
-    "total_bytes": 2701131776000,
-    "file_count": 12234,
-    "last_modified": "2025-01-04T12:34:56+01:00",
-    "last_verified": "2025-01-04T13:45:23+01:00",
-    "files": {
-        "archive1.json": "a1b2c3d4e5f6...",
-        "archive2.json": "f6e5d4c3b2a1..."
-    }
-}
-```
-
-**Version string format:** `photos-{TB:.3f}-{count%1000}`
-
-- TB: Total size in terabytes (3 decimal places)
-- count%1000: Last three digits of total file count
-
 ### fixdates - Update File Timestamps
 
 Update file and directory modification timestamps based on JSON metadata
@@ -181,6 +149,40 @@ photos fixdates archive1.json archive2.json --all
 - Restore original timestamps after copying files from archives
 - Ensure directory timestamps reflect their actual content
 - Keep filesystem timestamps synchronized with photo metadata
+
+### manifest - Generate Archive Version Info
+
+Generate version metadata from a collection of JSON files (created by index).
+
+```bash
+# Basic usage - output to stdout
+photos manifest /path/to/archive
+
+# Save to file
+photos manifest /path/to/archive --output version.json
+photos manifest /path/to/archive -o .version.json
+```
+
+**Output format:**
+
+```json
+{
+    "version": "photos-2.456-234",
+    "total_bytes": 2701131776000,
+    "file_count": 12234,
+    "last_modified": "2025-01-04T12:34:56+01:00",
+    "last_verified": "2025-01-04T13:45:23+01:00",
+    "files": {
+        "archive1.json": "a1b2c3d4e5f6...",
+        "archive2.json": "f6e5d4c3b2a1..."
+    }
+}
+```
+
+**Version string format:** `photos-{TB:.3f}-{count%1000}`
+
+- TB: Total size in terabytes (3 decimal places)
+- count%1000: Last three digits of total file count
 
 ### verify - Verify Archive Integrity
 
@@ -296,24 +298,25 @@ photos-manager-cli/
 │   ├── __init__.py        # Package initialization
 │   ├── cli.py             # Main CLI entry point
 │   ├── common.py          # Shared utilities
-│   ├── dedup.py           # Deduplication tool
-│   ├── index.py           # Generate file metadata JSON
-│   ├── manifest.py       # Generate archive version info
 │   ├── prepare.py         # Fix permissions and filenames
+│   ├── index.py           # Generate file metadata JSON
 │   ├── fixdates.py        # Update file timestamps from metadata
+│   ├── manifest.py        # Generate archive version info
+│   ├── verify.py          # Verify archive integrity
+│   ├── info.py            # Show archive statistics
 │   ├── sync.py            # Synchronization tool
-│   └── verify.py          # Verify archive integrity
+│   └── dedup.py           # Deduplication tool
 ├── tests/                 # 480 tests, 86.24% coverage
 │   ├── conftest.py        # Shared fixtures
 │   ├── test_cli.py
 │   ├── test_common.py
-│   ├── test_dedup.py
-│   ├── test_index.py
-│   ├── test_manifest.py
 │   ├── test_prepare.py
+│   ├── test_index.py
 │   ├── test_fixdates.py
+│   ├── test_manifest.py
+│   ├── test_verify.py
 │   ├── test_sync.py
-│   └── test_verify.py
+│   └── test_dedup.py
 ├── pyproject.toml         # Project configuration
 ├── .pre-commit-config.yaml # Pre-commit hooks config
 ├── Makefile               # Development commands
@@ -331,16 +334,18 @@ command:
 
 ```bash
 # Using Poetry
+poetry run photos prepare /path/to/incoming
 poetry run photos index /path/to/photos
-poetry run photos manifest /path/to/archive
 poetry run photos fixdates /path/to/photos.json
+poetry run photos manifest /path/to/archive
 poetry run photos verify /path/to/archive
 
 # Or after activating the virtual environment
 poetry shell
+photos prepare /path/to/incoming
 photos index /path/to/photos
-photos manifest /path/to/archive
 photos fixdates /path/to/photos.json
+photos manifest /path/to/archive
 photos verify /path/to/archive --all
 ```
 
@@ -349,9 +354,10 @@ photos verify /path/to/archive --all
 For backward compatibility, individual commands are still available:
 
 ```bash
+prepare /path/to/incoming
 index /path/to/photos
-manifest /path/to/archive
 fixdates /path/to/photos.json
+manifest /path/to/archive
 verify /path/to/archive --all
 ```
 
