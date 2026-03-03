@@ -161,7 +161,13 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     Args:
         parser: ArgumentParser instance to configure with manifest arguments.
     """
-    parser.add_argument("directory", type=str, help="Path to the archive directory")
+    parser.add_argument(
+        "directory",
+        type=str,
+        nargs="?",
+        default=".",
+        help="Path to the archive directory (default: current directory)",
+    )
     parser.add_argument(
         "-o",
         "--output",

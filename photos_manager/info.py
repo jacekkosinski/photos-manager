@@ -31,7 +31,13 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     Args:
         parser: ArgumentParser instance to configure with info arguments.
     """
-    parser.add_argument("directory", type=Path, help="Archive directory")
+    parser.add_argument(
+        "directory",
+        type=str,
+        nargs="?",
+        default=".",
+        help="Path to the archive directory (default: current directory)",
+    )
     parser.add_argument(
         "-s",
         "--stats",
@@ -359,7 +365,7 @@ def run(args: argparse.Namespace) -> int:
     Raises:
         SystemExit: If directory is invalid or no JSON index files are found.
     """
-    directory: Path = args.directory
+    directory = Path(args.directory)
 
     if not directory.is_dir():
         raise SystemExit(f"Error: not a directory: {directory}")
