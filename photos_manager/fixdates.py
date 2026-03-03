@@ -317,7 +317,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "-n",
         "--dry-run",
         action="store_true",
-        help="Print what will be done without actually setting timestamps",
+        help="Show what would be done without making changes",
     )
 
 

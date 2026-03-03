@@ -1329,14 +1329,14 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "--owner",
         type=str,
         default="storage",
-        help="Expected owner username for all files and directories (default: storage)",
+        help="Expected owner username (default: storage)",
     )
     parser.add_argument(
         "-g",
         "--group",
         type=str,
         default="storage",
-        help="Expected group name for all files and directories (default: storage)",
+        help="Expected group name (default: storage)",
     )
 
 
