@@ -269,7 +269,7 @@ def _print_stats(
         show_detailed: Whether to print by-year and by-extension breakdowns.
         top_n: Maximum rows to show in each breakdown table.
     """
-    print(f"{'Archive:':<16}{directory}")
+    print(f"{'Archive:':<16}{directory.resolve()}")
     if version_info is not None:
         _print_version_section(version_info)
     print()
