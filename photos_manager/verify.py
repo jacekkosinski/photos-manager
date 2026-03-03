@@ -28,6 +28,7 @@ Usage:
 """
 
 import argparse
+import concurrent.futures
 import grp
 import hashlib
 import json
@@ -36,6 +37,7 @@ import pwd
 import re
 import stat
 import sys
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -235,6 +237,30 @@ def verify_file_entry(
             return False, errors
 
     return not errors, errors
+
+
+def _verify_entries_parallel(
+    data: list[dict[str, str | int]],
+    workers: int,
+) -> Iterator[tuple[int, bool, list[str]]]:
+    """Verify file entries in parallel using multiple threads.
+
+    Submits verify_file_entry() calls to a thread pool and yields results
+    in submission order. Hashlib releases the GIL, so threads achieve real
+    parallelism for checksum computation on multi-core systems.
+
+    Args:
+        data: List of file entry dictionaries from JSON metadata.
+        workers: Number of worker threads to use.
+
+    Yields:
+        Tuples of (1-based index, success, error list) for each entry.
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(verify_file_entry, entry, True) for entry in data]
+        for i, future in enumerate(futures, 1):
+            success, errors = future.result()
+            yield i, success, errors
 
 
 def verify_timestamps(
@@ -1425,8 +1451,19 @@ def run(args: argparse.Namespace) -> int:
             print(f"  Found {file_count} file entries")
 
             # Verify each file entry
-            for i, entry in enumerate(data, 1):
-                success, errors = verify_file_entry(entry, verify_checksums=args.all)
+            if args.all:
+                workers = os.cpu_count() or 1
+                print(f"  Verifying checksums with {workers} threads...")
+                entries_iter: Iterator[tuple[int, bool, list[str]]] = _verify_entries_parallel(
+                    data, workers
+                )
+            else:
+                entries_iter = (
+                    (i, *verify_file_entry(entry, verify_checksums=False))
+                    for i, entry in enumerate(data, 1)
+                )
+
+            for i, success, errors in entries_iter:
                 if not success:
                     errors_in_file += len(errors)
                     total_errors += len(errors)
