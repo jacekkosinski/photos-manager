@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
@@ -73,29 +74,40 @@ def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
     local_tz = ZoneInfo(time_zone)
     file_info_list: list[dict[str, str | int]] = []
 
+    # Phase 1: collect paths and stat info (sequential — os.walk is not thread-safe)
+    file_entries: list[tuple[str, float, int]] = []
     try:
         for root, _, files in os.walk(directory):
             for file in files:
                 file_path = Path(root) / file
-
-                sha1, md5 = calculate_checksums(str(file_path))
-                if sha1 is None or md5 is None:
-                    continue
-
-                stat_info = file_path.stat()
-                mod_time_with_tz = datetime.fromtimestamp(stat_info.st_mtime, local_tz).isoformat()
-
-                file_info_list.append(
-                    {
-                        "path": str(file_path),
-                        "sha1": sha1,
-                        "md5": md5,
-                        "date": mod_time_with_tz,
-                        "size": stat_info.st_size,
-                    }
-                )
+                try:
+                    stat_info = file_path.stat()
+                    file_entries.append((str(file_path), stat_info.st_mtime, stat_info.st_size))
+                except OSError as e:
+                    print(f"Warning: Cannot stat {file_path}: {e}", file=sys.stderr)
     except OSError as e:
         print(f"Warning: Error accessing directory {directory}: {e}", file=sys.stderr)
+        return file_info_list
+
+    # Phase 2: compute checksums in parallel (hashlib releases the GIL)
+    workers = os.cpu_count() or 1
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        checksums = list(executor.map(calculate_checksums, [path for path, _, _ in file_entries]))
+
+    # Phase 3: assemble results (order preserved by executor.map)
+    for (path, mtime, size), (sha1, md5) in zip(file_entries, checksums, strict=True):
+        if sha1 is None or md5 is None:
+            continue
+        mod_time_with_tz = datetime.fromtimestamp(mtime, local_tz).isoformat()
+        file_info_list.append(
+            {
+                "path": path,
+                "sha1": sha1,
+                "md5": md5,
+                "date": mod_time_with_tz,
+                "size": size,
+            }
+        )
 
     return file_info_list
 
