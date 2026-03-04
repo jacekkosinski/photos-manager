@@ -87,30 +87,60 @@ class TestFindNeighbors:
 
 
 @pytest.mark.unit
-class TestProposeDirectory:
-    """Tests for propose_directory function."""
+class TestProposeDirectories:
+    """Tests for propose_directories function."""
 
     def test_proposes_most_common_directory(self) -> None:
         """Test that the most common parent directory is proposed."""
         sorted_entries = _build_sorted_entries(SAMPLE_ENTRIES[:3])
-        result = locate.propose_directory(sorted_entries)
-        assert result == "camera/100"
+        result = locate.propose_directories(sorted_entries)
+        assert result == ["camera/100"]
 
-    def test_returns_none_for_empty(self) -> None:
-        """Test that None is returned for empty list."""
-        result = locate.propose_directory([])
-        assert result is None
+    def test_returns_empty_for_empty(self) -> None:
+        """Test that empty list is returned for empty input."""
+        result = locate.propose_directories([])
+        assert result == []
 
     def test_mixed_directories(self) -> None:
-        """Test with entries from different directories."""
+        """Test with entries from different directories, clear winner."""
         entries = [
             _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
             _make_entry("dir_a/file2.jpg", "2025-07-07T10:01:00+02:00"),
             _make_entry("dir_b/file3.jpg", "2025-07-07T10:02:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        result = locate.propose_directory(sorted_entries)
-        assert result == "dir_a"
+        result = locate.propose_directories(sorted_entries)
+        assert result == ["dir_a"]
+
+    def test_ambiguous_two_tied(self) -> None:
+        """Test that tied directories are all returned."""
+        entries = [
+            _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_b/file2.jpg", "2025-07-07T10:01:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        result = locate.propose_directories(sorted_entries)
+        assert result == ["dir_a", "dir_b"]
+
+    def test_ambiguous_three_tied(self) -> None:
+        """Test that three tied directories are all returned."""
+        entries = [
+            _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_b/file2.jpg", "2025-07-07T10:01:00+02:00"),
+            _make_entry("dir_c/file3.jpg", "2025-07-07T10:02:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        result = locate.propose_directories(sorted_entries)
+        assert result == ["dir_a", "dir_b", "dir_c"]
+
+    def test_single_entry(self) -> None:
+        """Test with a single entry returns one directory."""
+        entries = [
+            _make_entry("only_dir/file1.jpg", "2025-07-07T10:00:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        result = locate.propose_directories(sorted_entries)
+        assert result == ["only_dir"]
 
 
 @pytest.mark.unit
@@ -267,7 +297,7 @@ class TestRun:
             directory=str(new_dir),
             json_files=[str(json_file)],
             list=False,
-            context=10,
+            context=3,
             filter=None,
             output=script_path,
         )
@@ -276,6 +306,69 @@ class TestRun:
         content = Path(script_path).read_text(encoding="utf-8")
         assert "mkdir -p" in content
         assert "mv -iv" in content
+
+    def test_output_mode_refuses_ambiguous(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test -o mode refuses to write script when placement is ambiguous."""
+        # Build archive where neighbors are evenly split between two dirs
+        entries = [
+            _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_b/file2.jpg", "2025-07-07T10:01:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        new_dir = tmp_path / "new"
+        new_dir.mkdir()
+        f = new_dir / "photo.jpg"
+        f.write_text("data")
+        target_ts = datetime(2025, 7, 7, 8, 0, 30, tzinfo=UTC).timestamp()
+        os.utime(f, (target_ts, target_ts))
+        script_path = str(tmp_path / "move.sh")
+        args = argparse.Namespace(
+            directory=str(new_dir),
+            json_files=[str(json_file)],
+            list=False,
+            context=5,
+            filter=None,
+            output=script_path,
+        )
+        with pytest.raises(SystemExit, match="Use -f to narrow results"):
+            locate.run(args)
+        captured = capsys.readouterr()
+        assert "Ambiguous placement" in captured.err
+        assert "photo.jpg" in captured.err
+        assert not Path(script_path).exists()
+
+    def test_default_mode_ambiguous(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test default mode shows all candidates when ambiguous."""
+        entries = [
+            _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_b/file2.jpg", "2025-07-07T10:01:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        new_dir = tmp_path / "new"
+        new_dir.mkdir()
+        f = new_dir / "photo.jpg"
+        f.write_text("data")
+        target_ts = datetime(2025, 7, 7, 8, 0, 30, tzinfo=UTC).timestamp()
+        os.utime(f, (target_ts, target_ts))
+        args = argparse.Namespace(
+            directory=str(new_dir),
+            json_files=[str(json_file)],
+            list=False,
+            context=5,
+            filter=None,
+            output=None,
+        )
+        result = locate.run(args)
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "dir_a" in captured.out
+        assert "dir_b" in captured.out
 
     def test_filter_option(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test filter restricts archive entries by path."""

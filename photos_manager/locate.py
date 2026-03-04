@@ -98,33 +98,39 @@ def find_neighbors(
     return sorted_entries[start:end]
 
 
-def propose_directory(
+def propose_directories(
     neighbors: list[tuple[datetime, dict[str, str | int]]],
-) -> str | None:
-    """Determine the most likely target directory from neighbor entries.
+) -> list[str]:
+    """Determine candidate target directories from neighbor entries.
 
     Takes the parent directory of each neighbor's path and returns the
-    most common one.
+    most common one(s). When the top two directories have equal counts,
+    all tied directories are returned (ambiguous result).
 
     Args:
         neighbors: List of (datetime, entry) tuples from the neighborhood.
 
     Returns:
-        Most common parent directory path, or None if no neighbors.
+        List of candidate directory paths: single element for unambiguous,
+        multiple for tied directories, empty if no neighbors.
     """
     if not neighbors:
-        return None
+        return []
     dirs = [str(Path(str(entry["path"])).parent) for _, entry in neighbors]
     counter = Counter(dirs)
-    return counter.most_common(1)[0][0]
+    top = counter.most_common(2)
+    if len(top) >= 2 and top[1][1] == top[0][1]:
+        top_count = top[0][1]
+        return sorted(d for d, c in counter.items() if c == top_count)
+    return [top[0][0]]
 
 
 def _build_placements(
     new_files: list[tuple[str, datetime]],
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
     context: int,
-) -> list[tuple[str, str]]:
-    """Build (file_path, target_dir) pairs without printing.
+) -> list[tuple[str, list[str]]]:
+    """Build (file_path, candidate_dirs) pairs without printing.
 
     Args:
         new_files: List of (path, datetime) for new files.
@@ -132,14 +138,14 @@ def _build_placements(
         context: Number of neighbors to consider.
 
     Returns:
-        List of (file_path, target_directory) tuples.
+        List of (file_path, candidate_directories) tuples.
     """
-    placements: list[tuple[str, str]] = []
+    placements: list[tuple[str, list[str]]] = []
     for file_path, dt in new_files:
         neighbors = find_neighbors(sorted_entries, dt, context)
-        target = propose_directory(neighbors)
-        if target:
-            placements.append((file_path, target))
+        candidates = propose_directories(neighbors)
+        if candidates:
+            placements.append((file_path, candidates))
     return placements
 
 
@@ -147,8 +153,8 @@ def _print_default(
     new_files: list[tuple[str, datetime]],
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
     context: int,
-) -> list[tuple[str, str]]:
-    """Print default mode output and return (file_path, target_dir) pairs.
+) -> list[tuple[str, list[str]]]:
+    """Print default mode output and return (file_path, candidate_dirs) pairs.
 
     Args:
         new_files: List of (path, datetime) for new files.
@@ -156,16 +162,16 @@ def _print_default(
         context: Number of neighbors to consider.
 
     Returns:
-        List of (file_path, target_directory) tuples.
+        List of (file_path, candidate_directories) tuples.
     """
-    placements: list[tuple[str, str]] = []
+    placements: list[tuple[str, list[str]]] = []
     for file_path, dt in new_files:
         neighbors = find_neighbors(sorted_entries, dt, context)
-        target = propose_directory(neighbors)
+        candidates = propose_directories(neighbors)
         name = Path(file_path).name
-        if target:
-            print(f"{name}  \u2192  {target}")
-            placements.append((file_path, target))
+        if candidates:
+            print(f"{name}  \u2192  {', '.join(candidates)}")
+            placements.append((file_path, candidates))
         else:
             print(f"{name}  \u2192  (no match found)", file=sys.stderr)
     return placements
@@ -175,7 +181,7 @@ def _print_list(
     new_files: list[tuple[str, datetime]],
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
     context: int,
-) -> list[tuple[str, str]]:
+) -> list[tuple[str, list[str]]]:
     """Print merged listing of archive and new files with context.
 
     Merges all new files into the sorted archive timeline, then shows
@@ -188,7 +194,7 @@ def _print_list(
         context: Number of archive entries to show before and after the new files.
 
     Returns:
-        List of (file_path, target_directory) tuples.
+        List of (file_path, candidate_directories) tuples.
     """
     # Build merged timeline: (datetime, path, is_new, original_file_path)
     merged: list[tuple[datetime, str, bool, str]] = []
@@ -229,13 +235,13 @@ def _print_list(
 
     # Propose directory from neighbors of all new files
     neighbors = find_neighbors(sorted_entries, new_files[0][1], context)
-    target = propose_directory(neighbors)
+    candidates = propose_directories(neighbors)
 
-    placements: list[tuple[str, str]] = []
-    if target:
-        print(f"\nProposed directory: {target}\n")
+    placements: list[tuple[str, list[str]]] = []
+    if candidates:
+        print(f"\nProposed directory: {', '.join(candidates)}\n")
         for file_path, _ in new_files:
-            placements.append((file_path, target))
+            placements.append((file_path, candidates))
     else:
         print("\nNo matching directory found\n", file=sys.stderr)
     return placements
@@ -370,11 +376,17 @@ def run(args: argparse.Namespace) -> int:
 
     if args.output:
         placements = _build_placements(new_files, sorted_entries, args.context)
+        ambiguous = [(fp, dirs) for fp, dirs in placements if len(dirs) > 1]
+        if ambiguous:
+            print("Error: Ambiguous placement for:", file=sys.stderr)
+            for fp, dirs in ambiguous:
+                print(f"  {Path(fp).name}: {', '.join(dirs)}", file=sys.stderr)
+            raise SystemExit("Use -f to narrow results")
         if placements:
-            _write_script(placements, args.output)
+            _write_script([(fp, dirs[0]) for fp, dirs in placements], args.output)
     elif args.list:
-        placements = _print_list(new_files, sorted_entries, args.context)
+        _print_list(new_files, sorted_entries, args.context)
     else:
-        placements = _print_default(new_files, sorted_entries, args.context)
+        _print_default(new_files, sorted_entries, args.context)
 
     return os.EX_OK
