@@ -4,6 +4,7 @@
 This is the main entry point for the photos-manager CLI suite, providing
 a unified interface to all photo management commands:
 - prepare: Prepare directories for archiving (fix permissions, ownership, filenames)
+- locate: Find archive directories for new photos based on timestamps
 - index: Generate JSON file with file metadata
 - fixdates: Fix file and directory dates to match JSON metadata
 - manifest: Generate archive version information
@@ -14,6 +15,7 @@ a unified interface to all photo management commands:
 
 Usage:
     photos prepare /path/to/directory --dry-run
+    photos locate /path/to/new/photos archive.json
     photos index /path/to/directory
     photos fixdates archive.json
     photos manifest /path/to/archive
@@ -33,6 +35,7 @@ from photos_manager import (
     fixdates,
     index,
     info,
+    locate,
     manifest,
     prepare,
     sync,
@@ -89,6 +92,15 @@ def main() -> int:
     )
     prepare.setup_parser(prepare_parser)
     prepare_parser.set_defaults(func=prepare.run)
+
+    # locate subcommand
+    locate_parser = subparsers.add_parser(
+        "locate",
+        help="Find archive directories for new photos based on timestamps",
+        description="Find where new photos belong in archive by matching timestamps",
+    )
+    locate.setup_parser(locate_parser)
+    locate_parser.set_defaults(func=locate.run)
 
     # index subcommand
     index_parser = subparsers.add_parser(
