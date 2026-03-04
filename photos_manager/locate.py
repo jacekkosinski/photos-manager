@@ -15,9 +15,9 @@ Usage:
 import argparse
 import bisect
 import os
+import re
 import stat
 import sys
-from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -98,52 +98,162 @@ def find_neighbors(
     return sorted_entries[start:end]
 
 
-def propose_directories(
-    neighbors: list[tuple[datetime, dict[str, str | int]]],
-) -> list[str]:
-    """Determine candidate target directories from neighbor entries.
-
-    Takes the parent directory of each neighbor's path and returns the
-    most common one(s). When the top two directories have equal counts,
-    all tied directories are returned (ambiguous result).
+def build_directory_entries(
+    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
+) -> dict[str, list[tuple[datetime, dict[str, str | int]]]]:
+    """Group archive entries by parent directory, preserving date order.
 
     Args:
-        neighbors: List of (datetime, entry) tuples from the neighborhood.
+        sorted_entries: Archive entries sorted by date.
 
     Returns:
-        List of candidate directory paths: single element for unambiguous,
-        multiple for tied directories, empty if no neighbors.
+        Mapping of directory path to list of (datetime, entry) tuples.
     """
-    if not neighbors:
-        return []
-    dirs = [str(Path(str(entry["path"])).parent) for _, entry in neighbors]
-    counter = Counter(dirs)
-    top = counter.most_common(2)
-    if len(top) >= 2 and top[1][1] == top[0][1]:
-        top_count = top[0][1]
-        return sorted(d for d, c in counter.items() if c == top_count)
-    return [top[0][0]]
+    by_dir: dict[str, list[tuple[datetime, dict[str, str | int]]]] = {}
+    for dt, entry in sorted_entries:
+        dir_path = str(Path(str(entry["path"])).parent)
+        by_dir.setdefault(dir_path, []).append((dt, entry))
+    return by_dir
+
+
+def build_directory_ranges(
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+) -> dict[str, tuple[datetime, datetime]]:
+    """Build date ranges for each archive directory.
+
+    Args:
+        dir_entries: Mapping of directory path to sorted (datetime, entry) lists.
+
+    Returns:
+        Mapping of directory path to (min_date, max_date) tuple.
+    """
+    return {d: (entries[0][0], entries[-1][0]) for d, entries in dir_entries.items()}
+
+
+def propose_directories(
+    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
+    dir_ranges: dict[str, tuple[datetime, datetime]],
+    target_dt: datetime,
+    context: int,
+) -> list[str]:
+    """Find candidate directories using hybrid range + neighbor matching.
+
+    A directory is a candidate only if both conditions are met:
+    1. The file's timestamp falls within the directory's [min, max] date range.
+    2. The directory has at least one entry among the N nearest neighbors.
+
+    Args:
+        sorted_entries: Archive entries sorted by date.
+        dir_ranges: Mapping of directory path to (min_date, max_date).
+        target_dt: Timestamp of the new file.
+        context: Number of neighbors to consider before and after.
+
+    Returns:
+        Sorted list of candidate directory paths.
+    """
+    range_matches = {d for d, (lo, hi) in dir_ranges.items() if lo <= target_dt <= hi}
+    neighbors = find_neighbors(sorted_entries, target_dt, context)
+    neighbor_dirs = {str(Path(str(e["path"])).parent) for _, e in neighbors}
+    return sorted(range_matches & neighbor_dirs)
+
+
+def extract_sequence_number(filename: str) -> int | None:
+    """Extract a numeric sequence number from a filename.
+
+    Returns the last run of digits found in the file stem.
+
+    Args:
+        filename: Filename (not full path).
+
+    Returns:
+        Integer sequence number, or None if no digits found.
+    """
+    stem = Path(filename).stem
+    matches = re.findall(r"\d+", stem)
+    if not matches:
+        return None
+    return int(matches[-1])
+
+
+def filter_by_sequence(
+    candidates: list[str],
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    target_dt: datetime,
+    target_name: str,
+) -> list[str]:
+    """Filter candidate directories by filename sequence number continuity.
+
+    For each candidate directory, uses binary search to find the archive
+    entries immediately before and after the target timestamp. If the new
+    file's sequence number falls between those entries' sequence numbers,
+    the directory is a sequence match.
+
+    Returns only sequence-matched directories. If none match, returns
+    the original candidates unchanged.
+
+    Args:
+        candidates: Candidate directory paths from hybrid matching.
+        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
+        target_dt: Timestamp of the new file.
+        target_name: Filename of the new file.
+
+    Returns:
+        Filtered list of candidate directory paths.
+    """
+    target_seq = extract_sequence_number(target_name)
+    if target_seq is None:
+        return candidates
+
+    seq_matches: list[str] = []
+    for candidate in candidates:
+        entries = dir_entries.get(candidate, [])
+        if not entries:
+            continue
+        dates = [dt for dt, _ in entries]
+        pos = bisect.bisect_left(dates, target_dt)
+        before_seq: int | None = None
+        after_seq: int | None = None
+        if pos > 0:
+            before_seq = extract_sequence_number(Path(str(entries[pos - 1][1]["path"])).name)
+        if pos < len(entries):
+            after_seq = extract_sequence_number(Path(str(entries[pos][1]["path"])).name)
+        # Check if target_seq falls between before and after
+        if before_seq is not None and before_seq <= target_seq:
+            if after_seq is None or target_seq <= after_seq:
+                seq_matches.append(candidate)
+        elif after_seq is not None and target_seq <= after_seq and before_seq is None:
+            seq_matches.append(candidate)
+
+    return sorted(seq_matches) if seq_matches else candidates
 
 
 def _build_placements(
     new_files: list[tuple[str, datetime]],
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
+    dir_ranges: dict[str, tuple[datetime, datetime]],
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
     context: int,
+    *,
+    use_seq: bool = False,
 ) -> list[tuple[str, list[str]]]:
     """Build (file_path, candidate_dirs) pairs without printing.
 
     Args:
         new_files: List of (path, datetime) for new files.
-        sorted_entries: Sorted archive entries.
+        sorted_entries: Archive entries sorted by date.
+        dir_ranges: Mapping of directory path to (min_date, max_date).
+        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
         context: Number of neighbors to consider.
+        use_seq: If True, filter candidates by sequence number continuity.
 
     Returns:
         List of (file_path, candidate_directories) tuples.
     """
     placements: list[tuple[str, list[str]]] = []
     for file_path, dt in new_files:
-        neighbors = find_neighbors(sorted_entries, dt, context)
-        candidates = propose_directories(neighbors)
+        candidates = propose_directories(sorted_entries, dir_ranges, dt, context)
+        if use_seq and candidates:
+            candidates = filter_by_sequence(candidates, dir_entries, dt, Path(file_path).name)
         if candidates:
             placements.append((file_path, candidates))
     return placements
@@ -152,22 +262,30 @@ def _build_placements(
 def _print_default(
     new_files: list[tuple[str, datetime]],
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
+    dir_ranges: dict[str, tuple[datetime, datetime]],
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
     context: int,
+    *,
+    use_seq: bool = False,
 ) -> list[tuple[str, list[str]]]:
     """Print default mode output and return (file_path, candidate_dirs) pairs.
 
     Args:
         new_files: List of (path, datetime) for new files.
-        sorted_entries: Sorted archive entries.
+        sorted_entries: Archive entries sorted by date.
+        dir_ranges: Mapping of directory path to (min_date, max_date).
+        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
         context: Number of neighbors to consider.
+        use_seq: If True, filter candidates by sequence number continuity.
 
     Returns:
         List of (file_path, candidate_directories) tuples.
     """
     placements: list[tuple[str, list[str]]] = []
     for file_path, dt in new_files:
-        neighbors = find_neighbors(sorted_entries, dt, context)
-        candidates = propose_directories(neighbors)
+        candidates = propose_directories(sorted_entries, dir_ranges, dt, context)
+        if use_seq and candidates:
+            candidates = filter_by_sequence(candidates, dir_entries, dt, Path(file_path).name)
         name = Path(file_path).name
         if candidates:
             print(f"{name}  \u2192  {', '.join(candidates)}")
@@ -180,7 +298,11 @@ def _print_default(
 def _print_list(
     new_files: list[tuple[str, datetime]],
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
+    dir_ranges: dict[str, tuple[datetime, datetime]],
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
     context: int,
+    *,
+    use_seq: bool = False,
 ) -> list[tuple[str, list[str]]]:
     """Print merged listing of archive and new files with context.
 
@@ -191,7 +313,10 @@ def _print_list(
     Args:
         new_files: List of (path, datetime) for new files.
         sorted_entries: Sorted archive entries.
+        dir_ranges: Mapping of directory path to (min_date, max_date).
+        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
         context: Number of archive entries to show before and after the new files.
+        use_seq: If True, filter candidates by sequence number continuity.
 
     Returns:
         List of (file_path, candidate_directories) tuples.
@@ -233,9 +358,12 @@ def _print_list(
         marker = ">" if is_new else " "
         print(f"{marker} {item_dt.strftime('%Y-%m-%d %H:%M:%S')}  {item_path}")
 
-    # Propose directory from neighbors of all new files
-    neighbors = find_neighbors(sorted_entries, new_files[0][1], context)
-    candidates = propose_directories(neighbors)
+    # Find matching directories using hybrid range + neighbor matching
+    candidates = propose_directories(sorted_entries, dir_ranges, new_files[0][1], context)
+    if use_seq and candidates:
+        candidates = filter_by_sequence(
+            candidates, dir_entries, new_files[0][1], Path(new_files[0][0]).name
+        )
 
     placements: list[tuple[str, list[str]]] = []
     if candidates:
@@ -322,6 +450,11 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         metavar="FILE",
         help="Write mkdir and mv commands to shell script",
     )
+    parser.add_argument(
+        "--seq",
+        action="store_true",
+        help="Filter candidates by filename sequence number continuity",
+    )
 
 
 def validate_args(args: argparse.Namespace) -> None:
@@ -355,6 +488,7 @@ def run(args: argparse.Namespace) -> int:
             - context: Number of neighbor files to consider
             - filter: Optional path substring filter
             - output: Optional path to output shell script
+            - seq: Whether to filter by filename sequence continuity
 
     Returns:
         int: os.EX_OK on success.
@@ -372,10 +506,22 @@ def run(args: argparse.Namespace) -> int:
     if not new_files:
         raise SystemExit(f"Error: No files found in {args.directory}")
 
+    dir_entries = build_directory_entries(sorted_entries)
+    dir_ranges = build_directory_ranges(dir_entries)
+
     print(f"Found {len(new_files)} new file(s), {len(sorted_entries)} archive entries")
 
+    use_seq = getattr(args, "seq", False)
+
     if args.output:
-        placements = _build_placements(new_files, sorted_entries, args.context)
+        placements = _build_placements(
+            new_files,
+            sorted_entries,
+            dir_ranges,
+            dir_entries,
+            args.context,
+            use_seq=use_seq,
+        )
         ambiguous = [(fp, dirs) for fp, dirs in placements if len(dirs) > 1]
         if ambiguous:
             print("Error: Ambiguous placement for:", file=sys.stderr)
@@ -385,8 +531,22 @@ def run(args: argparse.Namespace) -> int:
         if placements:
             _write_script([(fp, dirs[0]) for fp, dirs in placements], args.output)
     elif args.list:
-        _print_list(new_files, sorted_entries, args.context)
+        _print_list(
+            new_files,
+            sorted_entries,
+            dir_ranges,
+            dir_entries,
+            args.context,
+            use_seq=use_seq,
+        )
     else:
-        _print_default(new_files, sorted_entries, args.context)
+        _print_default(
+            new_files,
+            sorted_entries,
+            dir_ranges,
+            dir_entries,
+            args.context,
+            use_seq=use_seq,
+        )
 
     return os.EX_OK

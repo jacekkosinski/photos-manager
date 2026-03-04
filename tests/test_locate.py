@@ -87,60 +87,172 @@ class TestFindNeighbors:
 
 
 @pytest.mark.unit
-class TestProposeDirectories:
-    """Tests for propose_directories function."""
+class TestBuildDirectoryRanges:
+    """Tests for build_directory_ranges function."""
 
-    def test_proposes_most_common_directory(self) -> None:
-        """Test that the most common parent directory is proposed."""
+    def test_single_directory(self) -> None:
+        """Test range for entries in a single directory."""
         sorted_entries = _build_sorted_entries(SAMPLE_ENTRIES[:3])
-        result = locate.propose_directories(sorted_entries)
-        assert result == ["camera/100"]
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        result = locate.build_directory_ranges(dir_entries)
+        assert "camera/100" in result
+        lo, hi = result["camera/100"]
+        assert lo == datetime.fromisoformat("2025-07-07T10:00:00+02:00")
+        assert hi == datetime.fromisoformat("2025-07-07T10:10:00+02:00")
 
-    def test_returns_empty_for_empty(self) -> None:
-        """Test that empty list is returned for empty input."""
-        result = locate.propose_directories([])
-        assert result == []
+    def test_multiple_directories(self) -> None:
+        """Test ranges for entries in multiple directories."""
+        sorted_entries = _build_sorted_entries(SAMPLE_ENTRIES)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        result = locate.build_directory_ranges(dir_entries)
+        assert len(result) == 3
+        assert "camera/100" in result
+        assert "camera/101" in result
+        assert "phone/202507" in result
 
-    def test_mixed_directories(self) -> None:
-        """Test with entries from different directories, clear winner."""
+    def test_empty_entries(self) -> None:
+        """Test with empty entries list."""
+        dir_entries = locate.build_directory_entries([])
+        result = locate.build_directory_ranges(dir_entries)
+        assert result == {}
+
+
+@pytest.mark.unit
+class TestProposeDirectories:
+    """Tests for propose_directories hybrid function."""
+
+    def test_unambiguous_single_match(self) -> None:
+        """Test that a directory matching both range and neighbor passes."""
         entries = [
-            _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/file2.jpg", "2025-07-07T10:01:00+02:00"),
-            _make_entry("dir_b/file3.jpg", "2025-07-07T10:02:00+02:00"),
+            _make_entry("dir_a/f1.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/f2.jpg", "2025-07-07T12:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        result = locate.propose_directories(sorted_entries)
-        assert result == ["dir_a"]
+        dir_ranges = locate.build_directory_ranges(locate.build_directory_entries(sorted_entries))
+        target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
+        assert locate.propose_directories(sorted_entries, dir_ranges, target, 5) == ["dir_a"]
 
-    def test_ambiguous_two_tied(self) -> None:
-        """Test that tied directories are all returned."""
+    def test_ambiguous_overlapping_ranges_and_neighbors(self) -> None:
+        """Test that two dirs passing both checks are both returned."""
         entries = [
-            _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_b/file2.jpg", "2025-07-07T10:01:00+02:00"),
+            _make_entry("dir_a/f1.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/f2.jpg", "2025-07-07T14:00:00+02:00"),
+            _make_entry("dir_b/f1.jpg", "2025-07-07T11:00:00+02:00"),
+            _make_entry("dir_b/f2.jpg", "2025-07-07T15:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        result = locate.propose_directories(sorted_entries)
+        dir_ranges = locate.build_directory_ranges(locate.build_directory_entries(sorted_entries))
+        target = datetime.fromisoformat("2025-07-07T12:00:00+02:00")
+        result = locate.propose_directories(sorted_entries, dir_ranges, target, 5)
         assert result == ["dir_a", "dir_b"]
 
-    def test_ambiguous_three_tied(self) -> None:
-        """Test that three tied directories are all returned."""
+    def test_filtered_by_neighbor(self) -> None:
+        """Test that a dir in range but not in neighbors is excluded."""
         entries = [
-            _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_b/file2.jpg", "2025-07-07T10:01:00+02:00"),
-            _make_entry("dir_c/file3.jpg", "2025-07-07T10:02:00+02:00"),
+            _make_entry("dir_a/f1.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/f2.jpg", "2025-07-07T10:05:00+02:00"),
+            _make_entry("dir_b/f1.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_b/f2.jpg", "2025-07-07T12:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        result = locate.propose_directories(sorted_entries)
-        assert result == ["dir_a", "dir_b", "dir_c"]
+        dir_ranges = locate.build_directory_ranges(locate.build_directory_entries(sorted_entries))
+        # target inside both ranges, but N=1 only catches dir_a neighbors
+        target = datetime.fromisoformat("2025-07-07T10:03:00+02:00")
+        result = locate.propose_directories(sorted_entries, dir_ranges, target, 1)
+        assert result == ["dir_a"]
 
-    def test_single_entry(self) -> None:
-        """Test with a single entry returns one directory."""
+    def test_filtered_by_range(self) -> None:
+        """Test that a dir in neighbors but not in range is excluded."""
         entries = [
-            _make_entry("only_dir/file1.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/f1.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/f2.jpg", "2025-07-07T10:10:00+02:00"),
+            _make_entry("dir_b/f1.jpg", "2025-07-07T10:03:00+02:00"),
+            _make_entry("dir_b/f2.jpg", "2025-07-07T10:04:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        result = locate.propose_directories(sorted_entries)
-        assert result == ["only_dir"]
+        dir_ranges = locate.build_directory_ranges(locate.build_directory_entries(sorted_entries))
+        # target inside dir_a range (10:00-10:10) but outside dir_b (10:03-10:04)
+        target = datetime.fromisoformat("2025-07-07T10:06:00+02:00")
+        result = locate.propose_directories(sorted_entries, dir_ranges, target, 5)
+        assert "dir_b" not in result
+        assert result == ["dir_a"]
+
+    def test_empty_no_matches(self) -> None:
+        """Test no matches when timestamp is outside all ranges."""
+        entries = [
+            _make_entry("dir_a/f1.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/f2.jpg", "2025-07-07T10:05:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_ranges = locate.build_directory_ranges(locate.build_directory_entries(sorted_entries))
+        target = datetime.fromisoformat("2025-07-07T09:00:00+02:00")
+        result = locate.propose_directories(sorted_entries, dir_ranges, target, 5)
+        assert result == []
+
+
+@pytest.mark.unit
+class TestExtractSequenceNumber:
+    """Tests for extract_sequence_number function."""
+
+    def test_standard_photo_name(self) -> None:
+        """Test extraction from standard photo filename."""
+        assert locate.extract_sequence_number("img_6767.jpg") == 6767
+
+    def test_multiple_digit_groups(self) -> None:
+        """Test that last digit group is used."""
+        assert locate.extract_sequence_number("DSC_20250707_001.jpg") == 1
+
+    def test_no_digits(self) -> None:
+        """Test that None is returned for filename without digits."""
+        assert locate.extract_sequence_number("readme.txt") is None
+
+    def test_digits_only(self) -> None:
+        """Test filename that is just digits."""
+        assert locate.extract_sequence_number("12345.jpg") == 12345
+
+
+@pytest.mark.unit
+class TestFilterBySequence:
+    """Tests for filter_by_sequence function."""
+
+    def test_narrows_to_matching_directory(self) -> None:
+        """Test that seq filter keeps only the directory with matching gap."""
+        entries = [
+            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
+            _make_entry("dir_b/img_200.jpg", "2025-07-07T10:30:00+02:00"),
+            _make_entry("dir_b/img_210.jpg", "2025-07-07T11:30:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
+        # img_105 fits between img_100 and img_110 (dir_a), not 200-210 (dir_b)
+        result = locate.filter_by_sequence(["dir_a", "dir_b"], dir_entries, target, "img_105.jpg")
+        assert result == ["dir_a"]
+
+    def test_no_seq_match_returns_all(self) -> None:
+        """Test that when no directory matches by seq, all are returned."""
+        entries = [
+            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
+        # img_999 doesn't fit between 100 and 110
+        result = locate.filter_by_sequence(["dir_a"], dir_entries, target, "img_999.jpg")
+        assert result == ["dir_a"]
+
+    def test_no_digits_in_filename(self) -> None:
+        """Test that files without digits bypass seq filter."""
+        entries = [
+            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        target = datetime.fromisoformat("2025-07-07T10:00:00+02:00")
+        result = locate.filter_by_sequence(["dir_a"], dir_entries, target, "readme.txt")
+        assert result == ["dir_a"]
 
 
 @pytest.mark.unit
@@ -269,6 +381,7 @@ class TestRun:
             context=10,
             filter=None,
             output=None,
+            seq=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
@@ -286,6 +399,7 @@ class TestRun:
             context=3,
             filter=None,
             output=None,
+            seq=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
@@ -305,6 +419,7 @@ class TestRun:
             context=3,
             filter=None,
             output=script_path,
+            seq=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
@@ -316,10 +431,12 @@ class TestRun:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test -o mode refuses to write script when placement is ambiguous."""
-        # Build archive where neighbors are evenly split between two dirs
+        # Two directories with overlapping date ranges
         entries = [
             _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_b/file2.jpg", "2025-07-07T10:01:00+02:00"),
+            _make_entry("dir_a/file2.jpg", "2025-07-07T14:00:00+02:00"),
+            _make_entry("dir_b/file1.jpg", "2025-07-07T11:00:00+02:00"),
+            _make_entry("dir_b/file2.jpg", "2025-07-07T15:00:00+02:00"),
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
@@ -327,7 +444,8 @@ class TestRun:
         new_dir.mkdir()
         f = new_dir / "photo.jpg"
         f.write_text("data")
-        target_ts = datetime(2025, 7, 7, 8, 0, 30, tzinfo=UTC).timestamp()
+        # 12:00+02:00 falls within both dir_a (10:00-14:00) and dir_b (11:00-15:00)
+        target_ts = datetime(2025, 7, 7, 10, 0, 0, tzinfo=UTC).timestamp()
         os.utime(f, (target_ts, target_ts))
         script_path = str(tmp_path / "move.sh")
         args = argparse.Namespace(
@@ -337,6 +455,7 @@ class TestRun:
             context=5,
             filter=None,
             output=script_path,
+            seq=False,
         )
         with pytest.raises(SystemExit, match="Use -f to narrow results"):
             locate.run(args)
@@ -348,10 +467,12 @@ class TestRun:
     def test_default_mode_ambiguous(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test default mode shows all candidates when ambiguous."""
+        """Test default mode shows all candidates when date ranges overlap."""
         entries = [
             _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_b/file2.jpg", "2025-07-07T10:01:00+02:00"),
+            _make_entry("dir_a/file2.jpg", "2025-07-07T14:00:00+02:00"),
+            _make_entry("dir_b/file1.jpg", "2025-07-07T11:00:00+02:00"),
+            _make_entry("dir_b/file2.jpg", "2025-07-07T15:00:00+02:00"),
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
@@ -359,7 +480,8 @@ class TestRun:
         new_dir.mkdir()
         f = new_dir / "photo.jpg"
         f.write_text("data")
-        target_ts = datetime(2025, 7, 7, 8, 0, 30, tzinfo=UTC).timestamp()
+        # 12:00+02:00 falls within both dir_a and dir_b ranges
+        target_ts = datetime(2025, 7, 7, 10, 0, 0, tzinfo=UTC).timestamp()
         os.utime(f, (target_ts, target_ts))
         args = argparse.Namespace(
             directory=str(new_dir),
@@ -368,6 +490,7 @@ class TestRun:
             context=5,
             filter=None,
             output=None,
+            seq=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
@@ -392,6 +515,7 @@ class TestRun:
             context=10,
             filter="phone",
             output=None,
+            seq=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
@@ -407,6 +531,7 @@ class TestRun:
             context=10,
             filter=None,
             output=None,
+            seq=False,
         )
         with pytest.raises(SystemExit, match="Not a directory"):
             locate.run(args)
@@ -423,6 +548,41 @@ class TestRun:
             context=10,
             filter=None,
             output=None,
+            seq=False,
         )
         with pytest.raises(SystemExit, match="No files found"):
             locate.run(args)
+
+    def test_seq_filter_narrows_ambiguous(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --seq narrows ambiguous placement to matching directory."""
+        entries = [
+            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
+            _make_entry("dir_b/img_200.jpg", "2025-07-07T10:30:00+02:00"),
+            _make_entry("dir_b/img_210.jpg", "2025-07-07T11:30:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        new_dir = tmp_path / "new"
+        new_dir.mkdir()
+        f = new_dir / "img_105.jpg"
+        f.write_text("data")
+        # 11:00+02:00 = within both dir_a (10:00-12:00) and dir_b (10:30-11:30)
+        target_ts = datetime(2025, 7, 7, 9, 0, 0, tzinfo=UTC).timestamp()
+        os.utime(f, (target_ts, target_ts))
+        args = argparse.Namespace(
+            directory=str(new_dir),
+            json_files=[str(json_file)],
+            list=False,
+            context=5,
+            filter=None,
+            output=None,
+            seq=True,
+        )
+        result = locate.run(args)
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "dir_a" in captured.out
+        assert "dir_b" not in captured.out
