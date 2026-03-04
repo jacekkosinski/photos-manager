@@ -61,6 +61,7 @@ photos <command> [options]
 **Available commands:**
 
 - `prepare` - Fix permissions and normalize filenames
+- `locate` - Find archive directories for new photos based on timestamps
 - `index` - Generate JSON file with file metadata
 - `fixdates` - Update file timestamps based on metadata
 - `manifest` - Generate archive version information
@@ -116,6 +117,40 @@ photos prepare /path/to/directory --use-exif
 - Hidden files (starting with `.`) are skipped
 - Symbolic links are checked but not followed
 - Use `--dry-run` to preview all changes before applying
+
+### locate - Find Archive Directories for New Photos
+
+Find where new photos belong in the archive by matching modification timestamps
+against existing archive metadata. Useful for organizing incoming photos into
+the correct archive subdirectories.
+
+```bash
+# Find target directories for new photos
+photos locate /path/to/new/photos archive.json
+
+# Show interleaved timeline with archive context
+photos locate /path/to/new/photos archive.json --list
+
+# Show more/less context lines around new files
+photos locate /path/to/new/photos archive.json -l -N 3
+
+# Filter archive entries by path substring
+photos locate /path/to/new/photos archive.json --filter canon-eos
+
+# Generate shell script with mkdir/mv commands
+photos locate /path/to/new/photos archive.json --output move.sh
+
+# Search across multiple archive JSON files
+photos locate /path/to/new/photos camera1.json camera2.json
+```
+
+**Modes:**
+
+- **Default**: Prints proposed target directory for each new file
+- **List** (`-l`): Shows a merged timeline of archive and new files, with N
+  archive entries before and after for context
+- **Output** (`-o`): Generates an executable shell script with `mkdir -p` and
+  `mv -iv` commands
 
 ### index - Generate File Metadata
 
@@ -355,9 +390,17 @@ photos manifest /photos --output /photos/.version.json
 
 ```bash
 # Prepare new photos
-photos prepare /photos/2025
+photos prepare /photos/incoming
 
-# Scan new photos and merge with existing metadata
+# Find where new photos belong in the archive
+photos locate /photos/incoming /photos/archive.json --list
+
+# Generate and review move commands
+photos locate /photos/incoming /photos/archive.json --output move.sh
+cat move.sh
+bash move.sh
+
+# Scan and merge with existing metadata
 photos index /photos/2025 --merge /photos/2024.json
 
 # Update version info
@@ -417,6 +460,7 @@ photos-manager-cli/
 │   ├── cli.py             # Main CLI entry point
 │   ├── common.py          # Shared utilities
 │   ├── prepare.py         # Fix permissions and filenames
+│   ├── locate.py          # Find archive directories for new photos
 │   ├── index.py           # Generate file metadata JSON
 │   ├── fixdates.py        # Update file timestamps from metadata
 │   ├── manifest.py        # Generate archive version info
@@ -429,6 +473,7 @@ photos-manager-cli/
 │   ├── test_cli.py
 │   ├── test_common.py
 │   ├── test_prepare.py
+│   ├── test_locate.py
 │   ├── test_index.py
 │   ├── test_fixdates.py
 │   ├── test_manifest.py
@@ -454,6 +499,7 @@ command:
 ```bash
 # Using Poetry
 poetry run photos prepare /path/to/incoming
+poetry run photos locate /path/to/new /path/to/archive.json
 poetry run photos index /path/to/photos
 poetry run photos fixdates /path/to/photos.json
 poetry run photos manifest /path/to/archive
@@ -462,6 +508,7 @@ poetry run photos verify /path/to/archive
 # Or after activating the virtual environment
 poetry shell
 photos prepare /path/to/incoming
+photos locate /path/to/new archive.json --list
 photos index /path/to/photos
 photos fixdates /path/to/photos.json
 photos manifest /path/to/archive
