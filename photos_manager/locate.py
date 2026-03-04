@@ -53,7 +53,7 @@ def load_archive_entries(
 
 
 def scan_new_files(directory: str) -> list[tuple[str, datetime]]:
-    """Scan directory for files and return paths with modification datetimes.
+    """Scan directory recursively for files and return paths with modification datetimes.
 
     Args:
         directory: Path to directory with new photos.
@@ -63,7 +63,7 @@ def scan_new_files(directory: str) -> list[tuple[str, datetime]]:
     """
     results: list[tuple[str, datetime]] = []
     dir_path = Path(directory)
-    for file_path in sorted(dir_path.iterdir()):
+    for file_path in dir_path.rglob("*"):
         if not file_path.is_file():
             continue
         mtime = file_path.stat().st_mtime

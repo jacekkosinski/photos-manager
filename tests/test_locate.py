@@ -189,12 +189,17 @@ class TestScanNewFiles:
         assert "a.jpg" in names
         assert "b.jpg" in names
 
-    def test_ignores_subdirectories(self, tmp_path: Path) -> None:
-        """Test that subdirectories are not included."""
+    def test_scans_subdirectories(self, tmp_path: Path) -> None:
+        """Test that files in subdirectories are found recursively."""
         (tmp_path / "file.jpg").write_text("data")
-        (tmp_path / "subdir").mkdir()
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        (subdir / "nested.jpg").write_text("data")
         result = locate.scan_new_files(str(tmp_path))
-        assert len(result) == 1
+        assert len(result) == 2
+        names = [Path(p).name for p, _ in result]
+        assert "file.jpg" in names
+        assert "nested.jpg" in names
 
     def test_empty_directory(self, tmp_path: Path) -> None:
         """Test scanning empty directory."""
