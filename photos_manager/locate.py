@@ -446,12 +446,13 @@ def _print_list(
     *,
     use_seq: bool = False,
     match_prefix: bool = False,
+    base_dir: str = "",
 ) -> list[tuple[str, list[str]]]:
     """Print merged listing of archive and new files with context.
 
     Merges all new files into the sorted archive timeline, then shows
     N archive entries before the first new file and N after the last,
-    with all new files marked with ">".
+    with all new files marked with ">" and " <" suffix.
 
     Args:
         new_files: List of (path, datetime) for new files.
@@ -461,6 +462,7 @@ def _print_list(
         context: Number of archive entries to show before and after the new files.
         use_seq: If True, filter candidates by sequence number continuity.
         match_prefix: If True, only compare entries with the same filename prefix.
+        base_dir: Base directory for displaying relative paths of new files.
 
     Returns:
         List of (file_path, candidate_directories) tuples.
@@ -469,8 +471,10 @@ def _print_list(
     merged: list[tuple[datetime, str, bool, str]] = []
     for n_dt, entry in sorted_entries:
         merged.append((n_dt, str(entry["path"]), False, ""))
+    base = Path(base_dir).parent if base_dir else None
     for file_path, dt in new_files:
-        merged.append((dt, Path(file_path).name, True, file_path))
+        display = str(Path(file_path).relative_to(base)) if base else Path(file_path).name
+        merged.append((dt, display, True, file_path))
     merged.sort(key=lambda x: x[0])
 
     # Find index range of new files in the merged list
@@ -500,7 +504,8 @@ def _print_list(
     for i in range(start, end + 1):
         item_dt, item_path, is_new, _ = merged[i]
         marker = ">" if is_new else " "
-        print(f"{marker} {item_dt.strftime('%Y-%m-%d %H:%M:%S')}  {item_path}")
+        suffix = " <" if is_new else ""
+        print(f"{marker} {item_dt.strftime('%Y-%m-%d %H:%M:%S')}  {item_path}{suffix}")
 
     # Aggregate candidates across all new files
     all_candidates: set[str] = set()
@@ -705,6 +710,7 @@ def run(args: argparse.Namespace) -> int:
             args.context,
             use_seq=use_seq,
             match_prefix=match_prefix,
+            base_dir=args.directory,
         )
     else:
         _print_default(

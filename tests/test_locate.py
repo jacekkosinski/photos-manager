@@ -539,6 +539,7 @@ class TestRun:
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert ">" in captured.out
+        assert " <" in captured.out
         assert "Proposed directory:" in captured.out
 
     def test_output_mode(self, tmp_path: Path) -> None:
