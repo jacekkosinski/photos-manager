@@ -467,18 +467,18 @@ def _print_list(
     Returns:
         List of (file_path, candidate_directories) tuples.
     """
-    # Build merged timeline: (datetime, path, is_new, original_file_path)
-    merged: list[tuple[datetime, str, bool, str]] = []
-    for n_dt, entry in sorted_entries:
-        merged.append((n_dt, str(entry["path"]), False, ""))
+    # Build merged timeline: (datetime, path, is_new)
+    merged: list[tuple[datetime, str, bool]] = []
+    for dt, entry in sorted_entries:
+        merged.append((dt, str(entry["path"]), False))
     base = Path(base_dir).parent if base_dir else None
     for file_path, dt in new_files:
         display = str(Path(file_path).relative_to(base)) if base else Path(file_path).name
-        merged.append((dt, display, True, file_path))
+        merged.append((dt, display, True))
     merged.sort(key=lambda x: x[0])
 
     # Find index range of new files in the merged list
-    new_indices = [i for i, (_, _, is_new, _) in enumerate(merged) if is_new]
+    new_indices = [i for i, (_, _, is_new) in enumerate(merged) if is_new]
     if not new_indices:
         return []
 
@@ -502,7 +502,7 @@ def _print_list(
             archive_after += 1
 
     for i in range(start, end + 1):
-        item_dt, item_path, is_new, _ = merged[i]
+        item_dt, item_path, is_new = merged[i]
         marker = ">" if is_new else " "
         suffix = " <" if is_new else ""
         print(f"{marker} {item_dt.strftime('%Y-%m-%d %H:%M:%S')}  {item_path}{suffix}")
