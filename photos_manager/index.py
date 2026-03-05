@@ -74,20 +74,17 @@ def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
     local_tz = ZoneInfo(time_zone)
     file_info_list: list[dict[str, str | int]] = []
 
-    # Phase 1: collect paths and stat info (sequential — os.walk is not thread-safe)
+    # Phase 1: collect paths and stat info (sequential)
     file_entries: list[tuple[str, float, int]] = []
-    try:
-        for root, _, files in os.walk(directory):
-            for file in files:
-                file_path = Path(root) / file
-                try:
-                    stat_info = file_path.stat()
-                    file_entries.append((str(file_path), stat_info.st_mtime, stat_info.st_size))
-                except OSError as e:
-                    print(f"Warning: Cannot stat {file_path}: {e}", file=sys.stderr)
-    except OSError as e:
-        print(f"Warning: Error accessing directory {directory}: {e}", file=sys.stderr)
-        return file_info_list
+    dir_path = Path(directory)
+    for file_path in dir_path.rglob("*"):
+        if not file_path.is_file():
+            continue
+        try:
+            stat_info = file_path.stat()
+            file_entries.append((str(file_path), stat_info.st_mtime, stat_info.st_size))
+        except OSError as e:
+            print(f"Warning: Cannot stat {file_path}: {e}", file=sys.stderr)
 
     # Phase 2: compute checksums in parallel (hashlib releases the GIL)
     workers = os.cpu_count() or 1

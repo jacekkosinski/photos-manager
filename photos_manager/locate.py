@@ -68,7 +68,11 @@ def scan_new_files(directory: str) -> list[tuple[str, datetime]]:
     for file_path in dir_path.rglob("*"):
         if not file_path.is_file():
             continue
-        mtime = file_path.stat().st_mtime
+        try:
+            mtime = file_path.stat().st_mtime
+        except OSError as e:
+            print(f"Warning: Cannot stat {file_path}: {e}", file=sys.stderr)
+            continue
         dt = datetime.fromtimestamp(mtime, tz=UTC).astimezone()
         results.append((str(file_path), dt))
     results.sort(key=lambda x: x[1])
