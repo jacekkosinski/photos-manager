@@ -1,6 +1,6 @@
 .PHONY: help install install-dev test test-verbose coverage lint lint-fix format format-check type-check \
         docstring-check docstring-badge complexity pre-commit pre-commit-install \
-        docs-serve docs-build clean check-all build run ci update lock shell version
+        docs-serve docs-build clean git-clean check-all build run ci update lock shell version
 
 # Default target
 .DEFAULT_GOAL := help
@@ -78,6 +78,15 @@ clean: ## Clean up generated files
 	find . -type f -name ".coverage" -delete
 	find . -type f -name "coverage.xml" -delete
 	find . -type f -name "interrogate_badge.svg" -delete
+
+git-clean: ## Clean up git repository (prune, gc, remove stale branches)
+	git remote prune origin
+	git gc --aggressive --prune=now
+	git repack -a -d --depth=250 --window=250
+	git reflog expire --expire=now --all
+	@echo ""
+	@du -sh .git
+	@echo "Git repository cleaned."
 
 check-all: lint format-check type-check docstring-check complexity test pre-commit ## Run all quality checks
 
