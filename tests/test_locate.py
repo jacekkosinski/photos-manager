@@ -222,8 +222,8 @@ class TestFindSeqMatches:
             _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        result = locate.find_seq_matches(["dir_a"], dir_entries, "img_105.jpg")
+        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
+        result = locate.find_seq_matches(["dir_a"], dir_seqs, "img_105.jpg")
         assert result == ["dir_a"]
 
     def test_matches_before_first_entry(self) -> None:
@@ -233,8 +233,8 @@ class TestFindSeqMatches:
             _make_entry("dir_a/img_210.jpg", "2025-07-07T14:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        result = locate.find_seq_matches(["dir_a"], dir_entries, "img_190.jpg")
+        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
+        result = locate.find_seq_matches(["dir_a"], dir_seqs, "img_190.jpg")
         assert result == ["dir_a"]
 
     def test_no_match_returns_empty(self) -> None:
@@ -244,8 +244,8 @@ class TestFindSeqMatches:
             _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        result = locate.find_seq_matches(["dir_b"], dir_entries, "img_105.jpg")
+        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
+        result = locate.find_seq_matches(["dir_b"], dir_seqs, "img_105.jpg")
         assert result == []
 
     def test_prefix_filters_different_naming(self) -> None:
@@ -255,13 +255,11 @@ class TestFindSeqMatches:
             _make_entry("dir_a/dsc_110.jpg", "2025-07-07T12:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
+        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
         # Without prefix matching: seq 105 fits between 100 and 110
-        assert locate.find_seq_matches(["dir_a"], dir_entries, "img_105.jpg") == ["dir_a"]
+        assert locate.find_seq_matches(["dir_a"], dir_seqs, "img_105.jpg") == ["dir_a"]
         # With prefix matching: img_ != dsc_, no match
-        assert (
-            locate.find_seq_matches(["dir_a"], dir_entries, "img_105.jpg", match_prefix=True) == []
-        )
+        assert locate.find_seq_matches(["dir_a"], dir_seqs, "img_105.jpg", match_prefix=True) == []
 
     def test_tightest_gap_wins(self) -> None:
         """Test that directory with tightest seq gap is preferred."""
@@ -272,9 +270,9 @@ class TestFindSeqMatches:
             _make_entry("dir_b/img_500.jpg", "2025-07-07T15:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
+        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
         # img_105 fits in both dirs, but dir_a has tighter gap (10 vs 450)
-        result = locate.find_seq_matches(["dir_a", "dir_b"], dir_entries, "img_105.jpg")
+        result = locate.find_seq_matches(["dir_a", "dir_b"], dir_seqs, "img_105.jpg")
         assert result == ["dir_a"]
 
     def test_no_digits_returns_empty(self) -> None:
@@ -283,8 +281,8 @@ class TestFindSeqMatches:
             _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        result = locate.find_seq_matches(["dir_a"], dir_entries, "readme.txt")
+        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
+        result = locate.find_seq_matches(["dir_a"], dir_seqs, "readme.txt")
         assert result == []
 
 
@@ -305,12 +303,13 @@ class TestResolveCandiates:
         sorted_entries = _build_sorted_entries(entries)
         dir_entries = locate.build_directory_entries(sorted_entries)
         dir_ranges = locate.build_directory_ranges(dir_entries)
+        dir_seqs = locate.build_directory_seqs(dir_entries)
         # target at 12:00 — neighbors (N=1) are dir_b, but seq 105 fits dir_a
         target = datetime.fromisoformat("2025-07-07T12:00:00+02:00")
         result = locate._resolve_candidates(
             sorted_entries,
             dir_ranges,
-            dir_entries,
+            dir_seqs,
             target,
             1,
             use_seq=True,
@@ -327,12 +326,13 @@ class TestResolveCandiates:
         sorted_entries = _build_sorted_entries(entries)
         dir_entries = locate.build_directory_entries(sorted_entries)
         dir_ranges = locate.build_directory_ranges(dir_entries)
+        dir_seqs = locate.build_directory_seqs(dir_entries)
         # File before range, seq 190 < 200
         target = datetime.fromisoformat("2025-07-07T08:00:00+02:00")
         result = locate._resolve_candidates(
             sorted_entries,
             dir_ranges,
-            dir_entries,
+            dir_seqs,
             target,
             5,
             use_seq=True,
@@ -349,11 +349,12 @@ class TestResolveCandiates:
         sorted_entries = _build_sorted_entries(entries)
         dir_entries = locate.build_directory_entries(sorted_entries)
         dir_ranges = locate.build_directory_ranges(dir_entries)
+        dir_seqs = locate.build_directory_seqs(dir_entries)
         target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
         result = locate._resolve_candidates(
             sorted_entries,
             dir_ranges,
-            dir_entries,
+            dir_seqs,
             target,
             5,
             use_seq=False,
@@ -370,12 +371,13 @@ class TestResolveCandiates:
         sorted_entries = _build_sorted_entries(entries)
         dir_entries = locate.build_directory_entries(sorted_entries)
         dir_ranges = locate.build_directory_ranges(dir_entries)
+        dir_seqs = locate.build_directory_seqs(dir_entries)
         target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
         # With match_prefix: img_ != dsc_, seq fails, falls back to hybrid
         result = locate._resolve_candidates(
             sorted_entries,
             dir_ranges,
-            dir_entries,
+            dir_seqs,
             target,
             5,
             use_seq=True,

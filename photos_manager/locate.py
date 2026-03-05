@@ -130,6 +130,42 @@ def build_directory_ranges(
     return {d: (entries[0][0], entries[-1][0]) for d, entries in dir_entries.items()}
 
 
+_PREFIX_SEQ_RE = re.compile(r"^(.*?)(\d+)\.[^.]+$")
+
+
+def build_directory_seqs(
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+) -> dict[str, list[tuple[str | None, int]]]:
+    """Pre-compute sorted (prefix, sequence_number) pairs per directory.
+
+    Extracts filename prefix and sequence number from every archive entry
+    once, so that ``find_seq_matches`` can do fast lookups without repeated
+    regex calls.
+
+    Args:
+        dir_entries: Mapping of directory path to sorted (datetime, entry) lists.
+
+    Returns:
+        Mapping of directory path to sorted list of (prefix, seq) tuples.
+    """
+    pat = _PREFIX_SEQ_RE
+    result: dict[str, list[tuple[str | None, int]]] = {}
+    for d, entries in dir_entries.items():
+        pairs: list[tuple[str | None, int]] = []
+        for _, e in entries:
+            path_str = str(e["path"])
+            # Extract filename without Path object overhead
+            slash = path_str.rfind("/")
+            name = path_str[slash + 1 :] if slash >= 0 else path_str
+            m = pat.match(name)
+            if m:
+                pairs.append((m.group(1), int(m.group(2))))
+        if pairs:
+            pairs.sort(key=lambda x: x[1])
+            result[d] = pairs
+    return result
+
+
 def propose_directories(
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
     dir_ranges: dict[str, tuple[datetime, datetime]],
@@ -195,27 +231,26 @@ def extract_filename_prefix(filename: str) -> str | None:
 
 def find_seq_matches(
     directories: list[str],
-    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    dir_seqs: dict[str, list[tuple[str | None, int]]],
     target_name: str,
     *,
     match_prefix: bool = False,
 ) -> list[str]:
     """Find directories where the target file's sequence number fits.
 
-    Sorts archive entries by sequence number and uses binary search to find
-    the entries immediately before and after the target. A match requires
-    the target sequence to fall between those adjacent entries.
+    Uses pre-computed sequence data from ``build_directory_seqs`` for fast
+    lookup. For each directory, uses binary search to find the entries
+    immediately before and after the target sequence number.
 
-    When ``match_prefix`` is True, only archive entries whose filename prefix
-    matches the target file are considered (e.g. "img_" entries for
-    "img_6767.jpg").
+    When ``match_prefix`` is True, only entries whose filename prefix matches
+    the target file are considered (e.g. "img_" entries for "img_6767.jpg").
 
     When multiple directories match, only those with the tightest gap
     (smallest difference between adjacent sequence numbers) are returned.
 
     Args:
         directories: Directory paths to check.
-        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
+        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
         target_name: Filename of the new file.
         match_prefix: If True, only compare entries with the same filename prefix.
 
@@ -230,21 +265,16 @@ def find_seq_matches(
     strong: list[tuple[str, int]] = []  # (dir, gap) — both boundaries present
     weak: list[str] = []  # one boundary missing
     for d in directories:
-        entries = dir_entries.get(d, [])
-        if not entries:
+        pairs = dir_seqs.get(d, [])
+        if not pairs:
             continue
-        # Collect seq numbers (optionally filtering by prefix)
-        seqs: list[int] = []
-        for _, e in entries:
-            name = Path(str(e["path"])).name
-            if target_prefix is not None and extract_filename_prefix(name) != target_prefix:
-                continue
-            seq = extract_sequence_number(name)
-            if seq is not None:
-                seqs.append(seq)
+        if target_prefix is not None:
+            seqs = [s for p, s in pairs if p == target_prefix]
+        else:
+            seqs = [s for _, s in pairs]
         if not seqs:
             continue
-        seqs.sort()
+        # seqs already sorted (from build_directory_seqs)
         pos = bisect.bisect_left(seqs, target_seq)
         before_seq: int | None = seqs[pos - 1] if pos > 0 else None
         after_seq: int | None = seqs[pos] if pos < len(seqs) else None
@@ -265,7 +295,7 @@ def find_seq_matches(
 def _resolve_candidates(
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
     dir_ranges: dict[str, tuple[datetime, datetime]],
-    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    dir_seqs: dict[str, list[tuple[str | None, int]]],
     target_dt: datetime,
     context: int,
     *,
@@ -283,7 +313,7 @@ def _resolve_candidates(
     Args:
         sorted_entries: Archive entries sorted by date.
         dir_ranges: Mapping of directory path to (min_date, max_date).
-        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
+        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
         target_dt: Timestamp of the new file.
         context: Number of neighbors to consider.
         use_seq: If True, use sequence number matching.
@@ -301,7 +331,7 @@ def _resolve_candidates(
     range_matches = sorted(d for d, (lo, hi) in dir_ranges.items() if lo <= target_dt <= hi)
     seq_candidates = find_seq_matches(
         range_matches,
-        dir_entries,
+        dir_seqs,
         filename,
         match_prefix=match_prefix,
     )
@@ -314,8 +344,8 @@ def _resolve_candidates(
 
     # File outside all ranges — try all dirs by sequence
     return find_seq_matches(
-        sorted(dir_entries.keys()),
-        dir_entries,
+        sorted(dir_seqs.keys()),
+        dir_seqs,
         filename,
         match_prefix=match_prefix,
     )
@@ -325,7 +355,7 @@ def _build_placements(
     new_files: list[tuple[str, datetime]],
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
     dir_ranges: dict[str, tuple[datetime, datetime]],
-    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    dir_seqs: dict[str, list[tuple[str | None, int]]],
     context: int,
     *,
     use_seq: bool = False,
@@ -337,7 +367,7 @@ def _build_placements(
         new_files: List of (path, datetime) for new files.
         sorted_entries: Archive entries sorted by date.
         dir_ranges: Mapping of directory path to (min_date, max_date).
-        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
+        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
         context: Number of neighbors to consider.
         use_seq: If True, filter candidates by sequence number continuity.
         match_prefix: If True, only compare entries with the same filename prefix.
@@ -350,7 +380,7 @@ def _build_placements(
         candidates = _resolve_candidates(
             sorted_entries,
             dir_ranges,
-            dir_entries,
+            dir_seqs,
             dt,
             context,
             use_seq=use_seq,
@@ -366,7 +396,7 @@ def _print_default(
     new_files: list[tuple[str, datetime]],
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
     dir_ranges: dict[str, tuple[datetime, datetime]],
-    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    dir_seqs: dict[str, list[tuple[str | None, int]]],
     context: int,
     *,
     use_seq: bool = False,
@@ -378,7 +408,7 @@ def _print_default(
         new_files: List of (path, datetime) for new files.
         sorted_entries: Archive entries sorted by date.
         dir_ranges: Mapping of directory path to (min_date, max_date).
-        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
+        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
         context: Number of neighbors to consider.
         use_seq: If True, filter candidates by sequence number continuity.
         match_prefix: If True, only compare entries with the same filename prefix.
@@ -392,7 +422,7 @@ def _print_default(
         candidates = _resolve_candidates(
             sorted_entries,
             dir_ranges,
-            dir_entries,
+            dir_seqs,
             dt,
             context,
             use_seq=use_seq,
@@ -411,7 +441,7 @@ def _print_list(
     new_files: list[tuple[str, datetime]],
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
     dir_ranges: dict[str, tuple[datetime, datetime]],
-    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    dir_seqs: dict[str, list[tuple[str | None, int]]],
     context: int,
     *,
     use_seq: bool = False,
@@ -427,7 +457,7 @@ def _print_list(
         new_files: List of (path, datetime) for new files.
         sorted_entries: Sorted archive entries.
         dir_ranges: Mapping of directory path to (min_date, max_date).
-        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
+        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
         context: Number of archive entries to show before and after the new files.
         use_seq: If True, filter candidates by sequence number continuity.
         match_prefix: If True, only compare entries with the same filename prefix.
@@ -478,7 +508,7 @@ def _print_list(
         file_candidates = _resolve_candidates(
             sorted_entries,
             dir_ranges,
-            dir_entries,
+            dir_seqs,
             dt,
             context,
             use_seq=use_seq,
@@ -641,6 +671,7 @@ def run(args: argparse.Namespace) -> int:
 
     dir_entries = build_directory_entries(sorted_entries)
     dir_ranges = build_directory_ranges(dir_entries)
+    dir_seqs = build_directory_seqs(dir_entries)
 
     print(f"Found {len(new_files)} new file(s), {len(sorted_entries)} archive entries")
 
@@ -652,7 +683,7 @@ def run(args: argparse.Namespace) -> int:
             new_files,
             sorted_entries,
             dir_ranges,
-            dir_entries,
+            dir_seqs,
             args.context,
             use_seq=use_seq,
             match_prefix=match_prefix,
@@ -670,7 +701,7 @@ def run(args: argparse.Namespace) -> int:
             new_files,
             sorted_entries,
             dir_ranges,
-            dir_entries,
+            dir_seqs,
             args.context,
             use_seq=use_seq,
             match_prefix=match_prefix,
@@ -680,7 +711,7 @@ def run(args: argparse.Namespace) -> int:
             new_files,
             sorted_entries,
             dir_ranges,
-            dir_entries,
+            dir_seqs,
             args.context,
             use_seq=use_seq,
             match_prefix=match_prefix,
