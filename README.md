@@ -10,7 +10,7 @@ management.
 
 - 🚀 Modern Python 3.12
 - 📝 Type-safe with mypy strict mode
-- ✅ Comprehensive testing with pytest (535 tests, 87% coverage)
+- ✅ Comprehensive testing with pytest (585 tests, 88% coverage)
 - 📚 Google-style docstrings with interrogate validation
 - 🔧 Pre-commit hooks for code quality
 - 🎯 Linting and formatting with Ruff
@@ -481,7 +481,7 @@ photos-manager-cli/
 │   ├── info.py            # Show archive statistics
 │   ├── sync.py            # Synchronization tool
 │   └── dedup.py           # Deduplication tool
-├── tests/                 # 535 tests, 87% coverage
+├── tests/                 # 585 tests, 88% coverage
 │   ├── conftest.py        # Shared fixtures
 │   ├── test_cli.py
 │   ├── test_common.py
@@ -577,7 +577,7 @@ poetry run interrogate -v --generate-badge . photos_manager/
 
 ### Testing
 
-The project has comprehensive test coverage with 535 tests covering all modules.
+The project has comprehensive test coverage with 585 tests covering all modules.
 
 ```bash
 # Run all tests
@@ -593,7 +593,7 @@ poetry run pytest tests/test_prepare.py
 poetry run pytest -v
 ```
 
-**Test Coverage:** 87% overall with 535 tests across all modules.
+**Test Coverage:** 88% overall with 585 tests across all modules.
 
 ### Documentation
 

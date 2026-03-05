@@ -80,7 +80,7 @@ clean: ## Clean up generated files
 	find . -type f -name "interrogate_badge.svg" -delete
 
 git-clean: ## Clean up git repository (prune, gc, remove stale branches)
-	git remote prune origin
+	@git remote | grep -q origin && git remote prune origin || true
 	git gc --aggressive --prune=now
 	git repack -a -d --depth=250 --window=250
 	git reflog expire --expire=now --all

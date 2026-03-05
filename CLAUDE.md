@@ -25,7 +25,7 @@ pre-commit install                    # install hooks
 ## Key Commands
 
 ```bash
-poetry run pytest                     # all tests (~535, ~87% coverage)
+poetry run pytest                     # all tests (~585, ~88% coverage)
 poetry run pytest tests/test_X.py    # single file
 poetry run pytest -m unit            # unit tests only
 poetry run pytest -m integration     # integration tests only
