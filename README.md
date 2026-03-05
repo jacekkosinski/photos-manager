@@ -142,6 +142,12 @@ photos locate /path/to/new/photos archive.json --output move.sh
 
 # Search across multiple archive JSON files
 photos locate /path/to/new/photos camera1.json camera2.json
+
+# Match by filename sequence number continuity
+photos locate /path/to/new/photos archive.json --seq
+
+# Additionally restrict to files with same naming pattern
+photos locate /path/to/new/photos archive.json --seq --prefix
 ```
 
 **Modes:**
@@ -151,6 +157,13 @@ photos locate /path/to/new/photos camera1.json camera2.json
   archive entries before and after for context
 - **Output** (`-o`): Generates an executable shell script with `mkdir -p` and
   `mv -iv` commands
+
+**Matching options:**
+
+- **Seq** (`-s`): Uses filename sequence numbers to find directories where the
+  new file fits between adjacent archive entries (tightest gap wins)
+- **Prefix** (`-p`): Only compares files with the same naming pattern (e.g.
+  `img_` entries for `img_6767.jpg`); requires `--seq`
 
 ### index - Generate File Metadata
 

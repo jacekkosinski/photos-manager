@@ -10,6 +10,8 @@ Usage:
     photos locate /path/to/new/photos archive.json --list
     photos locate /path/to/new/photos archive.json --filter canon-eos
     photos locate /path/to/new/photos archive.json --output move.sh
+    photos locate /path/to/new/photos archive.json --seq
+    photos locate /path/to/new/photos archive.json --seq --prefix
 """
 
 import argparse
