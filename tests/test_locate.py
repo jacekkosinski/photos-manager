@@ -212,46 +212,176 @@ class TestExtractSequenceNumber:
 
 
 @pytest.mark.unit
-class TestFilterBySequence:
-    """Tests for filter_by_sequence function."""
+class TestFindSeqMatches:
+    """Tests for find_seq_matches function."""
 
-    def test_narrows_to_matching_directory(self) -> None:
-        """Test that seq filter keeps only the directory with matching gap."""
-        entries = [
-            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
-            _make_entry("dir_b/img_200.jpg", "2025-07-07T10:30:00+02:00"),
-            _make_entry("dir_b/img_210.jpg", "2025-07-07T11:30:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
-        # img_105 fits between img_100 and img_110 (dir_a), not 200-210 (dir_b)
-        result = locate.filter_by_sequence(["dir_a", "dir_b"], dir_entries, target, "img_105.jpg")
-        assert result == ["dir_a"]
-
-    def test_no_seq_match_returns_all(self) -> None:
-        """Test that when no directory matches by seq, all are returned."""
+    def test_matches_between_entries(self) -> None:
+        """Test seq match when file number is between adjacent entries."""
         entries = [
             _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
             _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
         dir_entries = locate.build_directory_entries(sorted_entries)
-        target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
-        # img_999 doesn't fit between 100 and 110
-        result = locate.filter_by_sequence(["dir_a"], dir_entries, target, "img_999.jpg")
+        result = locate.find_seq_matches(["dir_a"], dir_entries, "img_105.jpg")
         assert result == ["dir_a"]
 
-    def test_no_digits_in_filename(self) -> None:
-        """Test that files without digits bypass seq filter."""
+    def test_matches_before_first_entry(self) -> None:
+        """Test weak match when file number is before the first archive entry."""
+        entries = [
+            _make_entry("dir_a/img_200.jpg", "2025-07-07T12:00:00+02:00"),
+            _make_entry("dir_a/img_210.jpg", "2025-07-07T14:00:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        result = locate.find_seq_matches(["dir_a"], dir_entries, "img_190.jpg")
+        assert result == ["dir_a"]
+
+    def test_no_match_returns_empty(self) -> None:
+        """Test no match when target seq is outside all directory ranges."""
+        entries = [
+            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        result = locate.find_seq_matches(["dir_b"], dir_entries, "img_105.jpg")
+        assert result == []
+
+    def test_prefix_filters_different_naming(self) -> None:
+        """Test that match_prefix=True excludes entries with different prefix."""
+        entries = [
+            _make_entry("dir_a/dsc_100.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/dsc_110.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        # Without prefix matching: seq 105 fits between 100 and 110
+        assert locate.find_seq_matches(["dir_a"], dir_entries, "img_105.jpg") == ["dir_a"]
+        # With prefix matching: img_ != dsc_, no match
+        assert (
+            locate.find_seq_matches(["dir_a"], dir_entries, "img_105.jpg", match_prefix=True) == []
+        )
+
+    def test_tightest_gap_wins(self) -> None:
+        """Test that directory with tightest seq gap is preferred."""
+        entries = [
+            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
+            _make_entry("dir_b/img_050.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_b/img_500.jpg", "2025-07-07T15:00:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        # img_105 fits in both dirs, but dir_a has tighter gap (10 vs 450)
+        result = locate.find_seq_matches(["dir_a", "dir_b"], dir_entries, "img_105.jpg")
+        assert result == ["dir_a"]
+
+    def test_no_digits_returns_empty(self) -> None:
+        """Test that file without digits returns empty list."""
         entries = [
             _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
         ]
         sorted_entries = _build_sorted_entries(entries)
         dir_entries = locate.build_directory_entries(sorted_entries)
-        target = datetime.fromisoformat("2025-07-07T10:00:00+02:00")
-        result = locate.filter_by_sequence(["dir_a"], dir_entries, target, "readme.txt")
+        result = locate.find_seq_matches(["dir_a"], dir_entries, "readme.txt")
+        assert result == []
+
+
+@pytest.mark.unit
+class TestResolveCandiates:
+    """Tests for _resolve_candidates function."""
+
+    def test_seq_finds_dir_not_in_neighbors(self) -> None:
+        """Test that --seq finds a directory via range+seq even without neighbor match."""
+        # dir_a has a wide gap between entries — neighbors won't include it
+        # dir_b is close in time — neighbors will include it
+        entries = [
+            _make_entry("dir_a/img_100.jpg", "2025-07-07T08:00:00+02:00"),
+            _make_entry("dir_a/img_120.jpg", "2025-07-07T16:00:00+02:00"),
+            _make_entry("dir_b/img_500.jpg", "2025-07-07T11:58:00+02:00"),
+            _make_entry("dir_b/img_510.jpg", "2025-07-07T12:02:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        dir_ranges = locate.build_directory_ranges(dir_entries)
+        # target at 12:00 — neighbors (N=1) are dir_b, but seq 105 fits dir_a
+        target = datetime.fromisoformat("2025-07-07T12:00:00+02:00")
+        result = locate._resolve_candidates(
+            sorted_entries,
+            dir_ranges,
+            dir_entries,
+            target,
+            1,
+            use_seq=True,
+            filename="img_105.jpg",
+        )
+        assert result == ["dir_a"]
+
+    def test_seq_fallback_outside_range(self) -> None:
+        """Test that --seq matches files before archive date range."""
+        entries = [
+            _make_entry("dir_a/img_200.jpg", "2025-07-07T12:00:00+02:00"),
+            _make_entry("dir_a/img_210.jpg", "2025-07-07T14:00:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        dir_ranges = locate.build_directory_ranges(dir_entries)
+        # File before range, seq 190 < 200
+        target = datetime.fromisoformat("2025-07-07T08:00:00+02:00")
+        result = locate._resolve_candidates(
+            sorted_entries,
+            dir_ranges,
+            dir_entries,
+            target,
+            5,
+            use_seq=True,
+            filename="img_190.jpg",
+        )
+        assert result == ["dir_a"]
+
+    def test_without_seq_uses_hybrid(self) -> None:
+        """Test that without --seq, standard hybrid matching is used."""
+        entries = [
+            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        dir_ranges = locate.build_directory_ranges(dir_entries)
+        target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
+        result = locate._resolve_candidates(
+            sorted_entries,
+            dir_ranges,
+            dir_entries,
+            target,
+            5,
+            use_seq=False,
+            filename="img_105.jpg",
+        )
+        assert result == ["dir_a"]
+
+    def test_seq_no_match_falls_back_to_hybrid(self) -> None:
+        """Test that when seq doesn't match, hybrid candidates are kept."""
+        entries = [
+            _make_entry("dir_a/dsc_100.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/dsc_110.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        dir_ranges = locate.build_directory_ranges(dir_entries)
+        target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
+        # With match_prefix: img_ != dsc_, seq fails, falls back to hybrid
+        result = locate._resolve_candidates(
+            sorted_entries,
+            dir_ranges,
+            dir_entries,
+            target,
+            5,
+            use_seq=True,
+            match_prefix=True,
+            filename="img_105.jpg",
+        )
         assert result == ["dir_a"]
 
 
@@ -382,6 +512,7 @@ class TestRun:
             filter=None,
             output=None,
             seq=False,
+            prefix=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
@@ -400,6 +531,7 @@ class TestRun:
             filter=None,
             output=None,
             seq=False,
+            prefix=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
@@ -420,6 +552,7 @@ class TestRun:
             filter=None,
             output=script_path,
             seq=False,
+            prefix=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
@@ -456,6 +589,7 @@ class TestRun:
             filter=None,
             output=script_path,
             seq=False,
+            prefix=False,
         )
         with pytest.raises(SystemExit, match="Use -f to narrow results"):
             locate.run(args)
@@ -491,6 +625,7 @@ class TestRun:
             filter=None,
             output=None,
             seq=False,
+            prefix=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
@@ -516,6 +651,7 @@ class TestRun:
             filter="phone",
             output=None,
             seq=False,
+            prefix=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
@@ -532,6 +668,7 @@ class TestRun:
             filter=None,
             output=None,
             seq=False,
+            prefix=False,
         )
         with pytest.raises(SystemExit, match="Not a directory"):
             locate.run(args)
@@ -549,6 +686,7 @@ class TestRun:
             filter=None,
             output=None,
             seq=False,
+            prefix=False,
         )
         with pytest.raises(SystemExit, match="No files found"):
             locate.run(args)
@@ -580,9 +718,149 @@ class TestRun:
             filter=None,
             output=None,
             seq=True,
+            prefix=False,
         )
         result = locate.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert "dir_a" in captured.out
         assert "dir_b" not in captured.out
+
+    def test_seq_fallback_matches_outside_range(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --seq matches files before archive date range by sequence number."""
+        # Archive starts at img_200, new file img_190 is before the range
+        entries = [
+            _make_entry("dir_a/img_200.jpg", "2025-07-07T12:00:00+02:00"),
+            _make_entry("dir_a/img_210.jpg", "2025-07-07T14:00:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        new_dir = tmp_path / "new"
+        new_dir.mkdir()
+        f = new_dir / "img_190.jpg"
+        f.write_text("data")
+        # Timestamp before archive range
+        target_ts = datetime(2025, 7, 7, 8, 0, 0, tzinfo=UTC).timestamp()
+        os.utime(f, (target_ts, target_ts))
+        args = argparse.Namespace(
+            directory=str(new_dir),
+            json_files=[str(json_file)],
+            list=False,
+            context=5,
+            filter=None,
+            output=None,
+            seq=True,
+            prefix=False,
+        )
+        result = locate.run(args)
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "dir_a" in captured.out
+
+    def test_list_mode_aggregates_across_files(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test -l mode finds match even when first file is outside range."""
+        entries = [
+            _make_entry("dir_a/img_200.jpg", "2025-07-07T12:00:00+02:00"),
+            _make_entry("dir_a/img_210.jpg", "2025-07-07T14:00:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        new_dir = tmp_path / "new"
+        new_dir.mkdir()
+        # First file: before archive range (no hybrid match)
+        f1 = new_dir / "img_190.jpg"
+        f1.write_text("data")
+        ts1 = datetime(2025, 7, 7, 8, 0, 0, tzinfo=UTC).timestamp()
+        os.utime(f1, (ts1, ts1))
+        # Second file: within archive range (hybrid match)
+        f2 = new_dir / "img_205.jpg"
+        f2.write_text("data")
+        ts2 = datetime(2025, 7, 7, 11, 0, 0, tzinfo=UTC).timestamp()
+        os.utime(f2, (ts2, ts2))
+        args = argparse.Namespace(
+            directory=str(new_dir),
+            json_files=[str(json_file)],
+            list=True,
+            context=5,
+            filter=None,
+            output=None,
+            seq=False,
+            prefix=False,
+        )
+        result = locate.run(args)
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "Proposed directory:" in captured.out
+        assert "dir_a" in captured.out
+
+    def test_prefix_requires_seq(self, tmp_path: Path) -> None:
+        """Test that --prefix without --seq raises SystemExit."""
+        json_file = self._setup_archive(tmp_path)
+        new_dir = self._setup_new_files(tmp_path)
+        args = argparse.Namespace(
+            directory=str(new_dir),
+            json_files=[str(json_file)],
+            list=False,
+            context=5,
+            filter=None,
+            output=None,
+            seq=False,
+            prefix=True,
+        )
+        with pytest.raises(SystemExit, match="--prefix requires --seq"):
+            locate.run(args)
+
+    def test_prefix_narrows_seq_results(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --prefix with --seq only matches entries with same naming pattern."""
+        entries = [
+            # dir_a has dsc_ entries: seq 100-110
+            _make_entry("dir_a/dsc_100.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/dsc_110.jpg", "2025-07-07T12:00:00+02:00"),
+            # dir_b has img_ entries: seq 100-110
+            _make_entry("dir_b/img_100.jpg", "2025-07-07T10:30:00+02:00"),
+            _make_entry("dir_b/img_110.jpg", "2025-07-07T11:30:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        new_dir = tmp_path / "new"
+        new_dir.mkdir()
+        f = new_dir / "img_105.jpg"
+        f.write_text("data")
+        target_ts = datetime(2025, 7, 7, 9, 0, 0, tzinfo=UTC).timestamp()
+        os.utime(f, (target_ts, target_ts))
+        # With --seq only: both dirs match (same seq range)
+        args_seq = argparse.Namespace(
+            directory=str(new_dir),
+            json_files=[str(json_file)],
+            list=False,
+            context=5,
+            filter=None,
+            output=None,
+            seq=True,
+            prefix=False,
+        )
+        locate.run(args_seq)
+        captured = capsys.readouterr()
+        assert "dir_a" in captured.out
+        assert "dir_b" in captured.out
+        # With --seq --prefix: only dir_b matches (img_ prefix)
+        args_prefix = argparse.Namespace(
+            directory=str(new_dir),
+            json_files=[str(json_file)],
+            list=False,
+            context=5,
+            filter=None,
+            output=None,
+            seq=True,
+            prefix=True,
+        )
+        locate.run(args_prefix)
+        captured = capsys.readouterr()
+        assert "dir_b" in captured.out
+        assert "dir_a" not in captured.out

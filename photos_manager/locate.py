@@ -175,56 +175,150 @@ def extract_sequence_number(filename: str) -> int | None:
     return int(matches[-1])
 
 
-def filter_by_sequence(
-    candidates: list[str],
-    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
-    target_dt: datetime,
-    target_name: str,
-) -> list[str]:
-    """Filter candidate directories by filename sequence number continuity.
+def extract_filename_prefix(filename: str) -> str | None:
+    """Extract the prefix before the last digit run in a filename.
 
-    For each candidate directory, uses binary search to find the archive
-    entries immediately before and after the target timestamp. If the new
-    file's sequence number falls between those entries' sequence numbers,
-    the directory is a sequence match.
-
-    Returns only sequence-matched directories. If none match, returns
-    the original candidates unchanged.
+    For example, "img_6767.jpg" returns "img_", "DSC05242.jpg" returns "DSC".
 
     Args:
-        candidates: Candidate directory paths from hybrid matching.
-        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
-        target_dt: Timestamp of the new file.
-        target_name: Filename of the new file.
+        filename: Filename (not full path).
 
     Returns:
-        Filtered list of candidate directory paths.
+        Prefix string, or None if no digits found.
+    """
+    stem = Path(filename).stem
+    match = re.match(r"^(.*?)\d+$", stem)
+    if not match:
+        return None
+    return match.group(1)
+
+
+def find_seq_matches(
+    directories: list[str],
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    target_name: str,
+    *,
+    match_prefix: bool = False,
+) -> list[str]:
+    """Find directories where the target file's sequence number fits.
+
+    Sorts archive entries by sequence number and uses binary search to find
+    the entries immediately before and after the target. A match requires
+    the target sequence to fall between those adjacent entries.
+
+    When ``match_prefix`` is True, only archive entries whose filename prefix
+    matches the target file are considered (e.g. "img_" entries for
+    "img_6767.jpg").
+
+    When multiple directories match, only those with the tightest gap
+    (smallest difference between adjacent sequence numbers) are returned.
+
+    Args:
+        directories: Directory paths to check.
+        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
+        target_name: Filename of the new file.
+        match_prefix: If True, only compare entries with the same filename prefix.
+
+    Returns:
+        Sorted list of directories where sequence number fits.
     """
     target_seq = extract_sequence_number(target_name)
     if target_seq is None:
-        return candidates
+        return []
+    target_prefix = extract_filename_prefix(target_name) if match_prefix else None
 
-    seq_matches: list[str] = []
-    for candidate in candidates:
-        entries = dir_entries.get(candidate, [])
+    strong: list[tuple[str, int]] = []  # (dir, gap) — both boundaries present
+    weak: list[str] = []  # one boundary missing
+    for d in directories:
+        entries = dir_entries.get(d, [])
         if not entries:
             continue
-        dates = [dt for dt, _ in entries]
-        pos = bisect.bisect_left(dates, target_dt)
-        before_seq: int | None = None
-        after_seq: int | None = None
-        if pos > 0:
-            before_seq = extract_sequence_number(Path(str(entries[pos - 1][1]["path"])).name)
-        if pos < len(entries):
-            after_seq = extract_sequence_number(Path(str(entries[pos][1]["path"])).name)
-        # Check if target_seq falls between before and after
-        if before_seq is not None and before_seq <= target_seq:
-            if after_seq is None or target_seq <= after_seq:
-                seq_matches.append(candidate)
-        elif after_seq is not None and target_seq <= after_seq and before_seq is None:
-            seq_matches.append(candidate)
+        # Collect seq numbers (optionally filtering by prefix)
+        seqs: list[int] = []
+        for _, e in entries:
+            name = Path(str(e["path"])).name
+            if target_prefix is not None and extract_filename_prefix(name) != target_prefix:
+                continue
+            seq = extract_sequence_number(name)
+            if seq is not None:
+                seqs.append(seq)
+        if not seqs:
+            continue
+        seqs.sort()
+        pos = bisect.bisect_left(seqs, target_seq)
+        before_seq: int | None = seqs[pos - 1] if pos > 0 else None
+        after_seq: int | None = seqs[pos] if pos < len(seqs) else None
+        if before_seq is not None and after_seq is not None:
+            if before_seq <= target_seq <= after_seq:
+                strong.append((d, after_seq - before_seq))
+        elif (before_seq is not None and before_seq <= target_seq) or (
+            after_seq is not None and target_seq <= after_seq
+        ):
+            weak.append(d)
 
-    return sorted(seq_matches) if seq_matches else candidates
+    if strong:
+        min_gap = min(gap for _, gap in strong)
+        return sorted(d for d, gap in strong if gap == min_gap)
+    return sorted(weak)
+
+
+def _resolve_candidates(
+    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
+    dir_ranges: dict[str, tuple[datetime, datetime]],
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    target_dt: datetime,
+    context: int,
+    *,
+    use_seq: bool = False,
+    match_prefix: bool = False,
+    filename: str = "",
+) -> list[str]:
+    """Find candidate directories for a single file.
+
+    Without --seq: uses hybrid range + neighbor matching.
+    With --seq: checks all range-matched directories for sequence fit;
+    if found, uses those. Otherwise falls back to hybrid. If hybrid also
+    returns nothing, tries sequence match against all directories.
+
+    Args:
+        sorted_entries: Archive entries sorted by date.
+        dir_ranges: Mapping of directory path to (min_date, max_date).
+        dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
+        target_dt: Timestamp of the new file.
+        context: Number of neighbors to consider.
+        use_seq: If True, use sequence number matching.
+        match_prefix: If True, only compare entries with the same filename prefix.
+        filename: Filename of the new file (used with use_seq).
+
+    Returns:
+        Sorted list of candidate directory paths.
+    """
+    candidates = propose_directories(sorted_entries, dir_ranges, target_dt, context)
+    if not use_seq:
+        return candidates
+
+    # Check all range-matched dirs for sequence fit (broader than hybrid)
+    range_matches = sorted(d for d, (lo, hi) in dir_ranges.items() if lo <= target_dt <= hi)
+    seq_candidates = find_seq_matches(
+        range_matches,
+        dir_entries,
+        filename,
+        match_prefix=match_prefix,
+    )
+    if seq_candidates:
+        return seq_candidates
+
+    # No seq match in range — keep hybrid candidates if available
+    if candidates:
+        return candidates
+
+    # File outside all ranges — try all dirs by sequence
+    return find_seq_matches(
+        sorted(dir_entries.keys()),
+        dir_entries,
+        filename,
+        match_prefix=match_prefix,
+    )
 
 
 def _build_placements(
@@ -235,6 +329,7 @@ def _build_placements(
     context: int,
     *,
     use_seq: bool = False,
+    match_prefix: bool = False,
 ) -> list[tuple[str, list[str]]]:
     """Build (file_path, candidate_dirs) pairs without printing.
 
@@ -245,15 +340,23 @@ def _build_placements(
         dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
         context: Number of neighbors to consider.
         use_seq: If True, filter candidates by sequence number continuity.
+        match_prefix: If True, only compare entries with the same filename prefix.
 
     Returns:
         List of (file_path, candidate_directories) tuples.
     """
     placements: list[tuple[str, list[str]]] = []
     for file_path, dt in new_files:
-        candidates = propose_directories(sorted_entries, dir_ranges, dt, context)
-        if use_seq and candidates:
-            candidates = filter_by_sequence(candidates, dir_entries, dt, Path(file_path).name)
+        candidates = _resolve_candidates(
+            sorted_entries,
+            dir_ranges,
+            dir_entries,
+            dt,
+            context,
+            use_seq=use_seq,
+            match_prefix=match_prefix,
+            filename=Path(file_path).name,
+        )
         if candidates:
             placements.append((file_path, candidates))
     return placements
@@ -267,6 +370,7 @@ def _print_default(
     context: int,
     *,
     use_seq: bool = False,
+    match_prefix: bool = False,
 ) -> list[tuple[str, list[str]]]:
     """Print default mode output and return (file_path, candidate_dirs) pairs.
 
@@ -277,16 +381,24 @@ def _print_default(
         dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
         context: Number of neighbors to consider.
         use_seq: If True, filter candidates by sequence number continuity.
+        match_prefix: If True, only compare entries with the same filename prefix.
 
     Returns:
         List of (file_path, candidate_directories) tuples.
     """
     placements: list[tuple[str, list[str]]] = []
     for file_path, dt in new_files:
-        candidates = propose_directories(sorted_entries, dir_ranges, dt, context)
-        if use_seq and candidates:
-            candidates = filter_by_sequence(candidates, dir_entries, dt, Path(file_path).name)
         name = Path(file_path).name
+        candidates = _resolve_candidates(
+            sorted_entries,
+            dir_ranges,
+            dir_entries,
+            dt,
+            context,
+            use_seq=use_seq,
+            match_prefix=match_prefix,
+            filename=name,
+        )
         if candidates:
             print(f"{name}  \u2192  {', '.join(candidates)}")
             placements.append((file_path, candidates))
@@ -303,6 +415,7 @@ def _print_list(
     context: int,
     *,
     use_seq: bool = False,
+    match_prefix: bool = False,
 ) -> list[tuple[str, list[str]]]:
     """Print merged listing of archive and new files with context.
 
@@ -317,6 +430,7 @@ def _print_list(
         dir_entries: Pre-built mapping of directory to sorted (datetime, entry) lists.
         context: Number of archive entries to show before and after the new files.
         use_seq: If True, filter candidates by sequence number continuity.
+        match_prefix: If True, only compare entries with the same filename prefix.
 
     Returns:
         List of (file_path, candidate_directories) tuples.
@@ -358,13 +472,22 @@ def _print_list(
         marker = ">" if is_new else " "
         print(f"{marker} {item_dt.strftime('%Y-%m-%d %H:%M:%S')}  {item_path}")
 
-    # Find matching directories using hybrid range + neighbor matching
-    candidates = propose_directories(sorted_entries, dir_ranges, new_files[0][1], context)
-    if use_seq and candidates:
-        candidates = filter_by_sequence(
-            candidates, dir_entries, new_files[0][1], Path(new_files[0][0]).name
+    # Aggregate candidates across all new files
+    all_candidates: set[str] = set()
+    for file_path, dt in new_files:
+        file_candidates = _resolve_candidates(
+            sorted_entries,
+            dir_ranges,
+            dir_entries,
+            dt,
+            context,
+            use_seq=use_seq,
+            match_prefix=match_prefix,
+            filename=Path(file_path).name,
         )
+        all_candidates.update(file_candidates)
 
+    candidates = sorted(all_candidates)
     placements: list[tuple[str, list[str]]] = []
     if candidates:
         print(f"\nProposed directory: {', '.join(candidates)}\n")
@@ -451,9 +574,16 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Write mkdir and mv commands to shell script",
     )
     parser.add_argument(
+        "-s",
         "--seq",
         action="store_true",
         help="Filter candidates by filename sequence number continuity",
+    )
+    parser.add_argument(
+        "-p",
+        "--prefix",
+        action="store_true",
+        help="Only compare files with same naming pattern (requires --seq)",
     )
 
 
@@ -471,6 +601,8 @@ def validate_args(args: argparse.Namespace) -> None:
     for json_file in args.json_files:
         if not Path(json_file).is_file():
             raise SystemExit(f"Error: JSON file not found: {json_file}")
+    if getattr(args, "prefix", False) and not getattr(args, "seq", False):
+        raise SystemExit("Error: --prefix requires --seq")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -489,6 +621,7 @@ def run(args: argparse.Namespace) -> int:
             - filter: Optional path substring filter
             - output: Optional path to output shell script
             - seq: Whether to filter by filename sequence continuity
+            - prefix: Whether to restrict seq matching to same filename prefix
 
     Returns:
         int: os.EX_OK on success.
@@ -512,6 +645,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"Found {len(new_files)} new file(s), {len(sorted_entries)} archive entries")
 
     use_seq = getattr(args, "seq", False)
+    match_prefix = getattr(args, "prefix", False)
 
     if args.output:
         placements = _build_placements(
@@ -521,6 +655,7 @@ def run(args: argparse.Namespace) -> int:
             dir_entries,
             args.context,
             use_seq=use_seq,
+            match_prefix=match_prefix,
         )
         ambiguous = [(fp, dirs) for fp, dirs in placements if len(dirs) > 1]
         if ambiguous:
@@ -538,6 +673,7 @@ def run(args: argparse.Namespace) -> int:
             dir_entries,
             args.context,
             use_seq=use_seq,
+            match_prefix=match_prefix,
         )
     else:
         _print_default(
@@ -547,6 +683,7 @@ def run(args: argparse.Namespace) -> int:
             dir_entries,
             args.context,
             use_seq=use_seq,
+            match_prefix=match_prefix,
         )
 
     return os.EX_OK
