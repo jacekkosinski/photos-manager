@@ -800,6 +800,50 @@ class TestRun:
         assert "Proposed directory:" in captured.out
         assert "dir_a" in captured.out
 
+    def test_list_mode_per_file_context(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test -l mode shows only N context entries around each new file."""
+        # 20 archive entries spanning a wide range, 2 new files far apart
+        entries = [
+            _make_entry(f"dir_a/img_{i:03d}.jpg", f"2025-07-{i:02d}T12:00:00+02:00")
+            for i in range(1, 21)
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        new_dir = tmp_path / "new"
+        new_dir.mkdir()
+        # First new file: between entry 3 and 4
+        f1 = new_dir / "photo_a.jpg"
+        f1.write_text("data")
+        ts1 = datetime(2025, 7, 3, 18, 0, 0, tzinfo=UTC).timestamp()
+        os.utime(f1, (ts1, ts1))
+        # Second new file: between entry 17 and 18
+        f2 = new_dir / "photo_b.jpg"
+        f2.write_text("data")
+        ts2 = datetime(2025, 7, 17, 18, 0, 0, tzinfo=UTC).timestamp()
+        os.utime(f2, (ts2, ts2))
+        args = argparse.Namespace(
+            directory=str(new_dir),
+            json_files=[str(json_file)],
+            list=True,
+            context=2,
+            filter=None,
+            output=None,
+            seq=False,
+            prefix=False,
+        )
+        result = locate.run(args)
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        lines = [ln for ln in captured.out.splitlines() if ln.strip()]
+        # Should have separator between the two groups
+        assert "  (...)" in captured.out
+        # Should NOT show all 20 archive entries — only context around each new file
+        archive_lines = [ln for ln in lines if ln.startswith("  2025-") and "---" not in ln]
+        # 2 context before + 2 after for each of 2 new files = at most 8 archive lines
+        assert len(archive_lines) <= 8
+
     def test_prefix_requires_seq(self, tmp_path: Path) -> None:
         """Test that --prefix without --seq raises SystemExit."""
         json_file = self._setup_archive(tmp_path)

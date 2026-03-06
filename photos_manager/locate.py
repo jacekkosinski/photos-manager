@@ -456,8 +456,9 @@ def _print_list(
     """Print merged listing of archive and new files with context.
 
     Merges all new files into the sorted archive timeline, then shows
-    N archive entries before the first new file and N after the last,
-    with all new files marked with ">" and " <" suffix.
+    N archive entries before and after each new file, with "---"
+    separators between non-contiguous groups. New files are marked
+    with ">" and " <" suffix.
 
     Args:
         new_files: List of (path, datetime) for new files.
@@ -482,35 +483,40 @@ def _print_list(
         merged.append((dt, display, True))
     merged.sort(key=lambda x: x[0])
 
-    # Find index range of new files in the merged list
+    # Find indices of new files in the merged list
     new_indices = [i for i, (_, _, is_new) in enumerate(merged) if is_new]
     if not new_indices:
         return []
 
-    first_new = new_indices[0]
-    last_new = new_indices[-1]
+    # For each new file, mark N archive entries before and after as visible
+    visible: set[int] = set()
+    for ni in new_indices:
+        visible.add(ni)
+        count = 0
+        j = ni - 1
+        while j >= 0 and count < context:
+            visible.add(j)
+            if not merged[j][2]:
+                count += 1
+            j -= 1
+        count = 0
+        j = ni + 1
+        while j < len(merged) and count < context:
+            visible.add(j)
+            if not merged[j][2]:
+                count += 1
+            j += 1
 
-    # Expand to include N archive entries before and after
-    # Count only archive entries (not new files) for context
-    start = first_new
-    archive_before = 0
-    while start > 0 and archive_before < context:
-        start -= 1
-        if not merged[start][2]:
-            archive_before += 1
-
-    end = last_new
-    archive_after = 0
-    while end < len(merged) - 1 and archive_after < context:
-        end += 1
-        if not merged[end][2]:
-            archive_after += 1
-
-    for i in range(start, end + 1):
-        item_dt, item_path, is_new = merged[i]
+    # Print visible entries with separator between non-contiguous groups
+    prev_idx: int | None = None
+    for idx in sorted(visible):
+        if prev_idx is not None and idx > prev_idx + 1:
+            print("  (...)")
+        item_dt, item_path, is_new = merged[idx]
         marker = ">" if is_new else " "
         suffix = " <" if is_new else ""
         print(f"{marker} {item_dt.strftime('%Y-%m-%d %H:%M:%S')}  {item_path}{suffix}")
+        prev_idx = idx
 
     # Aggregate candidates across all new files
     per_file = _build_placements(
