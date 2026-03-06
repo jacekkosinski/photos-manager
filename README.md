@@ -134,8 +134,8 @@ photos locate /path/to/new/photos archive.json --list
 # Show more/less context lines around new files
 photos locate /path/to/new/photos archive.json -l -N 3
 
-# Filter archive entries by path substring
-photos locate /path/to/new/photos archive.json --filter canon-eos
+# Filter archive entries by path substring (repeatable, OR logic)
+photos locate /path/to/new/photos archive.json -f canon-eos -f apple-ipad
 
 # Generate shell script with mkdir/mv commands
 photos locate /path/to/new/photos archive.json --output move.sh
@@ -160,6 +160,8 @@ photos locate /path/to/new/photos archive.json --seq --prefix
 
 **Matching options:**
 
+- **Filter** (`-f`): Only consider archive entries whose path contains the given
+  substring; repeatable with OR logic (`-f canon -f ipad`)
 - **Seq** (`-s`): Uses filename sequence numbers to find directories where the
   new file fits between adjacent archive entries (tightest gap wins)
 - **Prefix** (`-p`): Only compares files with the same naming pattern (e.g.
