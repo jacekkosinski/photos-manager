@@ -422,22 +422,21 @@ def _print_default(
     Returns:
         List of (file_path, candidate_directories) tuples.
     """
-    placements: list[tuple[str, list[str]]] = []
-    for file_path, dt in new_files:
+    placements = _build_placements(
+        new_files,
+        sorted_entries,
+        dir_ranges,
+        dir_seqs,
+        context,
+        use_seq=use_seq,
+        match_prefix=match_prefix,
+    )
+    placed = dict(placements)
+    for file_path, _ in new_files:
         name = Path(file_path).name
-        candidates = _resolve_candidates(
-            sorted_entries,
-            dir_ranges,
-            dir_seqs,
-            dt,
-            context,
-            use_seq=use_seq,
-            match_prefix=match_prefix,
-            filename=name,
-        )
+        candidates = placed.get(file_path)
         if candidates:
             print(f"{name}  \u2192  {', '.join(candidates)}")
-            placements.append((file_path, candidates))
         else:
             print(f"{name}  \u2192  (no match found)", file=sys.stderr)
     return placements
@@ -514,21 +513,16 @@ def _print_list(
         print(f"{marker} {item_dt.strftime('%Y-%m-%d %H:%M:%S')}  {item_path}{suffix}")
 
     # Aggregate candidates across all new files
-    all_candidates: set[str] = set()
-    for file_path, dt in new_files:
-        file_candidates = _resolve_candidates(
-            sorted_entries,
-            dir_ranges,
-            dir_seqs,
-            dt,
-            context,
-            use_seq=use_seq,
-            match_prefix=match_prefix,
-            filename=Path(file_path).name,
-        )
-        all_candidates.update(file_candidates)
-
-    candidates = sorted(all_candidates)
+    per_file = _build_placements(
+        new_files,
+        sorted_entries,
+        dir_ranges,
+        dir_seqs,
+        context,
+        use_seq=use_seq,
+        match_prefix=match_prefix,
+    )
+    candidates = sorted({d for _, dirs in per_file for d in dirs})
     placements: list[tuple[str, list[str]]] = []
     if candidates:
         print(f"\nProposed directory: {', '.join(candidates)}\n")
@@ -642,7 +636,7 @@ def validate_args(args: argparse.Namespace) -> None:
     for json_file in args.json_files:
         if not Path(json_file).is_file():
             raise SystemExit(f"Error: JSON file not found: {json_file}")
-    if getattr(args, "prefix", False) and not getattr(args, "seq", False):
+    if args.prefix and not args.seq:
         raise SystemExit("Error: --prefix requires --seq")
 
 
@@ -686,8 +680,8 @@ def run(args: argparse.Namespace) -> int:
 
     print(f"Found {len(new_files)} new file(s), {len(sorted_entries)} archive entries")
 
-    use_seq = getattr(args, "seq", False)
-    match_prefix = getattr(args, "prefix", False)
+    use_seq: bool = args.seq
+    match_prefix: bool = args.prefix
 
     if args.output:
         placements = _build_placements(
