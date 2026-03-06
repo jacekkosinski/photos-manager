@@ -404,10 +404,18 @@ class TestLoadArchiveEntries:
         """Test filtering entries by path substring."""
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(SAMPLE_ENTRIES), encoding="utf-8")
-        result = locate.load_archive_entries([str(json_file)], "phone")
+        result = locate.load_archive_entries([str(json_file)], ["phone"])
         assert len(result) == 2
         for _, entry in result:
             assert "phone" in str(entry["path"])
+
+    def test_filter_multiple_or(self, tmp_path: Path) -> None:
+        """Test multiple filters combined with OR logic."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(SAMPLE_ENTRIES), encoding="utf-8")
+        result = locate.load_archive_entries([str(json_file)], ["phone", "101"])
+        # phone/202507 (2 entries) + camera/101 (3 entries) = 5
+        assert len(result) == 5
 
     def test_multiple_json_files(self, tmp_path: Path) -> None:
         """Test loading from multiple JSON files."""
@@ -651,7 +659,7 @@ class TestRun:
             json_files=[str(json_file)],
             list=False,
             context=10,
-            filter="phone",
+            filter=["phone"],
             output=None,
             seq=False,
             prefix=False,

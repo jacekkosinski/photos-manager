@@ -8,7 +8,7 @@ scripts with move commands.
 Usage:
     photos locate /path/to/new/photos archive.json
     photos locate /path/to/new/photos archive.json --list
-    photos locate /path/to/new/photos archive.json --filter canon-eos
+    photos locate /path/to/new/photos archive.json -f canon-eos -f apple-ipad
     photos locate /path/to/new/photos archive.json --output move.sh
     photos locate /path/to/new/photos archive.json --seq
     photos locate /path/to/new/photos archive.json --seq --prefix
@@ -27,13 +27,14 @@ from photos_manager.common import load_json
 
 
 def load_archive_entries(
-    json_files: list[str], path_filter: str | None
+    json_files: list[str], path_filters: list[str] | None
 ) -> list[tuple[datetime, dict[str, str | int]]]:
     """Load and merge archive entries from JSON files, sorted by date.
 
     Args:
         json_files: Paths to JSON metadata files.
-        path_filter: If set, only include entries whose path contains this string.
+        path_filters: If set, only include entries whose path contains
+            at least one of these strings (OR logic).
 
     Returns:
         List of (datetime, entry) tuples sorted by date.
@@ -43,7 +44,7 @@ def load_archive_entries(
         data = load_json(json_file)
         for entry in data:
             path_str = str(entry.get("path", ""))
-            if path_filter and path_filter not in path_str:
+            if path_filters and not any(f in path_str for f in path_filters):
                 continue
             date_str = str(entry.get("date", ""))
             if not date_str:
@@ -602,9 +603,10 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "-f",
         "--filter",
         type=str,
+        action="append",
         default=None,
         metavar="PATTERN",
-        help="Only consider JSON entries whose path contains this string",
+        help="Only consider entries whose path contains PATTERN (repeatable, OR logic)",
     )
     parser.add_argument(
         "-o",
@@ -659,7 +661,7 @@ def run(args: argparse.Namespace) -> int:
             - json_files: Paths to archive JSON metadata files
             - list: Whether to show interleaved listing
             - context: Number of neighbor files to consider
-            - filter: Optional path substring filter
+            - filter: Optional list of path substring filters (OR logic)
             - output: Optional path to output shell script
             - seq: Whether to filter by filename sequence continuity
             - prefix: Whether to restrict seq matching to same filename prefix
