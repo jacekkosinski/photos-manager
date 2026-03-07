@@ -178,6 +178,47 @@ def find_gaps(seq: list[tuple[str, str, int, datetime]]) -> list[str]:
     return gaps
 
 
+def find_decreases(
+    files: list[tuple[str, str, int, datetime]],
+) -> list[tuple[tuple[str, str, int, datetime], tuple[str, str, int, datetime]]]:
+    """Find consecutive file pairs where the sequence number decreases.
+
+    Args:
+        files: List of (path, prefix, seq, date) tuples sorted by date.
+
+    Returns:
+        List of (prev, curr) pairs where curr's seq number is less than prev's.
+    """
+    return [(files[i - 1], files[i]) for i in range(1, len(files)) if files[i][2] < files[i - 1][2]]
+
+
+def print_decreases(
+    files: list[tuple[str, str, int, datetime]],
+) -> None:
+    """Print sequence number decrease points (evidence of interleaving).
+
+    For each consecutive pair in the date-sorted file list where the sequence
+    number drops, prints a line showing the full path, sequence number, and
+    date of both files.  Prints ``(none)`` when no decreases exist.
+
+    Args:
+        files: List of (path, prefix, seq, date) tuples sorted by date.
+    """
+    decreases = find_decreases(files)
+    print("Sequence number decreases:")
+    print()
+    if not decreases:
+        print("  (none)")
+    else:
+        for prev, curr in decreases:
+            prev_path, _, prev_seq, prev_dt = prev
+            curr_path, _, curr_seq, curr_dt = curr
+            prev_date = prev_dt.strftime("%Y-%m-%d")
+            curr_date = curr_dt.strftime("%Y-%m-%d")
+            print(f"  {prev_seq} ({prev_path} {prev_date}) -> {curr_seq} ({curr_path} {curr_date})")
+    print()
+
+
 def print_summary(
     files: list[tuple[str, str, int, datetime]],
     seqs: list[list[tuple[str, str, int, datetime]]],
@@ -205,9 +246,9 @@ def print_summary(
     missing_counts = [count_missing(seq) for seq in seqs]
 
     if n_seqs == 1:
-        print(f"{len(files)} files, 1 sequence [{missing_counts[0]} missing]")
+        print(f"{len(files)} files, 1 sequence [{missing_counts[0]} missing]:")
     else:
-        print(f"{len(files)} files, {n_seqs} sequences")
+        print(f"{len(files)} files, {n_seqs} sequences:")
 
     if n_seqs <= 1 and not show_gaps:
         return
@@ -434,6 +475,8 @@ def run(args: argparse.Namespace) -> int:
 
     seqs = detect_sequences(files)
     print_summary(files, seqs, show_gaps=args.gaps)
+
+    print_decreases(files)
 
     if args.list:
         print_columns(seqs)

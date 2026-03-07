@@ -158,6 +158,59 @@ class TestSeqDirectories:
 
 
 @pytest.mark.unit
+class TestFindDecreases:
+    """Tests for find_decreases function."""
+
+    def _f(self, path: str, seq: int, date_str: str) -> tuple[str, str, int, datetime]:
+        return (path, "img_", seq, datetime.fromisoformat(date_str))
+
+    def test_empty_returns_empty(self) -> None:
+        """Empty input produces no decreases."""
+        assert sequences.find_decreases([]) == []
+
+    def test_monotonic_no_decreases(self) -> None:
+        """Strictly increasing sequence has no decreases."""
+        files = [
+            self._f("dir/img_001.jpg", 1, "2025-01-01T00:00:00+00:00"),
+            self._f("dir/img_002.jpg", 2, "2025-01-02T00:00:00+00:00"),
+            self._f("dir/img_003.jpg", 3, "2025-01-03T00:00:00+00:00"),
+        ]
+        assert sequences.find_decreases(files) == []
+
+    def test_equal_is_not_a_decrease(self) -> None:
+        """Equal consecutive seq numbers are not a decrease."""
+        files = [
+            self._f("dir/img_001.jpg", 1, "2025-01-01T00:00:00+00:00"),
+            self._f("dir/img_001b.jpg", 1, "2025-01-02T00:00:00+00:00"),
+            self._f("dir/img_002.jpg", 2, "2025-01-03T00:00:00+00:00"),
+        ]
+        assert sequences.find_decreases(files) == []
+
+    def test_single_decrease_returns_one_pair(self) -> None:
+        """One drop in seq number returns one (prev, curr) pair."""
+        files = [
+            self._f("dir/img_003.jpg", 3, "2025-01-01T00:00:00+00:00"),
+            self._f("dir/img_001.jpg", 1, "2025-01-02T00:00:00+00:00"),
+        ]
+        result = sequences.find_decreases(files)
+        assert len(result) == 1
+        assert result[0] == (files[0], files[1])
+
+    def test_multiple_decreases_all_returned(self) -> None:
+        """Two drops in seq numbers return two pairs."""
+        files = [
+            self._f("dir/img_005.jpg", 5, "2025-01-01T00:00:00+00:00"),
+            self._f("dir/img_003.jpg", 3, "2025-01-02T00:00:00+00:00"),
+            self._f("dir/img_004.jpg", 4, "2025-01-03T00:00:00+00:00"),
+            self._f("dir/img_001.jpg", 1, "2025-01-04T00:00:00+00:00"),
+        ]
+        result = sequences.find_decreases(files)
+        assert len(result) == 2
+        assert result[0] == (files[0], files[1])
+        assert result[1] == (files[2], files[3])
+
+
+@pytest.mark.unit
 class TestFindGaps:
     """Tests for find_gaps function."""
 
@@ -273,7 +326,7 @@ class TestRun:
         result = sequences.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
-        assert "4 files, 2 sequences" in captured.out
+        assert "4 files, 2 sequences:" in captured.out
 
     def test_single_sequence_no_report(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -545,3 +598,84 @@ class TestGaps:
         sequences.run(self._args(json_file, gaps=False))
         captured = capsys.readouterr()
         assert "seq 1..11" not in captured.out
+
+
+@pytest.mark.integration
+class TestDecreases:
+    """Integration tests for always-on sequence number decreases section."""
+
+    def _make_interleaved_archive(self, tmp_path: Path) -> Path:
+        """Create archive JSON where seq numbers drop: img_002 → dsc_001."""
+        entries = [
+            _make_entry("cam/100/img_001.jpg", "2025-01-01T10:00:00+01:00"),
+            _make_entry("cam/100/img_002.jpg", "2025-01-01T11:00:00+01:00"),
+            _make_entry("cam/100/dsc_001.jpg", "2025-01-01T12:00:00+01:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        return json_file
+
+    def _args(self, json_file: Path) -> argparse.Namespace:
+        return argparse.Namespace(
+            json_files=[str(json_file)],
+            filter=None,
+            gaps=False,
+            list=False,
+            output=None,
+            select=None,
+            target=None,
+        )
+
+    def test_decreases_always_shown(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Decreases section is always printed."""
+        json_file = self._make_interleaved_archive(tmp_path)
+        sequences.run(self._args(json_file))
+        captured = capsys.readouterr()
+        assert "Sequence number decreases:" in captured.out
+
+    def test_decreases_blank_line_after_header(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A blank line separates the header from the decrease entries."""
+        json_file = self._make_interleaved_archive(tmp_path)
+        sequences.run(self._args(json_file))
+        captured = capsys.readouterr()
+        assert "Sequence number decreases:\n\n" in captured.out
+
+    def test_decreases_shows_full_paths(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Decreases output includes full paths of both files in each pair."""
+        json_file = self._make_interleaved_archive(tmp_path)
+        sequences.run(self._args(json_file))
+        captured = capsys.readouterr()
+        assert "cam/100/img_002.jpg" in captured.out
+        assert "cam/100/dsc_001.jpg" in captured.out
+
+    def test_decreases_shows_seq_numbers_and_dates(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Decreases output includes seq numbers and dates for each pair."""
+        json_file = self._make_interleaved_archive(tmp_path)
+        sequences.run(self._args(json_file))
+        captured = capsys.readouterr()
+        assert "2025-01-01" in captured.out
+        assert " 2 " in captured.out
+        assert " 1 " in captured.out
+
+    def test_decreases_none_when_monotonic(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Monotonic sequence prints '(none)' in the decreases section."""
+        entries = [
+            _make_entry("dir/img_001.jpg", "2025-01-01T10:00:00+01:00"),
+            _make_entry("dir/img_002.jpg", "2025-01-01T11:00:00+01:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        sequences.run(self._args(json_file))
+        captured = capsys.readouterr()
+        assert "Sequence number decreases:" in captured.out
+        assert "(none)" in captured.out
