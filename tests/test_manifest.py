@@ -211,6 +211,31 @@ class TestRun:
 
         assert output_file.stat().st_mtime == known_mtime
 
+    def test_run_archive_directory_mtime_matches_last_modified(self, tmp_path: Path) -> None:
+        """Test that archive directory mtime is set to youngest JSON file mtime."""
+        data = [
+            {
+                "path": "/test/file.txt",
+                "sha1": "abc123",
+                "md5": "def456",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 500,
+            }
+        ]
+        json_file = tmp_path / "test.json"
+        json_file.write_text(json.dumps(data))
+        known_mtime = 1700000000.0  # 2023-11-14T22:13:20
+        os.utime(json_file, (known_mtime, known_mtime))
+
+        output_file = tmp_path / ".version.json"
+        args = argparse.Namespace(
+            directory=str(tmp_path), output_file=str(output_file), prefix="photos"
+        )
+
+        run(args)
+
+        assert tmp_path.stat().st_mtime == known_mtime
+
     def test_run_output_file_has_644_permissions(self, tmp_path: Path) -> None:
         """Test that output file has 644 permissions."""
         data = [

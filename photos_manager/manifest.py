@@ -269,6 +269,7 @@ def run(args: argparse.Namespace) -> int:
             output_path.chmod(0o644)
             mtime = json_files_with_mtimes[0][0]
             os.utime(output_path, (mtime, mtime))
+            os.utime(directory_path, (mtime, mtime))
         except OSError as exception:
             raise SystemExit(
                 f"Error: Could not write to output file '{args.output_file}': {exception}"
