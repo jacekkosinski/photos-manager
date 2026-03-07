@@ -159,6 +159,50 @@ class TestSeqDirectories:
 
 
 @pytest.mark.unit
+class TestFindGaps:
+    """Tests for find_gaps function."""
+
+    def _seq(self, nums: list[int]) -> list[tuple[str, str, int, datetime]]:
+        dt = datetime(2025, 1, 1, tzinfo=UTC)
+        return [("d/img.jpg", "img_", n, dt) for n in nums]
+
+    def test_no_gaps(self) -> None:
+        """Consecutive numbers produce no gaps."""
+        assert sequences.find_gaps(self._seq([1, 2, 3])) == []
+
+    def test_single_gap(self) -> None:
+        """One missing number is returned as a plain string."""
+        assert sequences.find_gaps(self._seq([1, 3])) == ["2"]
+
+    def test_two_consecutive_gaps(self) -> None:
+        """Two consecutive missing numbers are returned as two strings."""
+        assert sequences.find_gaps(self._seq([1, 4])) == ["2", "3"]
+
+    def test_range_gap(self) -> None:
+        """Three or more missing numbers are returned as 'start-end (count)'."""
+        assert sequences.find_gaps(self._seq([1, 5])) == ["2-4 (3)"]
+
+    def test_large_range_gap(self) -> None:
+        """Large gap is aggregated into range format."""
+        assert sequences.find_gaps(self._seq([6836, 6845])) == ["6837-6844 (8)"]
+
+    def test_mixed_gaps(self) -> None:
+        """Mix of single, double, and range gaps."""
+        result = sequences.find_gaps(self._seq([1, 3, 5, 15]))
+        assert "2" in result
+        assert "4" in result
+        assert "6-14 (9)" in result
+
+    def test_single_element(self) -> None:
+        """Single-element sequence has no gaps."""
+        assert sequences.find_gaps(self._seq([42])) == []
+
+    def test_duplicates_ignored(self) -> None:
+        """Duplicate sequence numbers do not produce false gaps."""
+        assert sequences.find_gaps(self._seq([1, 1, 2, 3])) == []
+
+
+@pytest.mark.unit
 class TestWriteScript:
     """Tests for write_script function."""
 
@@ -221,6 +265,7 @@ class TestRun:
         args = argparse.Namespace(
             json_files=[str(json_file)],
             filter=None,
+            gaps=False,
             list=False,
             output=None,
             select=None,
@@ -244,6 +289,7 @@ class TestRun:
         args = argparse.Namespace(
             json_files=[str(json_file)],
             filter=None,
+            gaps=False,
             list=False,
             output=None,
             select=None,
@@ -267,6 +313,7 @@ class TestRun:
         args = argparse.Namespace(
             json_files=[str(json_file)],
             filter=None,
+            gaps=False,
             list=True,
             output=None,
             select=None,
@@ -283,6 +330,7 @@ class TestRun:
         args = argparse.Namespace(
             json_files=[str(json_file)],
             filter=None,
+            gaps=False,
             list=True,
             output=None,
             select=None,
@@ -302,6 +350,7 @@ class TestRun:
         args = argparse.Namespace(
             json_files=[str(json_file)],
             filter=None,
+            gaps=False,
             list=True,
             output=None,
             select=None,
@@ -319,6 +368,7 @@ class TestRun:
         args = argparse.Namespace(
             json_files=[str(json_file)],
             filter=None,
+            gaps=False,
             list=False,
             output=script_path,
             select=[2],
@@ -337,6 +387,7 @@ class TestRun:
         args = argparse.Namespace(
             json_files=[str(json_file)],
             filter=None,
+            gaps=False,
             list=False,
             output=script_path,
             select=[2],
@@ -352,6 +403,7 @@ class TestRun:
         args = argparse.Namespace(
             json_files=[str(json_file)],
             filter=None,
+            gaps=False,
             list=False,
             output=None,
             select=[1],
@@ -371,6 +423,7 @@ class TestRun:
         args = argparse.Namespace(
             json_files=[str(json_file)],
             filter=["cam"],
+            gaps=False,
             list=False,
             output=None,
             select=None,
@@ -396,6 +449,7 @@ class TestRun:
         args = argparse.Namespace(
             json_files=[str(json_file)],
             filter=None,
+            gaps=False,
             list=False,
             output=None,
             select=None,
@@ -405,3 +459,88 @@ class TestRun:
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert "1 sequence" in captured.out
+
+
+@pytest.mark.integration
+class TestGaps:
+    """Integration tests for --gaps flag."""
+
+    def _make_archive_with_gaps(self, tmp_path: Path) -> Path:
+        """Archive: seq 1,2,4,5,9,11 — gaps at 3, 6-8 (range), 10."""
+        entries = [
+            _make_entry("dir/img_001.jpg", "2025-01-01T10:00:00+01:00"),
+            _make_entry("dir/img_002.jpg", "2025-01-01T11:00:00+01:00"),
+            # gap: 3
+            _make_entry("dir/img_004.jpg", "2025-01-01T12:00:00+01:00"),
+            _make_entry("dir/img_005.jpg", "2025-01-01T13:00:00+01:00"),
+            # gap: 6, 7, 8 (range of 3)
+            _make_entry("dir/img_009.jpg", "2025-01-01T14:00:00+01:00"),
+            # gap: 10
+            _make_entry("dir/img_011.jpg", "2025-01-01T15:00:00+01:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        return json_file
+
+    def _args(self, json_file: Path, gaps: bool = True) -> argparse.Namespace:
+        return argparse.Namespace(
+            json_files=[str(json_file)],
+            filter=None,
+            gaps=gaps,
+            list=False,
+            output=None,
+            select=None,
+            target=None,
+        )
+
+    def test_gaps_shows_table_for_single_sequence(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """--gaps shows the per-sequence table even when there is only 1 sequence."""
+        json_file = self._make_archive_with_gaps(tmp_path)
+        sequences.run(self._args(json_file))
+        captured = capsys.readouterr()
+        assert "seq 1..11" in captured.out
+
+    def test_gaps_shows_single_missing(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Single missing numbers appear as plain integers."""
+        json_file = self._make_archive_with_gaps(tmp_path)
+        sequences.run(self._args(json_file))
+        captured = capsys.readouterr()
+        assert "3" in captured.out
+        assert "10" in captured.out
+
+    def test_gaps_shows_range_for_three_or_more(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Three or more consecutive missing numbers appear as 'start-end (count)'."""
+        json_file = self._make_archive_with_gaps(tmp_path)
+        sequences.run(self._args(json_file))
+        captured = capsys.readouterr()
+        assert "6-8 (3)" in captured.out
+
+    def test_gaps_no_output_when_no_gaps(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """No 'missing in seq' line when a sequence has no gaps."""
+        entries = [
+            _make_entry("dir/img_001.jpg", "2025-01-01T10:00:00+01:00"),
+            _make_entry("dir/img_002.jpg", "2025-01-01T11:00:00+01:00"),
+            _make_entry("dir/img_003.jpg", "2025-01-01T12:00:00+01:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        sequences.run(self._args(json_file))
+        captured = capsys.readouterr()
+        assert "missing" not in captured.out
+
+    def test_gaps_false_no_table_for_single_sequence(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Without --gaps, single-sequence summary shows no table (existing behaviour)."""
+        json_file = self._make_archive_with_gaps(tmp_path)
+        sequences.run(self._args(json_file, gaps=False))
+        captured = capsys.readouterr()
+        assert "seq 1..11" not in captured.out

@@ -118,19 +118,64 @@ def _seq_directories(seq: list[tuple[str, str, int, datetime]]) -> list[str]:
     return [d for d, _ in dirs.most_common()]
 
 
+def find_gaps(seq: list[tuple[str, str, int, datetime]]) -> list[str]:
+    """Find gaps in sequence numbers within a single sequence.
+
+    Compares consecutive sequence numbers and identifies missing values.
+    Isolated missing numbers (1 or 2 in a row) are returned individually;
+    runs of 3 or more are aggregated as "start-end (count)".
+
+    Args:
+        seq: List of (path, prefix, seq_num, date) tuples for one sequence.
+
+    Returns:
+        List of gap description strings, e.g. ["6837", "6839-6845 (7)"].
+
+    Examples:
+        >>> seq = [("a", "p", 1, dt), ("a", "p", 2, dt), ("a", "p", 5, dt)]
+        >>> find_gaps(seq)
+        ['3', '4']
+        >>> seq = [("a", "p", 1, dt), ("a", "p", 10, dt)]
+        >>> find_gaps(seq)
+        ['2-9 (8)']
+    """
+    if len(seq) < 2:
+        return []
+    seq_nums = sorted({item[2] for item in seq})
+    gaps: list[str] = []
+    for i in range(len(seq_nums) - 1):
+        current = seq_nums[i]
+        nxt = seq_nums[i + 1]
+        missing = nxt - current - 1
+        if missing == 0:
+            continue
+        missing_start = current + 1
+        missing_end = nxt - 1
+        if missing <= 2:
+            for n in range(missing_start, missing_end + 1):
+                gaps.append(str(n))
+        else:
+            gaps.append(f"{missing_start}-{missing_end} ({missing})")
+    return gaps
+
+
 def print_summary(
     files: list[tuple[str, str, int, datetime]],
     seqs: list[list[tuple[str, str, int, datetime]]],
+    show_gaps: bool = False,
 ) -> None:
     """Print summary table of detected sequences.
 
     Args:
         files: All input files.
         seqs: Detected sequences sorted by length.
+        show_gaps: If True, always show the per-sequence table (even for a
+            single sequence) and add a line of missing sequence numbers under
+            each sequence that has gaps.
     """
     n_seqs = len(seqs)
     print(f"{len(files)} files, {n_seqs} sequence{'s' if n_seqs != 1 else ''}")
-    if n_seqs <= 1:
+    if n_seqs <= 1 and not show_gaps:
         return
     print()
     for i, seq in enumerate(seqs, 1):
@@ -143,6 +188,10 @@ def print_summary(
             f"  {i:3d}  {len(seq):5d} files  seq {first_seq}..{last_seq}"
             f"  ({first_dt} .. {last_dt})  [{dirs_str}]"
         )
+        if show_gaps:
+            gaps = find_gaps(seq)
+            if gaps:
+                print(f"         {', '.join(gaps)} missing in seq")
     print()
 
 
@@ -241,6 +290,12 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Only consider entries whose path contains PATTERN (repeatable, OR logic)",
     )
     parser.add_argument(
+        "-g",
+        "--gaps",
+        action="store_true",
+        help="Show missing sequence numbers under each sequence in the summary",
+    )
+    parser.add_argument(
         "-l",
         "--list",
         action="store_true",
@@ -301,6 +356,7 @@ def run(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments with fields:
             - json_files: Paths to archive JSON metadata files
             - filter: Optional list of path substring filters
+            - gaps: Whether to show missing sequence numbers in the summary
             - list: Whether to show columnar listing
             - output: Optional path to output shell script
             - select: Optional list of sequence indices to move
@@ -319,7 +375,7 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit("Error: No entries with sequence numbers found")
 
     seqs = detect_sequences(files)
-    print_summary(files, seqs)
+    print_summary(files, seqs, show_gaps=args.gaps)
 
     if args.list:
         print_columns(seqs)
