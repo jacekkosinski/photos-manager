@@ -657,13 +657,25 @@ class TestDecreases:
     def test_decreases_shows_seq_numbers_and_dates(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Decreases output includes seq numbers and dates for each pair."""
+        """Decreases output includes seq numbers, dates and times for each pair."""
         json_file = self._make_interleaved_archive(tmp_path)
         sequences.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "2025-01-01" in captured.out
+        assert "11:00:00" in captured.out  # time of img_002 (T11:00:00+01:00)
+        assert "12:00:00" in captured.out  # time of dsc_001 (T12:00:00+01:00)
         assert " 2 " in captured.out
         assert " 1 " in captured.out
+
+    def test_decreases_double_spaces_between_elements(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Decreases section uses double spaces between seq number, path, and date."""
+        json_file = self._make_interleaved_archive(tmp_path)
+        sequences.run(self._args(json_file))
+        captured = capsys.readouterr()
+        assert "  (" in captured.out
+        assert "  →  " in captured.out
 
     def test_decreases_none_when_monotonic(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]

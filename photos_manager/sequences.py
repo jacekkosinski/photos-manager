@@ -27,6 +27,7 @@ from pathlib import Path
 from photos_manager.common import load_json
 
 _SEQ_RE = re.compile(r"^(.*?)(\d+)\.[^.]+$")
+_DT_FMT = "%Y-%m-%d %H:%M:%S"
 
 
 def load_files(
@@ -193,29 +194,30 @@ def find_decreases(
 
 
 def print_decreases(
-    files: list[tuple[str, str, int, datetime]],
+    decreases: list[tuple[tuple[str, str, int, datetime], tuple[str, str, int, datetime]]],
 ) -> None:
     """Print sequence number decrease points (evidence of interleaving).
 
-    For each consecutive pair in the date-sorted file list where the sequence
-    number drops, prints a line showing the full path, sequence number, and
-    date of both files.  Prints ``(none)`` when no decreases exist.
+    For each consecutive pair where the sequence number drops, prints a line
+    showing the full path, sequence number, and datetime of both files.
+    Prints ``(none)`` when the list is empty.
 
     Args:
-        files: List of (path, prefix, seq, date) tuples sorted by date.
+        decreases: List of (prev, curr) pairs as returned by find_decreases.
     """
-    decreases = find_decreases(files)
     print("Sequence number decreases:")
     print()
     if not decreases:
         print("  (none)")
     else:
+        max_w = max(len(str(item[2])) for p, c in decreases for item in (p, c))
         for prev, curr in decreases:
             prev_path, _, prev_seq, prev_dt = prev
             curr_path, _, curr_seq, curr_dt = curr
-            prev_date = prev_dt.strftime("%Y-%m-%d")
-            curr_date = curr_dt.strftime("%Y-%m-%d")
-            print(f"  {prev_seq} ({prev_path} {prev_date}) -> {curr_seq} ({curr_path} {curr_date})")
+            print(
+                f"  {prev_seq:{max_w}}  {prev_path}  ({prev_dt.strftime(_DT_FMT)})"
+                f"  →  {curr_seq:{max_w}}  {curr_path}  ({curr_dt.strftime(_DT_FMT)})"
+            )
     print()
 
 
@@ -291,7 +293,6 @@ def print_summary(
                 )
                 print("\n".join(gap_lines))
         print()
-    print()
 
 
 def print_columns(
@@ -476,7 +477,7 @@ def run(args: argparse.Namespace) -> int:
     seqs = detect_sequences(files)
     print_summary(files, seqs, show_gaps=args.gaps)
 
-    print_decreases(files)
+    print_decreases(find_decreases(files))
 
     if args.list:
         print_columns(seqs)
