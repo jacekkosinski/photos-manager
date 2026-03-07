@@ -254,6 +254,29 @@ class TestRun:
         captured = capsys.readouterr()
         assert "1 sequence" in captured.out
 
+    def test_list_mode_single_sequence(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that -l shows columnar listing even with a single sequence."""
+        entries = [
+            _make_entry("dir/img_001.jpg", "2025-01-01T10:00:00+01:00"),
+            _make_entry("dir/img_002.jpg", "2025-01-01T11:00:00+01:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        args = argparse.Namespace(
+            json_files=[str(json_file)],
+            filter=None,
+            list=True,
+            output=None,
+            select=None,
+            target=None,
+        )
+        result = sequences.run(args)
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "Seq 1" in captured.out
+
     def test_list_mode(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test columnar listing."""
         json_file = self._make_archive(tmp_path)

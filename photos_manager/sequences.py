@@ -321,7 +321,7 @@ def run(args: argparse.Namespace) -> int:
     seqs = detect_sequences(files)
     print_summary(files, seqs)
 
-    if args.list and len(seqs) > 1:
+    if args.list:
         print_columns(seqs)
         print()
 
