@@ -146,16 +146,15 @@ class TestLoadFiles:
 class TestSeqDirectories:
     """Tests for _seq_directories helper."""
 
-    def test_returns_dirs_by_frequency(self) -> None:
-        """Test that directories are ordered by frequency."""
+    def test_returns_dirs_in_order_of_first_appearance(self) -> None:
+        """Test that directories are ordered by first appearance in the sequence."""
         seq = [
-            ("cam/100/img_001.jpg", "img_", 1, datetime(2025, 1, 1, tzinfo=UTC)),
+            ("cam/101/img_001.jpg", "img_", 1, datetime(2025, 1, 1, tzinfo=UTC)),
             ("cam/100/img_002.jpg", "img_", 2, datetime(2025, 1, 2, tzinfo=UTC)),
-            ("cam/101/img_003.jpg", "img_", 3, datetime(2025, 1, 3, tzinfo=UTC)),
+            ("cam/100/img_003.jpg", "img_", 3, datetime(2025, 1, 3, tzinfo=UTC)),
         ]
         dirs = sequences._seq_directories(seq)
-        assert dirs[0] == "cam/100"
-        assert "cam/101" in dirs
+        assert dirs == ["cam/101", "cam/100"]
 
 
 @pytest.mark.unit

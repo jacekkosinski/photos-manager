@@ -18,7 +18,6 @@ import bisect
 import os
 import re
 import stat
-from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -113,9 +112,11 @@ def detect_sequences(
 
 
 def _seq_directories(seq: list[tuple[str, str, int, datetime]]) -> list[str]:
-    """Extract unique directory names from a sequence, ordered by frequency."""
-    dirs = Counter(str(Path(path).parent) for path, _, _, _ in seq)
-    return [d for d, _ in dirs.most_common()]
+    """Extract unique directory names from a sequence, in order of first appearance."""
+    seen: dict[str, None] = {}
+    for path, _, _, _ in seq:
+        seen[str(Path(path).parent)] = None
+    return list(seen)
 
 
 def count_missing(seq: list[tuple[str, str, int, datetime]]) -> int:
