@@ -373,7 +373,7 @@ class TestFixFilePermissions:
         assert result is True
         assert stat.S_IMODE(test_file.stat().st_mode) == 0o777
         captured = capsys.readouterr()
-        assert "[FIX]" in captured.out
+        assert "0o644" in captured.out
 
 
 @pytest.mark.unit
@@ -404,7 +404,7 @@ class TestFixDirPermissions:
         assert result is True
         assert stat.S_IMODE(test_dir.stat().st_mode) == 0o700
         captured = capsys.readouterr()
-        assert "[FIX]" in captured.out
+        assert "0o755" in captured.out
 
 
 @pytest.mark.unit
@@ -469,7 +469,7 @@ class TestRenameToNormalized:
         assert success is True
         assert test_file.exists()  # Original still exists
         captured = capsys.readouterr()
-        assert "[FIX]" in captured.out
+        assert "->" in captured.out
 
     def test_adds_suffix_on_conflict(self, tmp_path: Path) -> None:
         """Test that suffix is added when normalized name exists."""
@@ -715,7 +715,7 @@ class TestErrorHandling:
 
         assert result is True
         captured = capsys.readouterr()
-        assert "[FIX]" in captured.out
+        assert "->" in captured.out
 
     def test_rename_to_normalized_oserror(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1060,7 +1060,7 @@ class TestSetMtimeFromExif:
 
             # Verify output
             captured = capsys.readouterr()
-            assert "[FIX]" in captured.out
+            assert "mtime ->" in captured.out
             assert "2025-01-24 15:30:45" in captured.out
 
     def test_handles_oserror(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -1596,7 +1596,6 @@ class TestProcessExifTimestamps:
             assert result is False
 
             captured = capsys.readouterr()
-            assert "[OK]" in captured.out
             assert "correct EXIF timestamps" in captured.out
 
     def test_prints_ok_when_no_media_files(
@@ -1613,7 +1612,6 @@ class TestProcessExifTimestamps:
         assert result is False
 
         captured = capsys.readouterr()
-        assert "[OK]" in captured.out
         assert "No supported media files" in captured.out
 
     def test_handles_exceptions(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

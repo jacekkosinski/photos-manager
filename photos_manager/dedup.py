@@ -460,7 +460,7 @@ def display_summary(
     dup_size = sum(int(scanned["size"]) for scanned, _ in duplicates)
     miss_size = sum(int(entry["size"]) for entry in missing)
 
-    print("=" * 64)
+    print("=" * 60)
     print("Summary:")
     print(f"  Files scanned: {scanned_count}")
     print(f"  Duplicates found: {len(duplicates)} (total size: {format_size(dup_size)} bytes)")
@@ -469,7 +469,7 @@ def display_summary(
         print(f"  Filename warnings: {filename_warnings}")
     if timestamp_warnings > 0:
         print(f"  Timestamp warnings: {timestamp_warnings}")
-    print("=" * 64)
+    print("=" * 60)
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:

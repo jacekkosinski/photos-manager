@@ -282,10 +282,10 @@ def set_file_mtime_from_exif(path: Path, dry_run: bool) -> bool:
 
         # Update mtime
         if dry_run:
-            print(f"  [FIX] {path}: mtime -> {exif_date.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"  {path}: mtime -> {exif_date.strftime('%Y-%m-%d %H:%M:%S')}")
         else:
             os.utime(path, (exif_timestamp, exif_timestamp))
-            print(f"  [FIXED] {path}: mtime set to {exif_date.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"  {path}: mtime set to {exif_date.strftime('%Y-%m-%d %H:%M:%S')}")
         return True
 
     except OSError as e:
@@ -323,9 +323,9 @@ def _process_exif_timestamps(all_items: list[Path], dry_run: bool) -> bool:
                 has_errors = True
 
     if not has_fixes and processed_count > 0:
-        print("  [OK] All files already have correct EXIF timestamps")
+        print("  All files already have correct EXIF timestamps")
     elif processed_count == 0:
-        print("  [OK] No supported media files found")
+        print("  No supported media files found")
 
     return has_errors
 
@@ -576,10 +576,10 @@ def fix_file_permissions(path: Path, dry_run: bool) -> bool:
     """
     try:
         if dry_run:
-            print(f"  [FIX] {path}: {oct(stat.S_IMODE(path.stat().st_mode))} -> 0o644")
+            print(f"  {path}: {oct(stat.S_IMODE(path.stat().st_mode))} -> 0o644")
         else:
             path.chmod(FILE_PERMISSIONS)
-            print(f"  [FIXED] {path}: permissions set to 0o644")
+            print(f"  {path}: permissions set to 0o644")
         return True
     except OSError as e:
         print(f"  Error: {path}: cannot change permissions: {e}", file=sys.stderr)
@@ -598,10 +598,10 @@ def fix_dir_permissions(path: Path, dry_run: bool) -> bool:
     """
     try:
         if dry_run:
-            print(f"  [FIX] {path}: {oct(stat.S_IMODE(path.stat().st_mode))} -> 0o755")
+            print(f"  {path}: {oct(stat.S_IMODE(path.stat().st_mode))} -> 0o755")
         else:
             path.chmod(DIR_PERMISSIONS)
-            print(f"  [FIXED] {path}: permissions set to 0o755")
+            print(f"  {path}: permissions set to 0o755")
         return True
     except OSError as e:
         print(f"  Error: {path}: cannot change permissions: {e}", file=sys.stderr)
@@ -639,10 +639,10 @@ def fix_ownership(path: Path, user: str, group: str, dry_run: bool) -> bool:
 
     try:
         if dry_run:
-            print(f"  [FIX] {path}: {current_user}:{current_group} -> {user}:{group}")
+            print(f"  {path}: {current_user}:{current_group} -> {user}:{group}")
         else:
             os.chown(path, uid, gid)
-            print(f"  [FIXED] {path}: ownership set to {user}:{group}")
+            print(f"  {path}: ownership set to {user}:{group}")
         return True
     except OSError as e:
         print(f"  Error: {path}: cannot change ownership: {e}", file=sys.stderr)
@@ -682,16 +682,16 @@ def rename_to_normalized(path: Path, dry_run: bool) -> tuple[bool, Path]:
     try:
         if dry_run:
             if has_conflict:
-                print(f"  [FIX] {path} -> {new_path.name} (conflict with {expected_normalized})")
+                print(f"  {path} -> {new_path.name} (conflict with {expected_normalized})")
             else:
-                print(f"  [FIX] {path} -> {new_path.name}")
+                print(f"  {path} -> {new_path.name}")
             return True, new_path
         else:
             path.rename(new_path)
             if has_conflict:
-                print(f"  [FIXED] {path} -> {new_path.name} (conflict with {expected_normalized})")
+                print(f"  {path} -> {new_path.name} (conflict with {expected_normalized})")
             else:
-                print(f"  [FIXED] {path} -> {new_path.name}")
+                print(f"  {path} -> {new_path.name}")
             return True, new_path
     except OSError as e:
         print(f"  Error: {path}: cannot rename: {e}", file=sys.stderr)
@@ -762,7 +762,7 @@ def _process_filenames(all_items: list[Path], dry_run: bool) -> tuple[bool, dict
                 has_errors = True
 
     if not has_fixes:
-        print("  [OK] All names are normalized")
+        print("  All names are normalized")
 
     return has_errors, path_map
 
@@ -791,7 +791,7 @@ def _process_file_permissions(all_items: list[Path], dry_run: bool) -> bool:
                 has_errors = True
 
     if not has_fixes:
-        print("  [OK] All files have correct permissions")
+        print("  All files have correct permissions")
 
     return has_errors
 
@@ -820,7 +820,7 @@ def _process_dir_permissions(all_items: list[Path], dry_run: bool) -> bool:
                 has_errors = True
 
     if not has_fixes:
-        print("  [OK] All directories have correct permissions")
+        print("  All directories have correct permissions")
 
     return has_errors
 
@@ -851,7 +851,7 @@ def _process_ownership(all_items: list[Path], user: str, group: str, dry_run: bo
                 has_errors = True
 
     if not has_fixes:
-        print("  [OK] All items have correct ownership")
+        print("  All items have correct ownership")
 
     return has_errors
 
