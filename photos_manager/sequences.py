@@ -118,6 +118,21 @@ def _seq_directories(seq: list[tuple[str, str, int, datetime]]) -> list[str]:
     return [d for d, _ in dirs.most_common()]
 
 
+def count_missing(seq: list[tuple[str, str, int, datetime]]) -> int:
+    """Count missing sequence numbers in a sequence.
+
+    Args:
+        seq: List of (path, prefix, seq_num, date) tuples for one sequence.
+
+    Returns:
+        Number of integers absent from the range [min_seq, max_seq].
+    """
+    if len(seq) < 2:
+        return 0
+    seq_nums = sorted({item[2] for item in seq})
+    return seq_nums[-1] - seq_nums[0] + 1 - len(seq_nums)
+
+
 def find_gaps(seq: list[tuple[str, str, int, datetime]]) -> list[str]:
     """Find gaps in sequence numbers within a single sequence.
 
@@ -166,6 +181,9 @@ def print_summary(
 ) -> None:
     """Print summary table of detected sequences.
 
+    For a single sequence the missing count appears on the header line.
+    For multiple sequences it appears as an aligned column in each row.
+
     Args:
         files: All input files.
         seqs: Detected sequences sorted by length.
@@ -174,19 +192,28 @@ def print_summary(
             each sequence that has gaps.
     """
     n_seqs = len(seqs)
-    print(f"{len(files)} files, {n_seqs} sequence{'s' if n_seqs != 1 else ''}")
+    missing_counts = [count_missing(seq) for seq in seqs]
+
+    if n_seqs == 1:
+        print(f"{len(files)} files, 1 sequence [{missing_counts[0]} missing]")
+    else:
+        print(f"{len(files)} files, {n_seqs} sequences")
+
     if n_seqs <= 1 and not show_gaps:
         return
+
     print()
-    for i, seq in enumerate(seqs, 1):
+    max_missing_width = max((len(f"[{m} missing]") for m in missing_counts), default=0)
+    for i, (seq, missing) in enumerate(zip(seqs, missing_counts, strict=True), 1):
         first_seq, last_seq = seq[0][2], seq[-1][2]
         first_dt = seq[0][3].strftime("%Y-%m-%d")
         last_dt = seq[-1][3].strftime("%Y-%m-%d")
         dirs = _seq_directories(seq)
         dirs_str = ", ".join(dirs)
+        missing_str = f"[{missing} missing]".ljust(max_missing_width)
         print(
             f"  {i:3d}  {len(seq):5d} files  seq {first_seq}..{last_seq}"
-            f"  ({first_dt} .. {last_dt})  [{dirs_str}]"
+            f"  {missing_str}  ({first_dt} .. {last_dt})  [{dirs_str}]"
         )
         if show_gaps:
             gaps = find_gaps(seq)

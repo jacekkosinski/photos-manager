@@ -521,10 +521,10 @@ class TestGaps:
         captured = capsys.readouterr()
         assert "6-8 (3)" in captured.out
 
-    def test_gaps_no_output_when_no_gaps(
+    def test_gaps_no_detail_line_when_no_gaps(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """No 'missing in seq' line when a sequence has no gaps."""
+        """No 'missing in seq' detail line when a sequence has no gaps."""
         entries = [
             _make_entry("dir/img_001.jpg", "2025-01-01T10:00:00+01:00"),
             _make_entry("dir/img_002.jpg", "2025-01-01T11:00:00+01:00"),
@@ -534,7 +534,8 @@ class TestGaps:
         json_file.write_text(json.dumps(entries), encoding="utf-8")
         sequences.run(self._args(json_file))
         captured = capsys.readouterr()
-        assert "missing" not in captured.out
+        assert "[0 missing]" in captured.out
+        assert "missing in seq" not in captured.out
 
     def test_gaps_false_no_table_for_single_sequence(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
