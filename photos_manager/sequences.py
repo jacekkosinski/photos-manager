@@ -248,7 +248,7 @@ def print_summary(
     missing_counts = [count_missing(seq) for seq in seqs]
 
     if n_seqs == 1:
-        print(f"{len(files)} files, 1 sequence [{missing_counts[0]} missing]:")
+        print(f"{len(files)} files, 1 sequence [{missing_counts[0]} missing]")
     else:
         print(f"{len(files)} files, {n_seqs} sequences:")
 
@@ -477,7 +477,9 @@ def run(args: argparse.Namespace) -> int:
     seqs = detect_sequences(files)
     print_summary(files, seqs, show_gaps=args.gaps)
 
-    print_decreases(find_decreases(files))
+    decreases = find_decreases(files)
+    if decreases:
+        print_decreases(decreases)
 
     if args.list:
         print_columns(seqs)

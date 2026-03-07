@@ -331,7 +331,7 @@ class TestRun:
     def test_single_sequence_no_report(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test that a single monotonic sequence shows count only."""
+        """Test that a single monotonic sequence shows count only, without colon."""
         entries = [
             _make_entry("dir/img_001.jpg", "2025-01-01T10:00:00+01:00"),
             _make_entry("dir/img_002.jpg", "2025-01-01T11:00:00+01:00"),
@@ -350,7 +350,8 @@ class TestRun:
         result = sequences.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
-        assert "1 sequence" in captured.out
+        assert "1 sequence [0 missing]" in captured.out
+        assert "1 sequence [0 missing]:" not in captured.out
 
     def test_list_mode_single_sequence(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -677,10 +678,10 @@ class TestDecreases:
         assert "  (" in captured.out
         assert "  →  " in captured.out
 
-    def test_decreases_none_when_monotonic(
+    def test_decreases_hidden_when_none(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Monotonic sequence prints '(none)' in the decreases section."""
+        """Decreases section is not shown when there are no decrease points."""
         entries = [
             _make_entry("dir/img_001.jpg", "2025-01-01T10:00:00+01:00"),
             _make_entry("dir/img_002.jpg", "2025-01-01T11:00:00+01:00"),
@@ -689,5 +690,4 @@ class TestDecreases:
         json_file.write_text(json.dumps(entries), encoding="utf-8")
         sequences.run(self._args(json_file))
         captured = capsys.readouterr()
-        assert "Sequence number decreases:" in captured.out
-        assert "(none)" in captured.out
+        assert "Sequence number decreases:" not in captured.out
