@@ -8,6 +8,7 @@ monotonically. A single sequence may span multiple directories.
 Usage:
     photos sequences archive.json
     photos sequences archive.json -f apple-ipad-2
+    photos sequences archive.json -f apple-ipad-2 -g
     photos sequences archive.json -f apple-ipad-2 -l
     photos sequences archive.json -f apple-ipad-2 -o move.sh -S 2
     photos sequences archive.json -f apple-ipad-2 -o move.sh -S 2 -S 3
@@ -184,15 +185,21 @@ def print_summary(
 ) -> None:
     """Print summary table of detected sequences.
 
-    For a single sequence the missing count appears on the header line.
-    For multiple sequences it appears as an aligned column in each row.
+    The missing-number count is always shown: on the header line for a
+    single sequence, or as an aligned ``[N missing]`` column in each row
+    for multiple sequences.  Directories are shown in ``{...}`` brackets
+    in order of first appearance.  When ``show_gaps`` is True the
+    per-sequence table is shown even for a single sequence and a
+    ``[gap, ...]`` block listing individual missing numbers (or ranges)
+    is printed below each row that has gaps.  Both the directory list
+    and gap block wrap to the terminal width.
 
     Args:
         files: All input files.
         seqs: Detected sequences sorted by length.
         show_gaps: If True, always show the per-sequence table (even for a
-            single sequence) and add a line of missing sequence numbers under
-            each sequence that has gaps.
+            single sequence) and print a ``[...]`` gap detail block under
+            each sequence that has missing numbers.
     """
     n_seqs = len(seqs)
     missing_counts = [count_missing(seq) for seq in seqs]
@@ -375,7 +382,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         type=str,
         default=None,
         metavar="DIR",
-        help="Base directory for moved sequences (default: most common dir of seq 1)",
+        help="Base directory for moved sequences (default: first directory of seq 1)",
     )
 
 
