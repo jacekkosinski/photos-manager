@@ -242,6 +242,7 @@ def print_summary(
                     break_on_hyphens=False,
                 )
                 print("\n".join(gap_lines))
+        print()
     print()
 
 
