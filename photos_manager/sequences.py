@@ -17,7 +17,9 @@ import argparse
 import bisect
 import os
 import re
+import shutil
 import stat
+import textwrap
 from datetime import datetime
 from pathlib import Path
 
@@ -219,7 +221,17 @@ def print_summary(
         if show_gaps:
             gaps = find_gaps(seq)
             if gaps:
-                print(f"         {', '.join(gaps)} missing in seq")
+                indent = "         "
+                term_width = shutil.get_terminal_size(fallback=(100, 24)).columns
+                text = ", ".join(gaps) + " missing in seq"
+                lines = textwrap.wrap(
+                    text,
+                    width=term_width,
+                    initial_indent=indent,
+                    subsequent_indent=indent,
+                    break_on_hyphens=False,
+                )
+                print("\n".join(lines))
     print()
 
 
