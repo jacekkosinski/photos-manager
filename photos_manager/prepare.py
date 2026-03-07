@@ -887,8 +887,9 @@ def process_directory(
 
     # Re-scan or update paths after renames
     if not dry_run and path_map:
-        items = get_items_depth_first(directory)
-        all_items = [*items, directory]
+        new_directory = path_map.get(directory, directory)
+        items = get_items_depth_first(new_directory)
+        all_items = [*items, new_directory]
     elif path_map:
         all_items = _update_paths_for_dry_run(all_items, path_map)
 

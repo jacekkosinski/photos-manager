@@ -561,6 +561,28 @@ class TestProcessDirectory:
         assert (tmp_path / "my_file.txt").exists()
         assert not test_file.exists()
 
+    def test_renames_target_directory_itself(
+        self, tmp_path: Path, current_user_and_group: tuple[str, str]
+    ) -> None:
+        """Test that process_directory succeeds when the target dir is itself renamed.
+
+        Regression test: after renaming the root directory (e.g. PHOTOS -> photos),
+        the re-scan must use the new path, not the now-missing original path.
+        """
+        uppercase_dir = tmp_path / "PHOTOS"
+        uppercase_dir.mkdir()
+        subdir = uppercase_dir / "SUBDIR"
+        subdir.mkdir()
+        (subdir / "IMG.JPG").touch()
+
+        current_user, current_group = current_user_and_group
+
+        result = process_directory(uppercase_dir, current_user, current_group, dry_run=False)
+
+        assert result is True
+        assert (tmp_path / "photos").exists()
+        assert not uppercase_dir.exists()
+
 
 @pytest.mark.unit
 class TestErrorHandling:
