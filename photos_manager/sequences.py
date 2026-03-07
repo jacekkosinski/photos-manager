@@ -27,6 +27,7 @@ from pathlib import Path
 from photos_manager.common import load_json
 
 _SEQ_RE = re.compile(r"^(.*?)(\d+)\.[^.]+$")
+_DATE_FMT = "%Y-%m-%d"
 _DT_FMT = "%Y-%m-%d %H:%M:%S"
 
 
@@ -117,10 +118,7 @@ def detect_sequences(
 
 def _seq_directories(seq: list[tuple[str, str, int, datetime]]) -> list[str]:
     """Extract unique directory names from a sequence, in order of first appearance."""
-    seen: dict[str, None] = {}
-    for path, _, _, _ in seq:
-        seen[str(Path(path).parent)] = None
-    return list(seen)
+    return list(dict.fromkeys(str(Path(path).parent) for path, *_ in seq))
 
 
 def count_missing(seq: list[tuple[str, str, int, datetime]]) -> int:
@@ -134,8 +132,8 @@ def count_missing(seq: list[tuple[str, str, int, datetime]]) -> int:
     """
     if len(seq) < 2:
         return 0
-    seq_nums = sorted({item[2] for item in seq})
-    return seq_nums[-1] - seq_nums[0] + 1 - len(seq_nums)
+    nums = {item[2] for item in seq}
+    return max(nums) - min(nums) + 1 - len(nums)
 
 
 def find_gaps(seq: list[tuple[str, str, int, datetime]]) -> list[str]:
@@ -260,8 +258,8 @@ def print_summary(
     term_width = shutil.get_terminal_size(fallback=(100, 24)).columns
     for i, (seq, missing) in enumerate(zip(seqs, missing_counts, strict=True), 1):
         first_seq, last_seq = seq[0][2], seq[-1][2]
-        first_dt = seq[0][3].strftime("%Y-%m-%d")
-        last_dt = seq[-1][3].strftime("%Y-%m-%d")
+        first_dt = seq[0][3].strftime(_DATE_FMT)
+        last_dt = seq[-1][3].strftime(_DATE_FMT)
         dirs = _seq_directories(seq)
         dirs_str = ", ".join(dirs)
         missing_str = f"[{missing} missing]".ljust(max_missing_width)
@@ -440,9 +438,9 @@ def validate_args(args: argparse.Namespace) -> None:
     for json_file in args.json_files:
         if not Path(json_file).is_file():
             raise SystemExit(f"Error: JSON file not found: {json_file}")
-    if args.select and not args.output:
+    if args.select is not None and args.output is None:
         raise SystemExit("Error: -S/--select requires -o/--output")
-    if args.output and not args.select:
+    if args.output is not None and args.select is None:
         raise SystemExit("Error: -o/--output requires -S/--select")
 
 
