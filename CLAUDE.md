@@ -9,7 +9,8 @@ Photos Manager CLI — Python 3.12+ toolkit for photo archive management.
 Tools: **prepare** (permissions/filenames), **locate** (find target
 directories), **index** (JSON metadata), **fixdates** (restore timestamps),
 **manifest** (version summaries), **verify** (integrity check), **info**
-(archive statistics), **sync** (synchronize), **dedup** (deduplicate).
+(archive statistics), **sync** (synchronize), **dedup** (deduplicate),
+**sequences** (detect interleaved camera sequences).
 
 JSON format per file: `path`, `sha1`, `md5`, `date` (ISO 8601 with `+HH:MM`),
 `size`.
@@ -25,7 +26,7 @@ pre-commit install                    # install hooks
 ## Key Commands
 
 ```bash
-poetry run pytest                     # all tests (~585, ~88% coverage)
+poetry run pytest                     # all tests (~636, ~88% coverage)
 poetry run pytest tests/test_X.py    # single file
 poetry run pytest -m unit            # unit tests only
 poetry run pytest -m integration     # integration tests only
@@ -51,14 +52,14 @@ photos_manager/
 ├── cli.py        # CLI entry point
 ├── common.py     # shared utilities
 ├── prepare.py / locate.py / index.py / fixdates.py / manifest.py
-├── verify.py / info.py / sync.py / dedup.py
+├── verify.py / info.py / sync.py / dedup.py / sequences.py
 └── __init__.py
 
 tests/
 ├── conftest.py   # shared fixtures: current_user_and_group, verify_args
 ├── test_cli.py / test_common.py / test_prepare.py / test_index.py
 ├── test_locate.py / test_fixdates.py / test_manifest.py / test_verify.py
-├── test_info.py / test_sync.py / test_dedup.py
+├── test_info.py / test_sync.py / test_dedup.py / test_sequences.py
 ```
 
 ## Testing Conventions
@@ -108,5 +109,8 @@ with `git tag -a vX.Y.Z -m "bump: version X → Y"`.
   stdout
 - `validate_args()` helpers must use `raise SystemExit` uniformly, not
   `return False`
+- `validate_args()` with `action="append"` flags: use `is not None` / `is None`,
+  not truthiness — argparse never produces `[]` here but `default=[]` would
+  silently break truthiness guards
 - `prepare.iter_directory()` — iterator over visible paths (renamed from
   `scan_directory`)
