@@ -10,7 +10,7 @@ Tools: **prepare** (permissions/filenames), **locate** (find target
 directories), **index** (JSON metadata), **fixdates** (restore timestamps),
 **manifest** (version summaries), **verify** (integrity check), **info**
 (archive statistics), **sync** (synchronize), **dedup** (deduplicate),
-**sequences** (detect interleaved camera sequences).
+**series** (detect interleaved camera series).
 
 JSON format per file: `path`, `sha1`, `md5`, `date` (ISO 8601 with `+HH:MM`),
 `size`.
@@ -52,14 +52,14 @@ photos_manager/
 ├── cli.py        # CLI entry point
 ├── common.py     # shared utilities
 ├── prepare.py / locate.py / index.py / fixdates.py / manifest.py
-├── verify.py / info.py / sync.py / dedup.py / sequences.py
+├── verify.py / info.py / sync.py / dedup.py / series.py
 └── __init__.py
 
 tests/
 ├── conftest.py   # shared fixtures: current_user_and_group, verify_args
 ├── test_cli.py / test_common.py / test_prepare.py / test_index.py
 ├── test_locate.py / test_fixdates.py / test_manifest.py / test_verify.py
-├── test_info.py / test_sync.py / test_dedup.py / test_sequences.py
+├── test_info.py / test_sync.py / test_dedup.py / test_series.py
 ```
 
 ## Testing Conventions

@@ -1,17 +1,17 @@
-"""sequences - Detect and separate interleaved photo sequences.
+"""series - Detect and separate interleaved photo series.
 
-Analyzes archive JSON metadata to find interleaved camera sequences.
+Analyzes archive JSON metadata to find interleaved camera series.
 Files from all matching directories are pooled together and partitioned
-into coherent sequences where both filename numbers and dates increase
-monotonically. A single sequence may span multiple directories.
+into coherent series where both filename numbers and dates increase
+monotonically. A single series may span multiple directories.
 
 Usage:
-    photos sequences archive.json
-    photos sequences archive.json -f apple-ipad-2
-    photos sequences archive.json -f apple-ipad-2 -g
-    photos sequences archive.json -f apple-ipad-2 -l
-    photos sequences archive.json -f apple-ipad-2 -o move.sh -S 2
-    photos sequences archive.json -f apple-ipad-2 -o move.sh -S 2 -S 3
+    photos series archive.json
+    photos series archive.json -f apple-ipad-2
+    photos series archive.json -f apple-ipad-2 -g
+    photos series archive.json -f apple-ipad-2 -l
+    photos series archive.json -f apple-ipad-2 -o move.sh -S 2
+    photos series archive.json -f apple-ipad-2 -o move.sh -S 2 -S 3
 """
 
 import argparse

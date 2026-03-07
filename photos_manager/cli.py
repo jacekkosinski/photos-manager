@@ -38,7 +38,7 @@ from photos_manager import (
     locate,
     manifest,
     prepare,
-    sequences,
+    series,
     sync,
     verify,
 )
@@ -157,14 +157,14 @@ def main() -> int:
     sync.setup_parser(sync_parser)
     sync_parser.set_defaults(func=sync.run)
 
-    # sequences subcommand
-    sequences_parser = subparsers.add_parser(
-        "sequences",
-        help="Detect and separate interleaved photo sequences",
-        description="Analyze archive directories for mixed camera sequences",
+    # series subcommand
+    series_parser = subparsers.add_parser(
+        "series",
+        help="Detect and separate interleaved photo series",
+        description="Analyze archive directories for mixed camera series",
     )
-    sequences.setup_parser(sequences_parser)
-    sequences_parser.set_defaults(func=sequences.run)
+    series.setup_parser(series_parser)
+    series_parser.set_defaults(func=series.run)
 
     # dedup subcommand
     dedup_parser = subparsers.add_parser(

@@ -1,4 +1,4 @@
-"""Tests for photos_manager.sequences module."""
+"""Tests for photos_manager.series module."""
 
 import argparse
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from photos_manager import sequences
+from photos_manager import series
 
 
 def _make_entry(path: str, date: str, size: int = 1000) -> dict[str, str | int]:
@@ -36,19 +36,19 @@ class TestDetectSequences:
             ("dir/img_002.jpg", "img_", 2, datetime(2025, 1, 2, tzinfo=UTC)),
             ("dir/img_003.jpg", "img_", 3, datetime(2025, 1, 3, tzinfo=UTC)),
         ]
-        result = sequences.detect_sequences(files)
+        result = series.detect_sequences(files)
         assert len(result) == 1
         assert len(result[0]) == 3
 
     def test_two_interleaved_sequences(self) -> None:
-        """Test detection of two interleaved sequences."""
+        """Test detection of two interleaved series."""
         files = [
             ("dir/img_001.jpg", "img_", 1, datetime(2025, 1, 1, tzinfo=UTC)),
             ("dir/img_002.jpg", "img_", 2, datetime(2025, 1, 2, tzinfo=UTC)),
             ("dir/dsc_001.jpg", "dsc_", 1, datetime(2025, 1, 3, tzinfo=UTC)),
             ("dir/img_003.jpg", "img_", 3, datetime(2025, 1, 4, tzinfo=UTC)),
         ]
-        result = sequences.detect_sequences(files)
+        result = series.detect_sequences(files)
         assert len(result) == 2
         assert len(result[0]) == 3
         assert len(result[1]) == 1
@@ -60,12 +60,12 @@ class TestDetectSequences:
             ("dir/img_002.jpg", "img_", 2, datetime(2025, 1, 2, tzinfo=UTC)),
             ("dir/img_001.jpg", "img_", 1, datetime(2025, 1, 3, tzinfo=UTC)),
         ]
-        result = sequences.detect_sequences(files)
+        result = series.detect_sequences(files)
         assert len(result) == 3
 
     def test_empty_input(self) -> None:
         """Test with no files."""
-        assert sequences.detect_sequences([]) == []
+        assert series.detect_sequences([]) == []
 
     def test_equal_seq_numbers_stay_together(self) -> None:
         """Test that equal seq numbers continue the same sequence."""
@@ -74,7 +74,7 @@ class TestDetectSequences:
             ("dir/img_005.cr3", "img_", 5, datetime(2025, 1, 1, tzinfo=UTC)),
             ("dir/img_006.jpg", "img_", 6, datetime(2025, 1, 2, tzinfo=UTC)),
         ]
-        result = sequences.detect_sequences(files)
+        result = series.detect_sequences(files)
         assert len(result) == 1
 
     def test_sequence_spans_directories(self) -> None:
@@ -85,7 +85,7 @@ class TestDetectSequences:
             ("cam/101/img_003.jpg", "img_", 3, datetime(2025, 1, 3, tzinfo=UTC)),
             ("cam/101/img_004.jpg", "img_", 4, datetime(2025, 1, 4, tzinfo=UTC)),
         ]
-        result = sequences.detect_sequences(files)
+        result = series.detect_sequences(files)
         assert len(result) == 1
         assert len(result[0]) == 4
 
@@ -102,7 +102,7 @@ class TestLoadFiles:
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
-        result = sequences.load_files([str(json_file)], None)
+        result = series.load_files([str(json_file)], None)
         assert len(result) == 2
         assert result[0][2] == 1  # seq 1 first (earlier date)
 
@@ -114,7 +114,7 @@ class TestLoadFiles:
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
-        result = sequences.load_files([str(json_file)], ["dir_a"])
+        result = series.load_files([str(json_file)], ["dir_a"])
         assert len(result) == 1
         assert "dir_a" in result[0][0]
 
@@ -126,7 +126,7 @@ class TestLoadFiles:
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
-        result = sequences.load_files([str(json_file)], None)
+        result = series.load_files([str(json_file)], None)
         assert len(result) == 1
 
     def test_pools_multiple_directories(self, tmp_path: Path) -> None:
@@ -138,7 +138,7 @@ class TestLoadFiles:
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
-        result = sequences.load_files([str(json_file)], None)
+        result = series.load_files([str(json_file)], None)
         assert len(result) == 3
 
 
@@ -153,7 +153,7 @@ class TestSeqDirectories:
             ("cam/100/img_002.jpg", "img_", 2, datetime(2025, 1, 2, tzinfo=UTC)),
             ("cam/100/img_003.jpg", "img_", 3, datetime(2025, 1, 3, tzinfo=UTC)),
         ]
-        dirs = sequences._seq_directories(seq)
+        dirs = series._seq_directories(seq)
         assert dirs == ["cam/101", "cam/100"]
 
 
@@ -166,7 +166,7 @@ class TestFindDecreases:
 
     def test_empty_returns_empty(self) -> None:
         """Empty input produces no decreases."""
-        assert sequences.find_decreases([]) == []
+        assert series.find_decreases([]) == []
 
     def test_monotonic_no_decreases(self) -> None:
         """Strictly increasing sequence has no decreases."""
@@ -175,7 +175,7 @@ class TestFindDecreases:
             self._f("dir/img_002.jpg", 2, "2025-01-02T00:00:00+00:00"),
             self._f("dir/img_003.jpg", 3, "2025-01-03T00:00:00+00:00"),
         ]
-        assert sequences.find_decreases(files) == []
+        assert series.find_decreases(files) == []
 
     def test_equal_is_not_a_decrease(self) -> None:
         """Equal consecutive seq numbers are not a decrease."""
@@ -184,7 +184,7 @@ class TestFindDecreases:
             self._f("dir/img_001b.jpg", 1, "2025-01-02T00:00:00+00:00"),
             self._f("dir/img_002.jpg", 2, "2025-01-03T00:00:00+00:00"),
         ]
-        assert sequences.find_decreases(files) == []
+        assert series.find_decreases(files) == []
 
     def test_single_decrease_returns_one_pair(self) -> None:
         """One drop in seq number returns one (prev, curr) pair."""
@@ -192,7 +192,7 @@ class TestFindDecreases:
             self._f("dir/img_003.jpg", 3, "2025-01-01T00:00:00+00:00"),
             self._f("dir/img_001.jpg", 1, "2025-01-02T00:00:00+00:00"),
         ]
-        result = sequences.find_decreases(files)
+        result = series.find_decreases(files)
         assert len(result) == 1
         assert result[0] == (files[0], files[1])
 
@@ -204,7 +204,7 @@ class TestFindDecreases:
             self._f("dir/img_004.jpg", 4, "2025-01-03T00:00:00+00:00"),
             self._f("dir/img_001.jpg", 1, "2025-01-04T00:00:00+00:00"),
         ]
-        result = sequences.find_decreases(files)
+        result = series.find_decreases(files)
         assert len(result) == 2
         assert result[0] == (files[0], files[1])
         assert result[1] == (files[2], files[3])
@@ -220,38 +220,38 @@ class TestFindGaps:
 
     def test_no_gaps(self) -> None:
         """Consecutive numbers produce no gaps."""
-        assert sequences.find_gaps(self._seq([1, 2, 3])) == []
+        assert series.find_gaps(self._seq([1, 2, 3])) == []
 
     def test_single_gap(self) -> None:
         """One missing number is returned as a plain string."""
-        assert sequences.find_gaps(self._seq([1, 3])) == ["2"]
+        assert series.find_gaps(self._seq([1, 3])) == ["2"]
 
     def test_two_consecutive_gaps(self) -> None:
         """Two consecutive missing numbers are returned as two strings."""
-        assert sequences.find_gaps(self._seq([1, 4])) == ["2", "3"]
+        assert series.find_gaps(self._seq([1, 4])) == ["2", "3"]
 
     def test_range_gap(self) -> None:
         """Three or more missing numbers are returned as 'start-end (count)'."""
-        assert sequences.find_gaps(self._seq([1, 5])) == ["2-4 (3)"]
+        assert series.find_gaps(self._seq([1, 5])) == ["2-4 (3)"]
 
     def test_large_range_gap(self) -> None:
         """Large gap is aggregated into range format."""
-        assert sequences.find_gaps(self._seq([6836, 6845])) == ["6837-6844 (8)"]
+        assert series.find_gaps(self._seq([6836, 6845])) == ["6837-6844 (8)"]
 
     def test_mixed_gaps(self) -> None:
         """Mix of single, double, and range gaps."""
-        result = sequences.find_gaps(self._seq([1, 3, 5, 15]))
+        result = series.find_gaps(self._seq([1, 3, 5, 15]))
         assert "2" in result
         assert "4" in result
         assert "6-14 (9)" in result
 
     def test_single_element(self) -> None:
         """Single-element sequence has no gaps."""
-        assert sequences.find_gaps(self._seq([42])) == []
+        assert series.find_gaps(self._seq([42])) == []
 
     def test_duplicates_ignored(self) -> None:
         """Duplicate sequence numbers do not produce false gaps."""
-        assert sequences.find_gaps(self._seq([1, 1, 2, 3])) == []
+        assert series.find_gaps(self._seq([1, 1, 2, 3])) == []
 
 
 @pytest.mark.unit
@@ -259,13 +259,13 @@ class TestWriteScript:
     """Tests for write_script function."""
 
     def test_generates_move_commands(self, tmp_path: Path) -> None:
-        """Test shell script generation for selected sequences."""
+        """Test shell script generation for selected series."""
         seqs = [
             [("dir_a/img_001.jpg", "img_", 1, datetime(2025, 1, 1, tzinfo=UTC))],
             [("dir_a/img_050.jpg", "img_", 50, datetime(2025, 1, 2, tzinfo=UTC))],
         ]
         script_path = str(tmp_path / "move.sh")
-        sequences.write_script(seqs, [2], "dir_a", script_path)
+        series.write_script(seqs, [2], "dir_a", script_path)
         content = Path(script_path).read_text(encoding="utf-8")
         assert "#!/bin/bash" in content
         assert 'mkdir -p "dir_a_s2"' in content
@@ -276,7 +276,7 @@ class TestWriteScript:
         """Test that invalid sequence index raises SystemExit."""
         seqs = [[("dir_a/img_001.jpg", "img_", 1, datetime(2025, 1, 1, tzinfo=UTC))]]
         with pytest.raises(SystemExit, match="out of range"):
-            sequences.write_script(seqs, [5], "dir_a", str(tmp_path / "move.sh"))
+            series.write_script(seqs, [5], "dir_a", str(tmp_path / "move.sh"))
 
     def test_script_is_executable(self, tmp_path: Path) -> None:
         """Test that generated script has execute permission."""
@@ -285,7 +285,7 @@ class TestWriteScript:
             [("dir_a/img_050.jpg", "img_", 50, datetime(2025, 1, 2, tzinfo=UTC))],
         ]
         script_path = tmp_path / "move.sh"
-        sequences.write_script(seqs, [2], "dir_a", str(script_path))
+        series.write_script(seqs, [2], "dir_a", str(script_path))
         assert script_path.stat().st_mode & 0o111
 
 
@@ -323,7 +323,7 @@ class TestRun:
             select=None,
             target=None,
         )
-        result = sequences.run(args)
+        result = series.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert "4 files, 2 sequences:" in captured.out
@@ -347,7 +347,7 @@ class TestRun:
             select=None,
             target=None,
         )
-        result = sequences.run(args)
+        result = series.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert "1 sequence [0 missing]" in captured.out
@@ -372,7 +372,7 @@ class TestRun:
             select=None,
             target=None,
         )
-        result = sequences.run(args)
+        result = series.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert "Seq 1" in captured.out
@@ -389,7 +389,7 @@ class TestRun:
             select=None,
             target=None,
         )
-        result = sequences.run(args)
+        result = series.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert "Seq 1" in captured.out
@@ -409,7 +409,7 @@ class TestRun:
             select=None,
             target=None,
         )
-        sequences.run(args)
+        series.run(args)
         captured = capsys.readouterr()
         # Should show dir/filename, not just filename
         assert "100/" in captured.out or "101/" in captured.out
@@ -427,7 +427,7 @@ class TestRun:
             select=[2],
             target=None,
         )
-        result = sequences.run(args)
+        result = series.run(args)
         assert result == os.EX_OK
         content = Path(script_path).read_text(encoding="utf-8")
         assert "mkdir -p" in content
@@ -446,7 +446,7 @@ class TestRun:
             select=[2],
             target="my_target",
         )
-        sequences.run(args)
+        series.run(args)
         content = Path(script_path).read_text(encoding="utf-8")
         assert 'mkdir -p "my_target_s2"' in content
 
@@ -463,7 +463,7 @@ class TestRun:
             target=None,
         )
         with pytest.raises(SystemExit, match="-S/--select requires -o"):
-            sequences.run(args)
+            series.run(args)
 
     def test_filter_option(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test filtering by path narrows results."""
@@ -482,7 +482,7 @@ class TestRun:
             select=None,
             target=None,
         )
-        result = sequences.run(args)
+        result = series.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert "1 file" in captured.out
@@ -508,7 +508,7 @@ class TestRun:
             select=None,
             target=None,
         )
-        result = sequences.run(args)
+        result = series.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert "1 sequence" in captured.out
@@ -551,7 +551,7 @@ class TestGaps:
     ) -> None:
         """--gaps shows the per-sequence table even when there is only 1 sequence."""
         json_file = self._make_archive_with_gaps(tmp_path)
-        sequences.run(self._args(json_file))
+        series.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "seq 1..11" in captured.out
 
@@ -560,7 +560,7 @@ class TestGaps:
     ) -> None:
         """Single missing numbers appear inside square brackets."""
         json_file = self._make_archive_with_gaps(tmp_path)
-        sequences.run(self._args(json_file))
+        series.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "3" in captured.out
         assert "10" in captured.out
@@ -570,7 +570,7 @@ class TestGaps:
     ) -> None:
         """Three or more consecutive missing numbers appear as 'start-end (count)'."""
         json_file = self._make_archive_with_gaps(tmp_path)
-        sequences.run(self._args(json_file))
+        series.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "6-8 (3)" in captured.out
 
@@ -585,7 +585,7 @@ class TestGaps:
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
-        sequences.run(self._args(json_file))
+        series.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "[0 missing]" in captured.out
         # No gap detail block (9-space-indented "[") should appear when there are no gaps
@@ -596,7 +596,7 @@ class TestGaps:
     ) -> None:
         """Without --gaps, single-sequence summary shows no table (existing behaviour)."""
         json_file = self._make_archive_with_gaps(tmp_path)
-        sequences.run(self._args(json_file, gaps=False))
+        series.run(self._args(json_file, gaps=False))
         captured = capsys.readouterr()
         assert "seq 1..11" not in captured.out
 
@@ -632,7 +632,7 @@ class TestDecreases:
     ) -> None:
         """Decreases section is always printed."""
         json_file = self._make_interleaved_archive(tmp_path)
-        sequences.run(self._args(json_file))
+        series.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "Sequence number decreases:" in captured.out
 
@@ -641,7 +641,7 @@ class TestDecreases:
     ) -> None:
         """A blank line separates the header from the decrease entries."""
         json_file = self._make_interleaved_archive(tmp_path)
-        sequences.run(self._args(json_file))
+        series.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "Sequence number decreases:\n\n" in captured.out
 
@@ -650,7 +650,7 @@ class TestDecreases:
     ) -> None:
         """Decreases output includes full paths of both files in each pair."""
         json_file = self._make_interleaved_archive(tmp_path)
-        sequences.run(self._args(json_file))
+        series.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "cam/100/img_002.jpg" in captured.out
         assert "cam/100/dsc_001.jpg" in captured.out
@@ -660,7 +660,7 @@ class TestDecreases:
     ) -> None:
         """Decreases output includes seq numbers, dates and times for each pair."""
         json_file = self._make_interleaved_archive(tmp_path)
-        sequences.run(self._args(json_file))
+        series.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "2025-01-01" in captured.out
         assert "11:00:00" in captured.out  # time of img_002 (T11:00:00+01:00)
@@ -673,7 +673,7 @@ class TestDecreases:
     ) -> None:
         """Decreases section uses double spaces between seq number, path, and date."""
         json_file = self._make_interleaved_archive(tmp_path)
-        sequences.run(self._args(json_file))
+        series.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "  (" in captured.out
         assert "  →  " in captured.out
@@ -688,6 +688,6 @@ class TestDecreases:
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
-        sequences.run(self._args(json_file))
+        series.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "Sequence number decreases:" not in captured.out
