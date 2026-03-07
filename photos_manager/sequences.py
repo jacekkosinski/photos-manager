@@ -207,6 +207,7 @@ def print_summary(
 
     print()
     max_missing_width = max((len(f"[{m} missing]") for m in missing_counts), default=0)
+    term_width = shutil.get_terminal_size(fallback=(100, 24)).columns
     for i, (seq, missing) in enumerate(zip(seqs, missing_counts, strict=True), 1):
         first_seq, last_seq = seq[0][2], seq[-1][2]
         first_dt = seq[0][3].strftime("%Y-%m-%d")
@@ -214,24 +215,35 @@ def print_summary(
         dirs = _seq_directories(seq)
         dirs_str = ", ".join(dirs)
         missing_str = f"[{missing} missing]".ljust(max_missing_width)
-        print(
+        main = (
             f"  {i:3d}  {len(seq):5d} files  seq {first_seq}..{last_seq}"
-            f"  {missing_str}  ({first_dt} .. {last_dt})  [{dirs_str}]"
+            f"  {missing_str}  ({first_dt} .. {last_dt})"
         )
+        if len(main) + 2 + len(dirs_str) + 2 <= term_width:
+            print(f"{main}  [{dirs_str}]")
+        else:
+            print(main)
+            dir_lines = textwrap.wrap(
+                dirs_str + "]",
+                width=term_width,
+                initial_indent="         [",
+                subsequent_indent="          ",
+                break_on_hyphens=False,
+            )
+            print("\n".join(dir_lines))
         if show_gaps:
             gaps = find_gaps(seq)
             if gaps:
                 indent = "         "
-                term_width = shutil.get_terminal_size(fallback=(100, 24)).columns
                 text = ", ".join(gaps) + " missing in seq"
-                lines = textwrap.wrap(
+                gap_lines = textwrap.wrap(
                     text,
                     width=term_width,
                     initial_indent=indent,
                     subsequent_indent=indent,
                     break_on_hyphens=False,
                 )
-                print("\n".join(lines))
+                print("\n".join(gap_lines))
     print()
 
 
