@@ -24,6 +24,7 @@ import os
 import shlex
 import stat
 import sys
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -202,19 +203,11 @@ def compare_version_files(
         if isinstance(files_data, dict):
             dest_files = files_data
 
-    changed: set[str] = set()
-    new: set[str] = set()
-    deleted: set[str] = set()
-
-    for name, sha1 in source_files.items():
-        if name not in dest_files:
-            new.add(name)
-        elif dest_files[name] != sha1:
-            changed.add(name)
-
-    for name in dest_files:
-        if name not in source_files:
-            deleted.add(name)
+    changed = {
+        n for n in source_files.keys() & dest_files.keys() if source_files[n] != dest_files[n]
+    }
+    new = source_files.keys() - dest_files.keys()
+    deleted = dest_files.keys() - source_files.keys()
 
     return changed, new, deleted
 
@@ -286,9 +279,7 @@ def compute_sync_plan(
             matched_dest_files.add(dest_rel_path)
 
             if rel_path == dest_rel_path and source_mtime == dest_mtime:
-                # Identical file: same content, same path, same timestamp
-                # No operation needed
-                pass
+                continue  # identical: same content, path, and timestamp
             elif rel_path == dest_rel_path:
                 # Same content and path, different timestamp -> touch
                 operations.append(
@@ -834,10 +825,8 @@ def generate_sync_script(
         >>> generate_sync_script(ops, "sync.sh")
     """
     # Group operations by type
-    groups: dict[str, list[SyncOperation]] = {}
+    groups: dict[str, list[SyncOperation]] = defaultdict(list)
     for op in operations:
-        if op.op_type not in groups:
-            groups[op.op_type] = []
         groups[op.op_type].append(op)
 
     # Sort each group alphabetically by dest_path, except update-dir-mtime
@@ -1062,8 +1051,7 @@ def _print_verbose_operations(operations: list[SyncOperation], verbose: bool) ->
         if op.source_path:
             op_desc += f" (from {op.source_path})"
         print(f"  {i}. {op_desc}")
-        if verbose:
-            print(f"     Reason: {op.reason}")
+        print(f"     Reason: {op.reason}")
 
     if len(operations) > _VERBOSE_OPS_LIMIT:
         print(f"  ... ({len(operations) - _VERBOSE_OPS_LIMIT} more operations)")
@@ -1074,29 +1062,20 @@ def _validate_and_load_archives(
 ) -> tuple[
     int,
     list[dict[str, str | int]] | None,
-    list[str] | None,
-    str | None,
     list[dict[str, str | int]] | None,
-    list[str] | None,
-    str | None,
-    set[str] | None,
-    set[str] | None,
-    set[str] | None,
+    set[str],
+    set[str],
+    set[str],
     str | None,
 ]:
     """Validate archives and load metadata.
 
     Returns:
-        Tuple of (exit_code, source_data, source_json_files, source_version, dest_data,
-        dest_json_files, dest_version, changed_jsons, new_jsons, deleted_jsons,
-        source_version_path)
+        Tuple of (exit_code, source_data, dest_data, changed_jsons, new_jsons,
+        deleted_jsons, source_version_path).
 
-        exit_code will be:
-        - 0 if successful or archives are identical
-        - 1 if error occurred
-
-        When exit_code is 0 and source_data is None, archives are identical.
-        When exit_code is 1, all other values will be None.
+        exit_code: 0 if successful or identical archives, 1 on error.
+        source_data is None when archives are identical (exit_code=0) or on error (exit_code=1).
     """
     print(f"Scanning source archive: {args.source}")
 
@@ -1107,7 +1086,7 @@ def _validate_and_load_archives(
     if not valid:
         for error in errors:
             print(f"Error: {error}", file=sys.stderr)
-        return 1, None, None, None, None, None, None, None, None, None, None
+        return 1, None, None, set(), set(), set(), None
 
     # Load and compare version files
     source_version_data, source_version_path = load_version_data(args.source)
@@ -1123,7 +1102,7 @@ def _validate_and_load_archives(
         jsons_to_process = changed_jsons | new_jsons
         if not jsons_to_process and not deleted_jsons:
             print("Archives are identical (all JSON files have matching SHA1)")
-            return 0, None, None, None, None, None, None, None, None, None, None
+            return 0, None, None, set(), set(), set(), None
         print(
             f"  Version comparison: {len(changed_jsons)} changed, "
             f"{len(new_jsons)} new, {len(deleted_jsons)} deleted JSON(s)"
@@ -1143,7 +1122,7 @@ def _validate_and_load_archives(
     if source_errors:
         for error in source_errors:
             print(f"Error: {error}", file=sys.stderr)
-        return 1, None, None, None, None, None, None, None, None, None, None
+        return 1, None, None, set(), set(), set(), None
 
     if source_version:
         print(f"  Found version file: {Path(source_version).name}")
@@ -1159,7 +1138,7 @@ def _validate_and_load_archives(
     if dest_errors:
         for error in dest_errors:
             print(f"Error: {error}", file=sys.stderr)
-        return 1, None, None, None, None, None, None, None, None, None, None
+        return 1, None, None, set(), set(), set(), None
 
     if dest_version:
         print(f"  Found version file: {Path(dest_version).name}")
@@ -1169,11 +1148,7 @@ def _validate_and_load_archives(
     return (
         0,
         source_data,
-        source_json_files,
-        source_version,
         dest_data,
-        dest_json_files,
-        dest_version,
         changed_jsons,
         new_jsons,
         deleted_jsons,
@@ -1235,10 +1210,7 @@ def _finalize_operations(
     if args.no_delete:
         operations = [op for op in operations if op.op_type != "delete"]
 
-    # Count operations by type
-    op_counts: dict[str, int] = {}
-    for op in operations:
-        op_counts[op.op_type] = op_counts.get(op.op_type, 0) + 1
+    op_counts = Counter(op.op_type for op in operations)
 
     return operations, op_counts
 
@@ -1345,11 +1317,7 @@ def run(args: argparse.Namespace) -> int:
     (
         exit_code,
         source_data,
-        _source_json_files,
-        _source_version,
         dest_data,
-        _dest_json_files,
-        _dest_version,
         changed_jsons,
         new_jsons,
         deleted_jsons,
@@ -1360,12 +1328,7 @@ def run(args: argparse.Namespace) -> int:
     if source_data is None:
         return exit_code
 
-    # At this point, all data should be loaded (not None)
-    # Type narrowing for mypy
     dest_data = cast("list[dict[str, str | int]]", dest_data)
-    changed_jsons = cast("set[str]", changed_jsons)
-    new_jsons = cast("set[str]", new_jsons)
-    deleted_jsons = cast("set[str]", deleted_jsons)
 
     # Compute all operations
     operations, warnings = _compute_all_operations(
