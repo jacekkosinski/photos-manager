@@ -481,6 +481,40 @@ class TestRun:
 
         assert exit_code == os.EX_OK
 
+    def test_run_prints_message_when_all_timestamps_correct(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() prints a message when no timestamps need updating."""
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        test_file = test_dir / "photo.jpg"
+        test_file.write_text("photo content")
+
+        known_mtime = 1700000000.0
+        os.utime(test_file, (known_mtime, known_mtime))
+        os.utime(test_dir, (known_mtime, known_mtime))
+
+        data = [
+            {
+                "path": str(test_file),
+                "date": "2023-11-14T22:13:20+00:00",
+                "sha1": "abc",
+                "md5": "def",
+                "size": len("photo content"),
+            }
+        ]
+        json_file = tmp_path / "photos.json"
+        json_file.write_text(json.dumps(data))
+        os.utime(json_file, (known_mtime, known_mtime))
+
+        args = argparse.Namespace(json_files=[str(json_file)], dry_run=False, all=False)
+
+        exit_code = run(args)
+
+        assert exit_code == os.EX_OK
+        captured = capsys.readouterr()
+        assert "already correct" in captured.out
+
     def test_run_with_nonexistent_json_file(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that run() handles nonexistent JSON file gracefully."""
         args = argparse.Namespace(json_files=["/nonexistent/file.json"], dry_run=False, all=False)

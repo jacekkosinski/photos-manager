@@ -83,7 +83,7 @@ def get_newest_files(
     return newest_files, newest_entry
 
 
-def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
+def set_files_timestamps(json_file: str, dry_run: bool = False) -> int:
     """Update file modification timestamps based on JSON metadata.
 
     Reads JSON metadata and updates the modification time of each file to match
@@ -99,6 +99,9 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
             and 'date' fields for each entry.
         dry_run: If True, only prints what would be changed without actually
             modifying any timestamps. Defaults to False.
+
+    Returns:
+        Number of timestamps updated (or that would be updated in dry-run).
 
     Raises:
         SystemExit: If the JSON file is empty or cannot be loaded.
@@ -116,6 +119,7 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
     if not json_data:
         raise SystemExit(f"Error: JSON file '{json_file}' is empty")
 
+    changes = 0
     for entry in json_data:
         file_path = entry.get("path")
         timestamp_str = entry.get("date")
@@ -151,6 +155,7 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
             continue
 
         if current_mtime != expected_timestamp:
+            changes += 1
             print(f"Set timestamp for file '{file_path}' to match '{expected_timestamp}' time")
             if not dry_run:
                 try:
@@ -160,11 +165,12 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> None:
                         f"Error: Failed to update timestamps for {file_path}: {e}",
                         file=sys.stderr,
                     )
+    return changes
 
 
 def set_dirs_timestamps(
     newest_files: dict[str, dict[str, str | int]], dry_run: bool = False
-) -> None:
+) -> int:
     """Set directory timestamps to match the newest file in each directory.
 
     Updates the modification time of each directory to match the modification
@@ -177,6 +183,9 @@ def set_dirs_timestamps(
         dry_run: If True, only prints what would be changed without actually
             modifying any timestamps. Defaults to False.
 
+    Returns:
+        Number of timestamps updated (or that would be updated in dry-run).
+
     Warnings:
         Directories or files that don't exist or aren't accessible are skipped
         with warning messages to stderr. Permission errors are handled gracefully.
@@ -186,6 +195,7 @@ def set_dirs_timestamps(
         >>> set_dirs_timestamps(newest, dry_run=True)
         Set timestamp for directory '/photos/2024' to match file '/photos/2024/img.jpg' (...)
     """
+    changes = 0
     for directory, file_info in newest_files.items():
         dir_path = Path(directory)
         file_path = Path(str(file_info["path"]))
@@ -207,6 +217,7 @@ def set_dirs_timestamps(
             continue
 
         if new_time != current_time:
+            changes += 1
             print(
                 f"Set timestamp for directory '{directory}' to match file "
                 f"'{file_info['path']}' ({datetime.fromtimestamp(new_time)})"
@@ -226,11 +237,12 @@ def set_dirs_timestamps(
                         f"Error setting timestamp for directory '{directory}': {e}",
                         file=sys.stderr,
                     )
+    return changes
 
 
 def set_json_timestamps(
     json_file: str, dir_name: str, newest_entry: dict[str, str | int], dry_run: bool = False
-) -> None:
+) -> int:
     """Set timestamps of JSON file and directory to match newest entry.
 
     Updates the modification time of both the JSON metadata file and its
@@ -246,6 +258,9 @@ def set_json_timestamps(
         dry_run: If True, only prints what would be changed without actually
             modifying any timestamps. Defaults to False.
 
+    Returns:
+        Number of timestamps updated (or that would be updated in dry-run).
+
     Warnings:
         If the reference file doesn't exist or timestamps cannot be updated,
         error messages are printed to stderr and the function returns early.
@@ -259,19 +274,21 @@ def set_json_timestamps(
     reference_path_str = newest_entry.get("path")
     if not reference_path_str:
         print("Error: Missing 'path' in newest entry", file=sys.stderr)
-        return
+        return 0
 
     reference_path = Path(str(reference_path_str))
     if not reference_path.exists():
         print(f"Error: Reference file '{reference_path}' does not exist", file=sys.stderr)
-        return
+        return 0
 
+    changes = 0
     try:
         reference_mtime = reference_path.stat().st_mtime
 
         json_path = Path(json_file)
         json_mtime = json_path.stat().st_mtime
         if json_mtime != reference_mtime:
+            changes += 1
             print(
                 f"Set timestamp for '{json_file}' to match file '{reference_path}' "
                 f"({datetime.fromtimestamp(reference_mtime)})"
@@ -282,6 +299,7 @@ def set_json_timestamps(
         dir_path = Path(dir_name)
         dir_mtime = dir_path.stat().st_mtime
         if dir_mtime != reference_mtime:
+            changes += 1
             print(
                 f"Set timestamp for directory '{dir_name}' to match file '{reference_path}' "
                 f"({datetime.fromtimestamp(reference_mtime)})"
@@ -294,6 +312,7 @@ def set_json_timestamps(
             f"Error setting timestamps for '{dir_name}': {e}",
             file=sys.stderr,
         )
+    return changes
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -384,12 +403,15 @@ def run(args: argparse.Namespace) -> int:
             continue
 
         try:
+            changes = 0
             if args.all:
-                set_files_timestamps(json_file, dry_run=args.dry_run)
+                changes += set_files_timestamps(json_file, dry_run=args.dry_run)
 
             newest_files, newest_entry = get_newest_files(json_file)
-            set_dirs_timestamps(newest_files, dry_run=args.dry_run)
-            set_json_timestamps(json_file, dir_name, newest_entry, dry_run=args.dry_run)
+            changes += set_dirs_timestamps(newest_files, dry_run=args.dry_run)
+            changes += set_json_timestamps(json_file, dir_name, newest_entry, dry_run=args.dry_run)
+            if changes == 0:
+                print(f"All timestamps already correct for {json_file}")
 
         except SystemExit as e:
             print(str(e), file=sys.stderr)

@@ -269,7 +269,7 @@ def run(args: argparse.Namespace) -> int:
             json.dump(sorted_file_info, json_file, ensure_ascii=False, indent=4)
             json_file.write("\n")
         output_path.chmod(0o644)
-        print(f"File information written to {output_json}")
+        print(f"File information written to {output_json} ({len(sorted_file_info)} files)")
     except OSError as exception:
         raise SystemExit(
             f"Error: Could not write to output file '{output_json}': {exception}"

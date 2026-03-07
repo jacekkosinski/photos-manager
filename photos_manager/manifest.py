@@ -270,6 +270,7 @@ def run(args: argparse.Namespace) -> int:
             mtime = json_files_with_mtimes[0][0]
             os.utime(output_path, (mtime, mtime))
             os.utime(directory_path, (mtime, mtime))
+            print(f"Manifest written to {args.output_file} ({file_count} files)")
         except OSError as exception:
             raise SystemExit(
                 f"Error: Could not write to output file '{args.output_file}': {exception}"

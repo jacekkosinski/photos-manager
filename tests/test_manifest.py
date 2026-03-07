@@ -211,6 +211,33 @@ class TestRun:
 
         assert output_file.stat().st_mtime == known_mtime
 
+    def test_run_output_file_prints_confirmation(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() prints a confirmation message when writing to a file."""
+        data = [
+            {
+                "path": "/test/file.txt",
+                "sha1": "abc123",
+                "md5": "def456",
+                "date": "2025-01-01T00:00:00+00:00",
+                "size": 500,
+            }
+        ]
+        json_file = tmp_path / "test.json"
+        json_file.write_text(json.dumps(data))
+
+        output_file = tmp_path / ".version.json"
+        args = argparse.Namespace(
+            directory=str(tmp_path), output_file=str(output_file), prefix="photos"
+        )
+
+        run(args)
+
+        captured = capsys.readouterr()
+        assert str(output_file) in captured.out
+        assert "1 files" in captured.out
+
     def test_run_archive_directory_mtime_matches_last_modified(self, tmp_path: Path) -> None:
         """Test that archive directory mtime is set to youngest JSON file mtime."""
         data = [

@@ -193,6 +193,30 @@ class TestRun:
         assert "date" in data[0]
         assert "size" in data[0]
 
+    def test_run_output_includes_file_count(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() output message includes the number of indexed files."""
+        test_dir = tmp_path / "photos"
+        test_dir.mkdir()
+        (test_dir / "a.txt").write_text("aaa")
+        (test_dir / "b.txt").write_text("bbb")
+
+        monkeypatch.chdir(tmp_path)
+
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            time_zone="UTC",
+            sort_by_number=False,
+            sort_by_dir=False,
+            merge=None,
+        )
+
+        run(args)
+
+        captured = capsys.readouterr()
+        assert "2 files" in captured.out
+
     def test_run_output_file_has_644_permissions(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
