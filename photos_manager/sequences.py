@@ -220,13 +220,13 @@ def print_summary(
             f"  {missing_str}  ({first_dt} .. {last_dt})"
         )
         if len(main) + 2 + len(dirs_str) + 2 <= term_width:
-            print(f"{main}  [{dirs_str}]")
+            print(f"{main}  {{{dirs_str}}}")
         else:
             print(main)
             dir_lines = textwrap.wrap(
-                dirs_str + "]",
+                dirs_str + "}",
                 width=term_width,
-                initial_indent="         [",
+                initial_indent="         {",
                 subsequent_indent="          ",
                 break_on_hyphens=False,
             )
@@ -234,13 +234,11 @@ def print_summary(
         if show_gaps:
             gaps = find_gaps(seq)
             if gaps:
-                indent = "         "
-                text = ", ".join(gaps) + " missing in seq"
                 gap_lines = textwrap.wrap(
-                    text,
+                    ", ".join(gaps) + "]",
                     width=term_width,
-                    initial_indent=indent,
-                    subsequent_indent=indent,
+                    initial_indent="         [",
+                    subsequent_indent="          ",
                     break_on_hyphens=False,
                 )
                 print("\n".join(gap_lines))

@@ -504,7 +504,7 @@ class TestGaps:
     def test_gaps_shows_single_missing(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Single missing numbers appear as plain integers."""
+        """Single missing numbers appear inside square brackets."""
         json_file = self._make_archive_with_gaps(tmp_path)
         sequences.run(self._args(json_file))
         captured = capsys.readouterr()
@@ -523,7 +523,7 @@ class TestGaps:
     def test_gaps_no_detail_line_when_no_gaps(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """No 'missing in seq' detail line when a sequence has no gaps."""
+        """No gap detail line when a sequence has no gaps."""
         entries = [
             _make_entry("dir/img_001.jpg", "2025-01-01T10:00:00+01:00"),
             _make_entry("dir/img_002.jpg", "2025-01-01T11:00:00+01:00"),
@@ -534,7 +534,8 @@ class TestGaps:
         sequences.run(self._args(json_file))
         captured = capsys.readouterr()
         assert "[0 missing]" in captured.out
-        assert "missing in seq" not in captured.out
+        # No gap detail block (9-space-indented "[") should appear when there are no gaps
+        assert "         [" not in captured.out
 
     def test_gaps_false_no_table_for_single_sequence(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
