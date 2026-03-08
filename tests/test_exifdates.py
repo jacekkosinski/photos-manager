@@ -115,7 +115,7 @@ class TestFormatReportLine:
         )
         assert "DSC01234.JPG" in line
         assert "[GPS]" in line
-        assert "10:23:45 -> 11:23:45" in line
+        assert "10:23:45 → 11:23:45" in line
         assert "(delta: +3600s)" in line
         assert "EXIF 10:23:45" in line
         assert "delta: +3600s" in line.split("[GPS]")[1]
@@ -132,7 +132,7 @@ class TestFormatReportLine:
             {"exif_dt": datetime(2023, 5, 14, 10, 27, 0), "offset": 3600, "std": 6.0},
         )
         assert "[EXIF+GPS]" in line
-        assert "10:27:00 -> 11:27:00" in line
+        assert "10:27:00 → 11:27:00" in line
         assert "offset: +3600s" in line
         assert "std: 6s" in line
 

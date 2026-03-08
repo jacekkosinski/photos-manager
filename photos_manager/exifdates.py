@@ -137,7 +137,7 @@ def format_report_line(
     delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
     core = (
         f"{filename}  {tag:<{_TAG_WIDTH}}"
-        f"  {old_dt:%H:%M:%S} -> {new_dt:%H:%M:%S} (delta: {delta_str})"
+        f"  {old_dt:%H:%M:%S} → {new_dt:%H:%M:%S} (delta: {delta_str})"
     )
 
     if tag == "[GPS]":

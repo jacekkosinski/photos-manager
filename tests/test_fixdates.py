@@ -24,9 +24,9 @@ class TestFormatChangeLine:
     """Tests for format_change_line helper."""
 
     def test_contains_arrow_separator(self) -> None:
-        """Output must contain ' -> ' between old and new timestamps."""
+        """Output must contain ' → ' between old and new timestamps."""
         line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
-        assert " -> " in line
+        assert " → " in line
 
     def test_contains_delta_colon(self) -> None:
         """Output must contain 'delta:' label."""
@@ -168,7 +168,7 @@ class TestSetFilesTimestamps:
 
         # Should print what would be done
         captured = capsys.readouterr()
-        assert "->" in captured.out
+        assert "\u2192" in captured.out
 
     def test_updates_file_timestamp(self, tmp_path: Path) -> None:
         """Test that file timestamp is actually updated."""
@@ -276,7 +276,7 @@ class TestSetDirsTimestamps:
 
         # Should print what would be done
         captured = capsys.readouterr()
-        assert "->" in captured.out
+        assert "\u2192" in captured.out
 
     def test_skips_nonexistent_directory(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -354,7 +354,7 @@ class TestSetJsonTimestamps:
 
         # Should print what would be done
         captured = capsys.readouterr()
-        assert "->" in captured.out
+        assert "\u2192" in captured.out
 
     def test_handles_missing_path_in_entry(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -422,7 +422,7 @@ class TestRun:
 
         assert exit_code == os.EX_OK
         captured = capsys.readouterr()
-        assert "->" in captured.out or "already correct" in captured.out
+        assert "\u2192" in captured.out or "already correct" in captured.out
 
     def test_run_default_does_not_modify(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -456,7 +456,7 @@ class TestRun:
 
         assert exit_code == os.EX_OK
         captured = capsys.readouterr()
-        assert "->" in captured.out  # Preview still prints messages
+        assert "\u2192" in captured.out  # Preview still prints messages
 
         # Verify mtime wasn't actually changed without --fix
         assert test_dir.stat().st_mtime == original_dir_mtime

@@ -57,7 +57,7 @@ def format_change_line(
 
     Returns:
         Aligned line:
-        ``name  [TAG]  YYYY-MM-DD HH:MM:SS -> YYYY-MM-DD HH:MM:SS (delta: +Xs[, src: path])``
+        ``name  [TAG]  YYYY-MM-DD HH:MM:SS → YYYY-MM-DD HH:MM:SS (delta: +Xs[, src: path])``
 
     Examples:
         >>> line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_000_003_600.0)
@@ -70,7 +70,7 @@ def format_change_line(
     delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
     suffix = f"delta: {delta_str}, src: {src}" if src is not None else f"delta: {delta_str}"
     name_col = f"{name:<{name_width}}" if name_width else name
-    return f"{name_col}  {tag:<{_TAG_WIDTH}}  {old_str} -> {new_str} ({suffix})"
+    return f"{name_col}  {tag:<{_TAG_WIDTH}}  {old_str} → {new_str} ({suffix})"
 
 
 def get_newest_files(
