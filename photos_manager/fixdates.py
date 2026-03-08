@@ -408,7 +408,14 @@ def run(args: argparse.Namespace) -> int:
                 changes += set_files_timestamps(json_file, dry_run=args.dry_run)
 
             newest_files, newest_entry = get_newest_files(json_file)
-            changes += set_dirs_timestamps(newest_files, dry_run=args.dry_run)
+
+            # Exclude root dir — set_json_timestamps handles it with overall newest.
+            # Process subdirs deepest-first so parent timestamps are written last.
+            newest_subdirs = {d: f for d, f in newest_files.items() if d != dir_name}
+            sorted_subdirs = dict(
+                sorted(newest_subdirs.items(), key=lambda x: x[0].count(os.sep), reverse=True)
+            )
+            changes += set_dirs_timestamps(sorted_subdirs, dry_run=args.dry_run)
             changes += set_json_timestamps(json_file, dir_name, newest_entry, dry_run=args.dry_run)
             if changes == 0:
                 print(f"All timestamps already correct for {json_file}")

@@ -515,6 +515,104 @@ class TestRun:
         captured = capsys.readouterr()
         assert "already correct" in captured.out
 
+    def test_run_root_dir_set_only_once_to_overall_newest(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Root dir must not be set twice when it also contains direct files.
+
+        Regression test: set_dirs_timestamps used to also process the root dir
+        (if it had direct files) and then set_json_timestamps would overwrite it
+        with a different timestamp, causing the root to appear twice in output.
+        """
+        root = tmp_path / "archive"
+        root.mkdir()
+        subdir = root / "sub"
+        subdir.mkdir()
+
+        root_file = root / "old.jpg"
+        root_file.write_text("x")
+        sub_file = subdir / "new.jpg"
+        sub_file.write_text("y")
+
+        old_ts = 1_600_000_000.0  # 2020 — root_file's mtime
+        new_ts = 1_700_000_000.0  # 2023 — sub_file's mtime (overall newest)
+        initial_root_ts = 500_000_000.0  # different from both → triggers set_dirs_timestamps
+        os.utime(root_file, (old_ts, old_ts))
+        os.utime(sub_file, (new_ts, new_ts))
+        os.utime(root, (initial_root_ts, initial_root_ts))
+        os.utime(subdir, (initial_root_ts, initial_root_ts))
+
+        data = [
+            {
+                "path": str(root_file),
+                "date": "2020-09-13T12:26:40+00:00",
+                "sha1": "a",
+                "md5": "b",
+                "size": 1,
+            },
+            {
+                "path": str(sub_file),
+                "date": "2023-11-14T22:13:20+00:00",
+                "sha1": "c",
+                "md5": "d",
+                "size": 1,
+            },
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(json_files=[str(json_file)], dry_run=False, all=False)
+        exit_code = run(args)
+        captured = capsys.readouterr()
+
+        assert exit_code == os.EX_OK
+        # Root dir must appear exactly once in output
+        root_lines = [ln for ln in captured.out.splitlines() if f"'{root}'" in ln]
+        assert len(root_lines) == 1, f"Root dir set {len(root_lines)} times: {root_lines}"
+        # Root dir must be set to the overall newest file's time (sub_file)
+        assert int(root.stat().st_mtime) == int(new_ts)
+
+    def test_run_dirs_processed_deepest_first(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Subdirectories must be processed before their parent directories.
+
+        When processing nested dirs, the deepest dirs should be updated first
+        so parent timestamps are set last and survive sibling/child processing.
+        """
+        root = tmp_path / "archive"
+        root.mkdir()
+        deep = root / "a" / "b"
+        deep.mkdir(parents=True)
+
+        deep_file = deep / "photo.jpg"
+        deep_file.write_text("z")
+
+        target_ts = 1_700_000_000.0
+        os.utime(deep_file, (target_ts, target_ts))
+
+        data = [
+            {
+                "path": str(deep_file),
+                "date": "2023-11-14T22:13:20+00:00",
+                "sha1": "e",
+                "md5": "f",
+                "size": 1,
+            }
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(json_files=[str(json_file)], dry_run=True, all=False)
+        run(args)
+        captured = capsys.readouterr()
+
+        # In output, deeper path (a/b) must appear before shallower path (a)
+        lines = [ln for ln in captured.out.splitlines() if "Set timestamp for directory" in ln]
+        paths = [ln.split("'")[1] for ln in lines]
+        depths = [p.count(os.sep) for p in paths]
+        assert depths == sorted(depths, reverse=True), f"Dirs not deepest-first: {paths}"
+
     def test_run_with_nonexistent_json_file(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that run() handles nonexistent JSON file gracefully."""
         args = argparse.Namespace(json_files=["/nonexistent/file.json"], dry_run=False, all=False)
