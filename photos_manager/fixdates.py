@@ -10,9 +10,9 @@ This is useful for fixing filesystem timestamps to match the actual photo dates
 after copying or restoring files from archives.
 
 Usage:
-    photos fixdates archive1.json
-    photos fixdates archive1.json archive2.json --all
-    photos fixdates archive.json --dry-run
+    photos fixdates archive1.json              # preview changes
+    photos fixdates archive1.json --fix        # apply changes
+    photos fixdates archive1.json --all --fix  # also fix individual file timestamps
 """
 
 import argparse
