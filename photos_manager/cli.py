@@ -32,6 +32,7 @@ from typing import cast
 from photos_manager import (
     __version__,
     dedup,
+    exifdates,
     fixdates,
     index,
     info,
@@ -165,6 +166,15 @@ def main() -> int:
     )
     series.setup_parser(series_parser)
     series_parser.set_defaults(func=series.run)
+
+    # exifdates subcommand
+    exifdates_parser = subparsers.add_parser(
+        "exifdates",
+        help="Detect and fix JSON date fields from EXIF/GPS data",
+        description="Compare EXIF/GPS timestamps against JSON metadata and optionally update JSON",
+    )
+    exifdates.setup_parser(exifdates_parser)
+    exifdates_parser.set_defaults(func=exifdates.run)
 
     # dedup subcommand
     dedup_parser = subparsers.add_parser(
