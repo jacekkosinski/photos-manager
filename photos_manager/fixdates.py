@@ -212,14 +212,12 @@ def _collect_dir_changes(
     pending: list[_PendingChange] = []
     for directory, file_info in newest_files.items():
         dir_path = Path(directory)
-        file_path = Path(str(file_info["path"]))
 
         try:
-            new_time = file_path.stat().st_mtime
             current_time = dir_path.stat().st_mtime
         except FileNotFoundError:
             print(
-                f"Error: File or directory '{directory}' does not exist",
+                f"Error: Directory '{directory}' does not exist",
                 file=sys.stderr,
             )
             continue
@@ -230,7 +228,13 @@ def _collect_dir_changes(
             )
             continue
 
-        if new_time != current_time:
+        try:
+            new_time = datetime.fromisoformat(str(file_info["date"])).timestamp()
+        except (KeyError, ValueError):
+            print(f"Error: Invalid or missing date for '{directory}'", file=sys.stderr)
+            continue
+
+        if int(new_time) != int(current_time):
             pending.append(
                 (
                     directory + "/",
@@ -265,25 +269,28 @@ def _collect_json_changes(
         print("Error: Missing 'path' in newest entry", file=sys.stderr)
         return []
 
-    reference_path = Path(str(reference_path_str))
-    if not reference_path.exists():
-        print(f"Error: Reference file '{reference_path}' does not exist", file=sys.stderr)
+    date_str = newest_entry.get("date")
+    if not date_str:
+        print("Error: Missing 'date' in newest entry", file=sys.stderr)
         return []
 
-    reference_mtime = reference_path.stat().st_mtime  # may raise OSError
+    try:
+        reference_mtime = datetime.fromisoformat(str(date_str)).timestamp()
+    except ValueError:
+        print(f"Error: Invalid date in newest entry: {date_str}", file=sys.stderr)
+        return []
 
+    src = str(reference_path_str)
     pending: list[_PendingChange] = []
 
     json_path = Path(json_file)
-    json_mtime = json_path.stat().st_mtime
-    src = str(reference_path)
-
-    if json_mtime != reference_mtime:
+    json_mtime = json_path.stat().st_mtime  # may raise OSError
+    if int(json_mtime) != int(reference_mtime):
         pending.append((json_file, _TAG_JSON, json_mtime, reference_mtime, json_path, src))
 
     dir_path = Path(dir_name)
     dir_mtime = dir_path.stat().st_mtime
-    if dir_mtime != reference_mtime:
+    if int(dir_mtime) != int(reference_mtime):
         pending.append((dir_name + "/", _TAG_DIR, dir_mtime, reference_mtime, dir_path, src))
 
     return pending

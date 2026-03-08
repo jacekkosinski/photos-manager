@@ -241,9 +241,10 @@ class TestSetDirsTimestamps:
         target_timestamp = int(datetime.fromisoformat(target_date).timestamp())
         os.utime(str(test_file), (target_timestamp, target_timestamp))
 
-        # Create newest_files dict
+        # Create newest_files dict (must include 'date' — used as the target timestamp)
         newest_files = cast(
-            "dict[str, dict[str, str | int]]", {str(subdir): {"path": str(test_file)}}
+            "dict[str, dict[str, str | int]]",
+            {str(subdir): {"path": str(test_file), "date": target_date}},
         )
 
         # Update directory timestamp
@@ -262,9 +263,11 @@ class TestSetDirsTimestamps:
         test_file.write_text("content")
 
         original_dir_mtime = int(subdir.stat().st_mtime)
+        old_date = "2020-01-01T00:00:00+0000"  # guaranteed to differ from dir's current mtime
 
         newest_files = cast(
-            "dict[str, dict[str, str | int]]", {str(subdir): {"path": str(test_file)}}
+            "dict[str, dict[str, str | int]]",
+            {str(subdir): {"path": str(test_file), "date": old_date}},
         )
         set_dirs_timestamps(newest_files, dry_run=True)
 
@@ -281,7 +284,12 @@ class TestSetDirsTimestamps:
         """Test that nonexistent directories are skipped."""
         newest_files = cast(
             "dict[str, dict[str, str | int]]",
-            {str(tmp_path / "missing"): {"path": str(tmp_path / "missing" / "file.jpg")}},
+            {
+                str(tmp_path / "missing"): {
+                    "path": str(tmp_path / "missing" / "file.jpg"),
+                    "date": "2024-01-01T12:00:00+0000",
+                }
+            },
         )
 
         set_dirs_timestamps(newest_files, dry_run=False)
@@ -311,8 +319,8 @@ class TestSetJsonTimestamps:
         target_timestamp = int(datetime.fromisoformat(target_date).timestamp())
         os.utime(str(test_file), (target_timestamp, target_timestamp))
 
-        # Create newest entry
-        newest_entry = cast("dict[str, str | int]", {"path": str(test_file)})
+        # Create newest entry (must include 'date' — used as the target timestamp)
+        newest_entry = cast("dict[str, str | int]", {"path": str(test_file), "date": target_date})
 
         # Update timestamps
         set_json_timestamps(str(json_file), str(subdir), newest_entry, dry_run=False)
@@ -336,7 +344,8 @@ class TestSetJsonTimestamps:
         original_json_mtime = int(json_file.stat().st_mtime)
         original_dir_mtime = int(subdir.stat().st_mtime)
 
-        newest_entry = cast("dict[str, str | int]", {"path": str(test_file)})
+        old_date = "2020-01-01T00:00:00+0000"  # guaranteed to differ from current mtimes
+        newest_entry = cast("dict[str, str | int]", {"path": str(test_file), "date": old_date})
         set_json_timestamps(str(json_file), str(subdir), newest_entry, dry_run=True)
 
         # Timestamps should not change
@@ -361,19 +370,19 @@ class TestSetJsonTimestamps:
         captured = capsys.readouterr()
         assert "Missing 'path'" in captured.err
 
-    def test_handles_nonexistent_reference_file(
+    def test_handles_missing_date_in_entry(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test handling of nonexistent reference file."""
+        """Test handling of missing date in newest entry."""
         json_file = tmp_path / "test.json"
         json_file.write_text("{}")
 
-        newest_entry = cast("dict[str, str | int]", {"path": str(tmp_path / "missing.jpg")})
+        newest_entry = cast("dict[str, str | int]", {"path": str(tmp_path / "photo.jpg")})
 
         set_json_timestamps(str(json_file), str(tmp_path), newest_entry, dry_run=False)
 
         captured = capsys.readouterr()
-        assert "does not exist" in captured.err
+        assert "Missing 'date'" in captured.err
 
 
 @pytest.mark.integration
