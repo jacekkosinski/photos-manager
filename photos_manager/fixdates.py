@@ -487,6 +487,7 @@ def run(args: argparse.Namespace) -> int:
         Set timestamp for directory '/photos' to match file ...
     """
     errors = 0
+    total_changes = 0
     for json_file in args.json_files:
         json_path = Path(json_file)
 
@@ -541,11 +542,19 @@ def run(args: argparse.Namespace) -> int:
                 print(f"All timestamps already correct for {json_file}")
             else:
                 global_width = _name_col_width(all_pending)
-                _apply_changes(all_pending, global_width, dry_run)
+                total_changes += _apply_changes(all_pending, global_width, dry_run)
 
         except SystemExit as e:
             print(str(e), file=sys.stderr)
             errors += 1
             continue
+
+    verb = "applied" if args.fix else "detected"
+    print(f"\n{total_changes} change(s) {verb}.")
+    if total_changes:
+        if not args.fix:
+            print("Dry-run: use --fix to apply changes.")
+        else:
+            print("Run 'photos manifest' to regenerate it.")
 
     return os.EX_OK if errors == 0 else 1
