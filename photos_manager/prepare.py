@@ -138,6 +138,19 @@ def check_dir_permissions(path: Path) -> tuple[bool, int]:
     return current == DIR_PERMISSIONS, current
 
 
+def _owner_group_names(st: os.stat_result) -> tuple[str, str]:
+    """Return (username, groupname) from a stat result, falling back to uid/gid strings."""
+    try:
+        current_user = pwd.getpwuid(st.st_uid).pw_name
+    except KeyError:
+        current_user = str(st.st_uid)
+    try:
+        current_group = grp.getgrgid(st.st_gid).gr_name
+    except KeyError:
+        current_group = str(st.st_gid)
+    return current_user, current_group
+
+
 def check_ownership(path: Path, user: str, group: str) -> tuple[bool, str, str]:
     """Check if a path has the expected owner and group.
 
@@ -154,15 +167,7 @@ def check_ownership(path: Path, user: str, group: str) -> tuple[bool, str, str]:
         (False, 'root', 'wheel')
     """
     st = path.stat()
-    try:
-        current_user = pwd.getpwuid(st.st_uid).pw_name
-    except KeyError:
-        current_user = str(st.st_uid)
-    try:
-        current_group = grp.getgrgid(st.st_gid).gr_name
-    except KeyError:
-        current_group = str(st.st_gid)
-
+    current_user, current_group = _owner_group_names(st)
     is_correct = current_user == user and current_group == group
     return is_correct, current_user, current_group
 
@@ -341,14 +346,7 @@ def fix_ownership(
         return False
 
     st = path.stat()
-    try:
-        current_user = pwd.getpwuid(st.st_uid).pw_name
-    except KeyError:
-        current_user = str(st.st_uid)
-    try:
-        current_group = grp.getgrgid(st.st_gid).gr_name
-    except KeyError:
-        current_group = str(st.st_gid)
+    current_user, current_group = _owner_group_names(st)
 
     try:
         if dry_run:
@@ -506,7 +504,7 @@ def _process_file_permissions(
     has_fixes = False
 
     for item in all_items:
-        if not item.exists() or item.is_symlink() or not item.is_file():
+        if item.is_symlink() or not item.is_file():
             continue
         is_ok, _current_perms = check_file_permissions(item)
         if not is_ok:
@@ -538,7 +536,7 @@ def _process_dir_permissions(
     has_fixes = False
 
     for item in all_items:
-        if not item.exists() or item.is_symlink() or not item.is_dir():
+        if item.is_symlink() or not item.is_dir():
             continue
         is_ok, _current_perms = check_dir_permissions(item)
         if not is_ok:
