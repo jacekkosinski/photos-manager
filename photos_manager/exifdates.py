@@ -167,6 +167,40 @@ def format_report_line(
 # ---------------------------------------------------------------------------
 
 
+def parse_exif_date(date_str: str) -> datetime | None:
+    """Parse an EXIF date string to a naive datetime.
+
+    EXIF dates are in format ``YYYY:MM:DD HH:MM:SS``, optionally with
+    sub-seconds separated by a dot.
+
+    Args:
+        date_str: EXIF date string to parse.
+
+    Returns:
+        Naive datetime object, or None if parsing fails.
+
+    Examples:
+        >>> parse_exif_date("2025:01:24 15:30:45")
+        datetime.datetime(2025, 1, 24, 15, 30, 45)
+        >>> parse_exif_date("invalid")
+    """
+    if not date_str:
+        return None
+    date_str = date_str.replace("\x00", "").strip()
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        pass
+    try:
+        if "." in date_str:
+            return datetime.strptime(date_str.split(".")[0], "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        pass
+    return None
+
+
 def read_file_exif(file_path: str) -> tuple[datetime | None, datetime | None]:
     """Read EXIF DateTimeOriginal and GPS timestamp from a file.
 
@@ -197,8 +231,6 @@ def read_file_exif(file_path: str) -> tuple[datetime | None, datetime | None]:
     exif_ifd = exif_dict.get("Exif", {})
     dt_bytes = exif_ifd.get(piexif.ExifIFD.DateTimeOriginal)
     if dt_bytes:
-        from photos_manager.prepare import parse_exif_date
-
         exif_dt = parse_exif_date(dt_bytes.decode("ascii", errors="replace"))
 
     # GPS timestamp
