@@ -9,9 +9,9 @@ This script checks and fixes:
 Hidden files (starting with .) are skipped. Symbolic links are checked but not followed.
 
 Usage:
-    photos prepare /path/to/directory
-    photos prepare /path/to/dir1 /path/to/dir2 --dry-run
-    photos prepare /path/to/directory --owner storage --group storage
+    photos prepare /path/to/directory              # preview changes
+    photos prepare /path/to/directory --fix        # apply changes
+    photos prepare /path/to/directory --fix --owner storage --group storage
 """
 
 import argparse
@@ -643,10 +643,9 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="One or more directories to prepare for archiving",
     )
     parser.add_argument(
-        "-n",
-        "--dry-run",
+        "--fix",
         action="store_true",
-        help="Show what would be done without making changes",
+        help="Apply changes to the filesystem (default: preview only)",
     )
     parser.add_argument(
         "-u",
@@ -690,7 +689,7 @@ def run(args: argparse.Namespace) -> int:
     all_success = True
     for directory in args.directories:
         path = Path(directory).resolve()
-        success = process_directory(path, args.owner, args.group, args.dry_run)
+        success = process_directory(path, args.owner, args.group, not args.fix)
         if not success:
             all_success = False
 

@@ -791,7 +791,7 @@ class TestRunIntegration:
 
         args = argparse.Namespace(
             directories=[str(test_dir)],
-            dry_run=False,
+            fix=True,
             owner=current_user,
             group=current_group,
         )
@@ -806,7 +806,7 @@ class TestRunIntegration:
 
         args = argparse.Namespace(
             directories=["/nonexistent/path/that/does/not/exist"],
-            dry_run=False,
+            fix=True,
             owner="storage",
             group="storage",
         )
@@ -822,7 +822,7 @@ class TestRunIntegration:
 
         args = argparse.Namespace(
             directories=[str(test_file)],
-            dry_run=False,
+            fix=True,
             owner="storage",
             group="storage",
         )
@@ -850,7 +850,7 @@ class TestRunIntegration:
 
         args = argparse.Namespace(
             directories=[str(dir1), str(dir2)],
-            dry_run=False,
+            fix=True,
             owner=current_user,
             group=current_group,
         )
@@ -862,12 +862,12 @@ class TestRunIntegration:
         assert (dir1 / "test.txt").exists()
         assert (dir2 / "file.txt").exists()
 
-    def test_run_with_dry_run_flag(
+    def test_run_without_fix_flag_does_not_modify(
         self,
         tmp_path: Path,
         current_user_and_group: tuple[str, str],
     ) -> None:
-        """Test that run() with --dry-run doesn't modify files."""
+        """Test that run() without --fix doesn't modify files."""
 
         test_dir = tmp_path / "test"
         test_dir.mkdir()
@@ -881,7 +881,7 @@ class TestRunIntegration:
 
         args = argparse.Namespace(
             directories=[str(test_dir)],
-            dry_run=True,
+            fix=False,
             owner=current_user,
             group=current_group,
         )
@@ -909,7 +909,7 @@ class TestRunIntegration:
 
         args = argparse.Namespace(
             directories=[str(test_dir)],
-            dry_run=False,
+            fix=True,
             owner=current_user,
             group=current_group,
         )
@@ -937,7 +937,7 @@ class TestRunIntegration:
 
         args = argparse.Namespace(
             directories=[str(test_dir)],
-            dry_run=False,
+            fix=True,
             owner=current_user,
             group=current_group,
         )
@@ -970,7 +970,7 @@ class TestRunIntegration:
         # Use relative path (if possible)
         args = argparse.Namespace(
             directories=[str(test_dir)],
-            dry_run=True,
+            fix=False,
             owner=current_user,
             group=current_group,
         )
@@ -994,7 +994,7 @@ class TestRunIntegration:
 
         args = argparse.Namespace(
             directories=[str(dir1), str(dir2)],
-            dry_run=False,
+            fix=True,
             owner=current_user,
             group=current_group,
         )
