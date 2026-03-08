@@ -469,7 +469,7 @@ class TestRenameToNormalized:
         assert success is True
         assert test_file.exists()  # Original still exists
         captured = capsys.readouterr()
-        assert "->" in captured.out
+        assert "→" in captured.out
 
     def test_adds_suffix_on_conflict(self, tmp_path: Path) -> None:
         """Test that suffix is added when normalized name exists."""
@@ -737,7 +737,7 @@ class TestErrorHandling:
 
         assert result is True
         captured = capsys.readouterr()
-        assert "->" in captured.out
+        assert "→" in captured.out
 
     def test_rename_to_normalized_oserror(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1082,7 +1082,7 @@ class TestSetMtimeFromExif:
 
             # Verify output
             captured = capsys.readouterr()
-            assert "mtime ->" in captured.out
+            assert "mtime →" in captured.out
             assert "2025-01-24 15:30:45" in captured.out
 
     def test_handles_oserror(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

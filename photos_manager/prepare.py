@@ -240,7 +240,7 @@ def extract_date_from_video(path: Path) -> datetime | None:  # noqa: ARG001
     return None
 
 
-def set_file_mtime_from_exif(path: Path, dry_run: bool) -> bool:
+def set_file_mtime_from_exif(path: Path, dry_run: bool, root: Path | None = None) -> bool:
     """Set file modification time from EXIF metadata.
 
     Extracts EXIF date from the file and updates the file's mtime if different.
@@ -249,6 +249,7 @@ def set_file_mtime_from_exif(path: Path, dry_run: bool) -> bool:
     Args:
         path: Path to the file.
         dry_run: If True, only print what would be done.
+        root: Root directory for relative display of paths in output.
 
     Returns:
         True if mtime was updated (or would be in dry-run), False otherwise.
@@ -282,23 +283,26 @@ def set_file_mtime_from_exif(path: Path, dry_run: bool) -> bool:
 
         # Update mtime
         if dry_run:
-            print(f"  {path}: mtime -> {exif_date.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"  {_rel(path, root)}: mtime → {exif_date.strftime('%Y-%m-%d %H:%M:%S')}")
         else:
             os.utime(path, (exif_timestamp, exif_timestamp))
-            print(f"  {path}: mtime set to {exif_date.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"  {_rel(path, root)}: mtime set to {exif_date.strftime('%Y-%m-%d %H:%M:%S')}")
         return True
 
     except OSError as e:
-        print(f"  Warning: {path}: cannot update mtime: {e}", file=sys.stderr)
+        print(f"  Warning: {_rel(path, root)}: cannot update mtime: {e}", file=sys.stderr)
         return False
 
 
-def _process_exif_timestamps(all_items: list[Path], dry_run: bool) -> bool:
+def _process_exif_timestamps(
+    all_items: list[Path], dry_run: bool, root: Path | None = None
+) -> bool:
     """Process EXIF timestamp updates for all files.
 
     Args:
         all_items: List of paths to process.
         dry_run: If True, only show what would be done.
+        root: Root directory for relative display of paths in output.
 
     Returns:
         True if any errors occurred.
@@ -316,10 +320,10 @@ def _process_exif_timestamps(all_items: list[Path], dry_run: bool) -> bool:
         if get_file_type(item):
             processed_count += 1
             try:
-                if set_file_mtime_from_exif(item, dry_run):
+                if set_file_mtime_from_exif(item, dry_run, root=root):
                     has_fixes = True
             except Exception as e:
-                print(f"  Error: {item}: {e}", file=sys.stderr)
+                print(f"  Error: {_rel(item, root)}: {e}", file=sys.stderr)
                 has_errors = True
 
     if not has_fixes and processed_count > 0:
@@ -523,6 +527,16 @@ def needs_normalization(name: str) -> bool:
     return has_uppercase(name) or has_spaces(name)
 
 
+def _rel(path: Path, root: Path | None) -> str:
+    """Return path relative to root for display, falling back to str(path)."""
+    if root is None:
+        return str(path)
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
 def get_unique_normalized_path(path: Path) -> Path:
     """Get a unique normalized path (lowercase, no spaces), adding suffix if needed.
 
@@ -564,51 +578,55 @@ def get_unique_normalized_path(path: Path) -> Path:
     return new_path
 
 
-def fix_file_permissions(path: Path, dry_run: bool) -> bool:
+def fix_file_permissions(path: Path, dry_run: bool, root: Path | None = None) -> bool:
     """Fix file permissions to 644.
 
     Args:
         path: Path to the file.
         dry_run: If True, only print what would be done.
+        root: Root directory for relative display of paths in output.
 
     Returns:
         True if successful or dry-run, False on error.
     """
     try:
         if dry_run:
-            print(f"  {path}: {oct(stat.S_IMODE(path.stat().st_mode))} -> 0o644")
+            print(f"  {_rel(path, root)}: {oct(stat.S_IMODE(path.stat().st_mode))} → 0o644")
         else:
             path.chmod(FILE_PERMISSIONS)
-            print(f"  {path}: permissions set to 0o644")
+            print(f"  {_rel(path, root)}: permissions set to 0o644")
         return True
     except OSError as e:
-        print(f"  Error: {path}: cannot change permissions: {e}", file=sys.stderr)
+        print(f"  Error: {_rel(path, root)}: cannot change permissions: {e}", file=sys.stderr)
         return False
 
 
-def fix_dir_permissions(path: Path, dry_run: bool) -> bool:
+def fix_dir_permissions(path: Path, dry_run: bool, root: Path | None = None) -> bool:
     """Fix directory permissions to 755.
 
     Args:
         path: Path to the directory.
         dry_run: If True, only print what would be done.
+        root: Root directory for relative display of paths in output.
 
     Returns:
         True if successful or dry-run, False on error.
     """
     try:
         if dry_run:
-            print(f"  {path}: {oct(stat.S_IMODE(path.stat().st_mode))} -> 0o755")
+            print(f"  {_rel(path, root)}: {oct(stat.S_IMODE(path.stat().st_mode))} → 0o755")
         else:
             path.chmod(DIR_PERMISSIONS)
-            print(f"  {path}: permissions set to 0o755")
+            print(f"  {_rel(path, root)}: permissions set to 0o755")
         return True
     except OSError as e:
-        print(f"  Error: {path}: cannot change permissions: {e}", file=sys.stderr)
+        print(f"  Error: {_rel(path, root)}: cannot change permissions: {e}", file=sys.stderr)
         return False
 
 
-def fix_ownership(path: Path, user: str, group: str, dry_run: bool) -> bool:
+def fix_ownership(
+    path: Path, user: str, group: str, dry_run: bool, root: Path | None = None
+) -> bool:
     """Fix file/directory ownership.
 
     Args:
@@ -616,6 +634,7 @@ def fix_ownership(path: Path, user: str, group: str, dry_run: bool) -> bool:
         user: Target username.
         group: Target group name.
         dry_run: If True, only print what would be done.
+        root: Root directory for relative display of paths in output.
 
     Returns:
         True if successful or dry-run, False on error.
@@ -624,7 +643,7 @@ def fix_ownership(path: Path, user: str, group: str, dry_run: bool) -> bool:
         uid = pwd.getpwnam(user).pw_uid
         gid = grp.getgrnam(group).gr_gid
     except KeyError as e:
-        print(f"  Error: {path}: user or group not found: {e}", file=sys.stderr)
+        print(f"  Error: {_rel(path, root)}: user or group not found: {e}", file=sys.stderr)
         return False
 
     st = path.stat()
@@ -639,17 +658,17 @@ def fix_ownership(path: Path, user: str, group: str, dry_run: bool) -> bool:
 
     try:
         if dry_run:
-            print(f"  {path}: {current_user}:{current_group} -> {user}:{group}")
+            print(f"  {_rel(path, root)}: {current_user}:{current_group} → {user}:{group}")
         else:
             os.chown(path, uid, gid)
-            print(f"  {path}: ownership set to {user}:{group}")
+            print(f"  {_rel(path, root)}: ownership set to {user}:{group}")
         return True
     except OSError as e:
-        print(f"  Error: {path}: cannot change ownership: {e}", file=sys.stderr)
+        print(f"  Error: {_rel(path, root)}: cannot change ownership: {e}", file=sys.stderr)
         return False
 
 
-def rename_to_normalized(path: Path, dry_run: bool) -> tuple[bool, Path]:
+def rename_to_normalized(path: Path, dry_run: bool, root: Path | None = None) -> tuple[bool, Path]:
     """Rename file/directory to normalized form (lowercase, no spaces).
 
     Converts uppercase letters to lowercase and spaces to underscores.
@@ -658,6 +677,7 @@ def rename_to_normalized(path: Path, dry_run: bool) -> tuple[bool, Path]:
     Args:
         path: Path to rename.
         dry_run: If True, only print what would be done.
+        root: Root directory for relative display of paths in output.
 
     Returns:
         Tuple of (success, new_path). On dry-run, returns the target path.
@@ -682,19 +702,23 @@ def rename_to_normalized(path: Path, dry_run: bool) -> tuple[bool, Path]:
     try:
         if dry_run:
             if has_conflict:
-                print(f"  {path} -> {new_path.name} (conflict with {expected_normalized})")
+                print(
+                    f"  {_rel(path, root)} → {new_path.name} (conflict with {expected_normalized})"
+                )
             else:
-                print(f"  {path} -> {new_path.name}")
+                print(f"  {_rel(path, root)} → {new_path.name}")
             return True, new_path
         else:
             path.rename(new_path)
             if has_conflict:
-                print(f"  {path} -> {new_path.name} (conflict with {expected_normalized})")
+                print(
+                    f"  {_rel(path, root)} → {new_path.name} (conflict with {expected_normalized})"
+                )
             else:
-                print(f"  {path} -> {new_path.name}")
+                print(f"  {_rel(path, root)} → {new_path.name}")
             return True, new_path
     except OSError as e:
-        print(f"  Error: {path}: cannot rename: {e}", file=sys.stderr)
+        print(f"  Error: {_rel(path, root)}: cannot rename: {e}", file=sys.stderr)
         return False, path
 
 
@@ -733,12 +757,15 @@ def _update_paths_for_dry_run(all_items: list[Path], path_map: dict[Path, Path])
     return updated_items
 
 
-def _process_filenames(all_items: list[Path], dry_run: bool) -> tuple[bool, dict[Path, Path]]:
+def _process_filenames(
+    all_items: list[Path], dry_run: bool, root: Path | None = None
+) -> tuple[bool, dict[Path, Path]]:
     """Process filename fixes (normalize: lowercase, no spaces).
 
     Args:
         all_items: List of paths to process.
         dry_run: If True, only show what would be done.
+        root: Root directory for relative display of paths in output.
 
     Returns:
         Tuple of (has_errors, path_map).
@@ -755,7 +782,7 @@ def _process_filenames(all_items: list[Path], dry_run: bool) -> tuple[bool, dict
 
         if needs_normalization(current_path.name):
             has_fixes = True
-            success, new_path = rename_to_normalized(current_path, dry_run)
+            success, new_path = rename_to_normalized(current_path, dry_run, root=root)
             if success and new_path != current_path:
                 path_map[current_path] = new_path
             elif not success:
@@ -767,12 +794,15 @@ def _process_filenames(all_items: list[Path], dry_run: bool) -> tuple[bool, dict
     return has_errors, path_map
 
 
-def _process_file_permissions(all_items: list[Path], dry_run: bool) -> bool:
+def _process_file_permissions(
+    all_items: list[Path], dry_run: bool, root: Path | None = None
+) -> bool:
     """Process file permission fixes.
 
     Args:
         all_items: List of paths to process.
         dry_run: If True, only show what would be done.
+        root: Root directory for relative display of paths in output.
 
     Returns:
         True if any errors occurred.
@@ -787,7 +817,7 @@ def _process_file_permissions(all_items: list[Path], dry_run: bool) -> bool:
         is_ok, _current_perms = check_file_permissions(item)
         if not is_ok:
             has_fixes = True
-            if not fix_file_permissions(item, dry_run):
+            if not fix_file_permissions(item, dry_run, root=root):
                 has_errors = True
 
     if not has_fixes:
@@ -796,12 +826,15 @@ def _process_file_permissions(all_items: list[Path], dry_run: bool) -> bool:
     return has_errors
 
 
-def _process_dir_permissions(all_items: list[Path], dry_run: bool) -> bool:
+def _process_dir_permissions(
+    all_items: list[Path], dry_run: bool, root: Path | None = None
+) -> bool:
     """Process directory permission fixes.
 
     Args:
         all_items: List of paths to process.
         dry_run: If True, only show what would be done.
+        root: Root directory for relative display of paths in output.
 
     Returns:
         True if any errors occurred.
@@ -816,7 +849,7 @@ def _process_dir_permissions(all_items: list[Path], dry_run: bool) -> bool:
         is_ok, _current_perms = check_dir_permissions(item)
         if not is_ok:
             has_fixes = True
-            if not fix_dir_permissions(item, dry_run):
+            if not fix_dir_permissions(item, dry_run, root=root):
                 has_errors = True
 
     if not has_fixes:
@@ -825,7 +858,9 @@ def _process_dir_permissions(all_items: list[Path], dry_run: bool) -> bool:
     return has_errors
 
 
-def _process_ownership(all_items: list[Path], user: str, group: str, dry_run: bool) -> bool:
+def _process_ownership(
+    all_items: list[Path], user: str, group: str, dry_run: bool, root: Path | None = None
+) -> bool:
     """Process ownership fixes.
 
     Args:
@@ -833,6 +868,7 @@ def _process_ownership(all_items: list[Path], user: str, group: str, dry_run: bo
         user: Expected owner username.
         group: Expected group name.
         dry_run: If True, only show what would be done.
+        root: Root directory for relative display of paths in output.
 
     Returns:
         True if any errors occurred.
@@ -847,7 +883,7 @@ def _process_ownership(all_items: list[Path], user: str, group: str, dry_run: bo
         is_ok, _curr_user, _curr_group = check_ownership(item, user, group)
         if not is_ok:
             has_fixes = True
-            if not fix_ownership(item, user, group, dry_run):
+            if not fix_ownership(item, user, group, dry_run, root=root):
                 has_errors = True
 
     if not has_fixes:
@@ -875,15 +911,14 @@ def process_directory(
     Returns:
         True if processing completed without errors, False otherwise.
     """
-    print(f"\nProcessing: {directory}")
-    print("-" * 60)
+    root = directory.parent
 
     # Get all items, deepest first (for renaming)
     items = get_items_depth_first(directory)
     all_items = [*items, directory]
 
     # Phase 1: Rename to lowercase
-    name_errors, path_map = _process_filenames(all_items, dry_run)
+    name_errors, path_map = _process_filenames(all_items, dry_run, root=root)
 
     # Re-scan or update paths after renames
     if not dry_run and path_map:
@@ -896,12 +931,12 @@ def process_directory(
     # Phase 2: EXIF timestamps
     exif_errors = False
     if use_exif:
-        exif_errors = _process_exif_timestamps(all_items, dry_run)
+        exif_errors = _process_exif_timestamps(all_items, dry_run, root=root)
 
     # Phase 3-5: Fix permissions and ownership
-    file_perm_errors = _process_file_permissions(all_items, dry_run)
-    dir_perm_errors = _process_dir_permissions(all_items, dry_run)
-    ownership_errors = _process_ownership(all_items, user, group, dry_run)
+    file_perm_errors = _process_file_permissions(all_items, dry_run, root=root)
+    dir_perm_errors = _process_dir_permissions(all_items, dry_run, root=root)
+    ownership_errors = _process_ownership(all_items, user, group, dry_run, root=root)
 
     has_errors = (
         name_errors or exif_errors or file_perm_errors or dir_perm_errors or ownership_errors
