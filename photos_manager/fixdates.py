@@ -324,7 +324,9 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         parser: ArgumentParser instance to configure with fixdates arguments.
     """
     parser.add_argument(
-        "json_files", nargs="+", help="One or more JSON files containing file metadata"
+        "json_files",
+        nargs="+",
+        help="One or more JSON files containing file metadata (preview by default)",
     )
     parser.add_argument(
         "-a",
@@ -333,10 +335,9 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Update timestamps for all individual files in addition to directories",
     )
     parser.add_argument(
-        "-n",
-        "--dry-run",
+        "--fix",
         action="store_true",
-        help="Show what would be done without making changes",
+        help="Apply changes to the filesystem (default: preview only)",
     )
 
 
@@ -358,7 +359,7 @@ def run(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments with fields:
             - json_files: List of JSON files containing file metadata
             - all: Whether to update all individual file timestamps
-            - dry_run: Whether to preview changes without modifying
+            - fix: Whether to apply changes (default: preview only)
 
     Returns:
         int: Exit code indicating success or failure
@@ -370,7 +371,7 @@ def run(args: argparse.Namespace) -> int:
             or if corresponding directories don't exist.
 
     Examples:
-        >>> args = parser.parse_args(['archive.json', '--dry-run'])
+        >>> args = parser.parse_args(['archive.json'])
         >>> exit_code = run(args)
         Set timestamp for directory '/photos' to match file ...
     """
@@ -403,9 +404,10 @@ def run(args: argparse.Namespace) -> int:
             continue
 
         try:
+            dry_run = not args.fix
             changes = 0
             if args.all:
-                changes += set_files_timestamps(json_file, dry_run=args.dry_run)
+                changes += set_files_timestamps(json_file, dry_run=dry_run)
 
             newest_files, newest_entry = get_newest_files(json_file)
 
@@ -415,8 +417,8 @@ def run(args: argparse.Namespace) -> int:
             sorted_subdirs = dict(
                 sorted(newest_subdirs.items(), key=lambda x: x[0].count(os.sep), reverse=True)
             )
-            changes += set_dirs_timestamps(sorted_subdirs, dry_run=args.dry_run)
-            changes += set_json_timestamps(json_file, dir_name, newest_entry, dry_run=args.dry_run)
+            changes += set_dirs_timestamps(sorted_subdirs, dry_run=dry_run)
+            changes += set_json_timestamps(json_file, dir_name, newest_entry, dry_run=dry_run)
             if changes == 0:
                 print(f"All timestamps already correct for {json_file}")
 

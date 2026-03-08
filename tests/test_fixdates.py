@@ -361,7 +361,7 @@ class TestRun:
         json_file = tmp_path / "photos.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(json_files=[str(json_file)], dry_run=False, all=False)
+        args = argparse.Namespace(json_files=[str(json_file)], fix=True, all=False)
 
         exit_code = run(args)
 
@@ -369,8 +369,10 @@ class TestRun:
         captured = capsys.readouterr()
         assert "timestamps set" in captured.out.lower() or "timestamp" in captured.out.lower()
 
-    def test_run_with_dry_run(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test that run() in dry-run mode doesn't modify anything."""
+    def test_run_default_does_not_modify(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() without --fix does not modify anything (dry-run by default)."""
         # Create test directory
         test_dir = tmp_path / "photos"
         test_dir.mkdir()
@@ -393,15 +395,15 @@ class TestRun:
         # Store original mtime
         original_dir_mtime = test_dir.stat().st_mtime
 
-        args = argparse.Namespace(json_files=[str(json_file)], dry_run=True, all=False)
+        args = argparse.Namespace(json_files=[str(json_file)], fix=False, all=False)
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
         captured = capsys.readouterr()
-        assert "Set timestamp" in captured.out  # Dry run still prints messages
+        assert "Set timestamp" in captured.out  # Preview still prints messages
 
-        # Verify mtime wasn't actually changed in dry-run mode
+        # Verify mtime wasn't actually changed without --fix
         assert test_dir.stat().st_mtime == original_dir_mtime
 
     def test_run_with_all_flag(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -429,7 +431,7 @@ class TestRun:
         json_file = tmp_path / "photos.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(json_files=[str(json_file)], dry_run=False, all=True)
+        args = argparse.Namespace(json_files=[str(json_file)], fix=True, all=True)
 
         exit_code = run(args)
 
@@ -475,7 +477,7 @@ class TestRun:
         json1.write_text(json.dumps(data1))
         json2.write_text(json.dumps(data2))
 
-        args = argparse.Namespace(json_files=[str(json1), str(json2)], dry_run=False, all=False)
+        args = argparse.Namespace(json_files=[str(json1), str(json2)], fix=True, all=False)
 
         exit_code = run(args)
 
@@ -507,7 +509,7 @@ class TestRun:
         json_file.write_text(json.dumps(data))
         os.utime(json_file, (known_mtime, known_mtime))
 
-        args = argparse.Namespace(json_files=[str(json_file)], dry_run=False, all=False)
+        args = argparse.Namespace(json_files=[str(json_file)], fix=True, all=False)
 
         exit_code = run(args)
 
@@ -561,7 +563,7 @@ class TestRun:
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(json_files=[str(json_file)], dry_run=False, all=False)
+        args = argparse.Namespace(json_files=[str(json_file)], fix=True, all=False)
         exit_code = run(args)
         captured = capsys.readouterr()
 
@@ -603,7 +605,7 @@ class TestRun:
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(data))
 
-        args = argparse.Namespace(json_files=[str(json_file)], dry_run=True, all=False)
+        args = argparse.Namespace(json_files=[str(json_file)], fix=False, all=False)
         run(args)
         captured = capsys.readouterr()
 
@@ -615,7 +617,7 @@ class TestRun:
 
     def test_run_with_nonexistent_json_file(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that run() handles nonexistent JSON file gracefully."""
-        args = argparse.Namespace(json_files=["/nonexistent/file.json"], dry_run=False, all=False)
+        args = argparse.Namespace(json_files=["/nonexistent/file.json"], fix=True, all=False)
 
         exit_code = run(args)
 
