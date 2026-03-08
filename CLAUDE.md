@@ -6,12 +6,11 @@ Guidance for Claude Code when working in this repository.
 
 Photos Manager CLI — Python 3.12+ toolkit for photo archive management.
 
-Tools: **prepare** (permissions/filenames), **locate** (find target
-directories), **index** (JSON metadata), **exifdates** (fix JSON dates from
-EXIF/GPS), **fixdates** (restore timestamps), **manifest** (version summaries),
-**verify** (integrity check), **info** (archive statistics), **sync**
-(synchronize), **dedup** (deduplicate), **series** (detect interleaved camera
-series).
+Tools: **dedup** (deduplicate), **prepare** (permissions/filenames), **locate**
+(find target directories), **index** (JSON metadata), **series** (detect
+interleaved camera series), **exifdates** (fix JSON dates from EXIF/GPS),
+**fixdates** (restore timestamps), **manifest** (version summaries), **info**
+(archive statistics), **verify** (integrity check), **sync** (synchronize).
 
 JSON format per file: `path`, `sha1`, `md5`, `date` (ISO 8601 with `+HH:MM`),
 `size`.

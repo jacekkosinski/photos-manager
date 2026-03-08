@@ -3,26 +3,30 @@
 
 This is the main entry point for the photos-manager CLI suite, providing
 a unified interface to all photo management commands:
+- dedup: Find duplicate and missing files by comparing with archive
 - prepare: Prepare directories for archiving (fix permissions, ownership, filenames)
 - locate: Find archive directories for new photos based on timestamps
 - index: Generate JSON file with file metadata
+- series: Detect and separate interleaved photo series
+- exifdates: Detect and fix JSON date fields from EXIF/GPS data
 - fixdates: Fix file and directory dates to match JSON metadata
 - manifest: Generate archive version information
-- verify: Verify archive integrity
 - info: Show archive statistics
+- verify: Verify archive integrity
 - sync: Synchronize source and destination archives
-- dedup: Find duplicate and missing files by comparing with archive
 
 Usage:
-    photos prepare /path/to/directory --dry-run
+    photos dedup archive.json /path/to/scan -d -m
+    photos prepare /path/to/directory
     photos locate /path/to/new/photos archive.json
     photos index /path/to/directory
+    photos series /path/to/directory
+    photos exifdates archive.json
     photos fixdates archive.json
     photos manifest /path/to/archive
-    photos verify /path/to/archive
     photos info /path/to/archive
+    photos verify /path/to/archive
     photos sync /source/archive /dest/archive
-    photos dedup archive.json /path/to/scan -d -m
 """
 
 import argparse
@@ -86,6 +90,15 @@ def main() -> int:
         help="Command to execute",
     )
 
+    # dedup subcommand
+    dedup_parser = subparsers.add_parser(
+        "dedup",
+        help="Find duplicate and missing files by comparing with archive",
+        description="Find files that exist in archive (duplicates) and files not in archive",
+    )
+    dedup.setup_parser(dedup_parser)
+    dedup_parser.set_defaults(func=dedup.run)
+
     # prepare subcommand
     prepare_parser = subparsers.add_parser(
         "prepare",
@@ -113,51 +126,6 @@ def main() -> int:
     index.setup_parser(index_parser)
     index_parser.set_defaults(func=index.run)
 
-    # fixdates subcommand
-    fixdates_parser = subparsers.add_parser(
-        "fixdates",
-        help="Fix file and directory dates to match JSON metadata",
-        description="Fix file and directory timestamps to match JSON metadata",
-    )
-    fixdates.setup_parser(fixdates_parser)
-    fixdates_parser.set_defaults(func=fixdates.run)
-
-    # manifest subcommand
-    manifest_parser = subparsers.add_parser(
-        "manifest",
-        help="Generate archive manifest information",
-        description="Generate manifest information from JSON files",
-    )
-    manifest.setup_parser(manifest_parser)
-    manifest_parser.set_defaults(func=manifest.run)
-
-    # verify subcommand
-    verify_parser = subparsers.add_parser(
-        "verify",
-        help="Verify archive integrity",
-        description="Verify archive integrity based on JSON metadata",
-    )
-    verify.setup_parser(verify_parser)
-    verify_parser.set_defaults(func=verify.run)
-
-    # info subcommand
-    info_parser = subparsers.add_parser(
-        "info",
-        help="Show archive statistics",
-        description="Show human-readable statistics from JSON index files",
-    )
-    info.setup_parser(info_parser)
-    info_parser.set_defaults(func=info.run)
-
-    # sync subcommand
-    sync_parser = subparsers.add_parser(
-        "sync",
-        help="Synchronize source and destination archives",
-        description="Generate minimal sync commands for archive synchronization",
-    )
-    sync.setup_parser(sync_parser)
-    sync_parser.set_defaults(func=sync.run)
-
     # series subcommand
     series_parser = subparsers.add_parser(
         "series",
@@ -176,14 +144,50 @@ def main() -> int:
     exifdates.setup_parser(exifdates_parser)
     exifdates_parser.set_defaults(func=exifdates.run)
 
-    # dedup subcommand
-    dedup_parser = subparsers.add_parser(
-        "dedup",
-        help="Find duplicate and missing files by comparing with archive",
-        description="Find files that exist in archive (duplicates) and files not in archive",
+    # fixdates subcommand
+    fixdates_parser = subparsers.add_parser(
+        "fixdates",
+        help="Fix file and directory dates to match JSON metadata",
+        description="Fix file and directory timestamps to match JSON metadata",
     )
-    dedup.setup_parser(dedup_parser)
-    dedup_parser.set_defaults(func=dedup.run)
+    fixdates.setup_parser(fixdates_parser)
+    fixdates_parser.set_defaults(func=fixdates.run)
+
+    # manifest subcommand
+    manifest_parser = subparsers.add_parser(
+        "manifest",
+        help="Generate archive manifest information",
+        description="Generate manifest information from JSON files",
+    )
+    manifest.setup_parser(manifest_parser)
+    manifest_parser.set_defaults(func=manifest.run)
+
+    # info subcommand
+    info_parser = subparsers.add_parser(
+        "info",
+        help="Show archive statistics",
+        description="Show human-readable statistics from JSON index files",
+    )
+    info.setup_parser(info_parser)
+    info_parser.set_defaults(func=info.run)
+
+    # verify subcommand
+    verify_parser = subparsers.add_parser(
+        "verify",
+        help="Verify archive integrity",
+        description="Verify archive integrity based on JSON metadata",
+    )
+    verify.setup_parser(verify_parser)
+    verify_parser.set_defaults(func=verify.run)
+
+    # sync subcommand
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Synchronize source and destination archives",
+        description="Generate minimal sync commands for archive synchronization",
+    )
+    sync.setup_parser(sync_parser)
+    sync_parser.set_defaults(func=sync.run)
 
     # Parse arguments and execute
     args = parser.parse_args()
