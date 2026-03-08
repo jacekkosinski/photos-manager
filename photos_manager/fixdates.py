@@ -23,6 +23,55 @@ from pathlib import Path
 
 from photos_manager.common import load_json
 
+_TS_FMT = "%Y-%m-%d %H:%M:%S"
+_TAG_WIDTH = 6  # max(len("[FILE]"), len("[JSON]")) — "[DIR]" is 5, padded to 6
+_TAG_FILE = "[FILE]"
+_TAG_DIR = "[DIR]"
+_TAG_JSON = "[JSON]"
+
+# (name, tag, old_ts, new_ts, path, src)  — src is None for [FILE] entries
+_PendingChange = tuple[str, str, float, float, Path, str | None]
+
+
+def _name_col_width(pending: list[_PendingChange]) -> int:
+    """Return the max name length for aligned column formatting."""
+    return max((len(name) for name, *_ in pending), default=0)
+
+
+def format_change_line(
+    name: str, tag: str, old_ts: float, new_ts: float, name_width: int = 0, src: str | None = None
+) -> str:
+    """Format one output line describing a timestamp change.
+
+    Args:
+        name: Display name — full path of the file or directory (with trailing
+            ``/`` for directories).
+        tag: Type tag — one of ``[FILE]``, ``[DIR]``, ``[JSON]``.
+        old_ts: Current modification time as POSIX timestamp.
+        new_ts: Target modification time as POSIX timestamp.
+        name_width: When non-zero, left-justifies the name column to this width
+            so tags align across all lines in the output block.
+        src: Source file whose mtime was used as the new timestamp.  When
+            not None, appended as ``src: <path>`` inside the trailing
+            parentheses.  None for ``[FILE]`` entries.
+
+    Returns:
+        Aligned line:
+        ``name  [TAG]  YYYY-MM-DD HH:MM:SS -> YYYY-MM-DD HH:MM:SS (delta: +Xs[, src: path])``
+
+    Examples:
+        >>> line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_000_003_600.0)
+        >>> "->" in line and "delta:" in line
+        True
+    """
+    old_str = datetime.fromtimestamp(old_ts).strftime(_TS_FMT)
+    new_str = datetime.fromtimestamp(new_ts).strftime(_TS_FMT)
+    delta_s = int(new_ts - old_ts)
+    delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
+    suffix = f"delta: {delta_str}, src: {src}" if src is not None else f"delta: {delta_str}"
+    name_col = f"{name:<{name_width}}" if name_width else name
+    return f"{name_col}  {tag:<{_TAG_WIDTH}}  {old_str} -> {new_str} ({suffix})"
+
 
 def get_newest_files(
     json_file: str,
@@ -83,43 +132,24 @@ def get_newest_files(
     return newest_files, newest_entry
 
 
-def set_files_timestamps(json_file: str, dry_run: bool = False) -> int:
-    """Update file modification timestamps based on JSON metadata.
-
-    Reads JSON metadata and updates the modification time of each file to match
-    the 'date' field in the metadata. This is useful for restoring original
-    timestamps after copying files.
-
-    Only updates files where the current modification time differs from the
-    expected timestamp. Files that don't exist or aren't writable are skipped
-    with a warning message.
+def _collect_file_changes(json_file: str, dry_run: bool = False) -> list[_PendingChange]:
+    """Collect file timestamp changes without printing or applying.
 
     Args:
-        json_file: Path to the JSON file containing file metadata with 'path'
-            and 'date' fields for each entry.
-        dry_run: If True, only prints what would be changed without actually
-            modifying any timestamps. Defaults to False.
+        json_file: Path to the JSON file containing file metadata.
+        dry_run: If True, checks for read access instead of write access.
 
     Returns:
-        Number of timestamps updated (or that would be updated in dry-run).
+        List of pending changes as ``(name, tag, old_ts, new_ts, path)`` tuples.
 
     Raises:
         SystemExit: If the JSON file is empty or cannot be loaded.
-
-    Warnings:
-        Files with missing path/date fields, invalid dates, or that are
-        inaccessible are skipped with warning messages to stderr.
-
-    Examples:
-        >>> set_files_timestamps("archive.json", dry_run=True)
-        Set timestamp for file '/photos/img.jpg' to match '1704376496' time
-        >>> set_files_timestamps("archive.json")  # Actually updates files
     """
     json_data = load_json(json_file)
     if not json_data:
         raise SystemExit(f"Error: JSON file '{json_file}' is empty")
 
-    changes = 0
+    pending: list[_PendingChange] = []
     for entry in json_data:
         file_path = entry.get("path")
         timestamp_str = entry.get("date")
@@ -155,17 +185,166 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> int:
             continue
 
         if current_mtime != expected_timestamp:
-            changes += 1
-            print(f"Set timestamp for file '{file_path}' to match '{expected_timestamp}' time")
-            if not dry_run:
-                try:
-                    os.utime(str(path), (expected_timestamp, expected_timestamp))
-                except OSError as e:
-                    print(
-                        f"Error: Failed to update timestamps for {file_path}: {e}",
-                        file=sys.stderr,
-                    )
-    return changes
+            pending.append(
+                (
+                    str(file_path),
+                    _TAG_FILE,
+                    float(current_mtime),
+                    float(expected_timestamp),
+                    path,
+                    None,
+                )
+            )
+    return pending
+
+
+def _collect_dir_changes(
+    newest_files: dict[str, dict[str, str | int]],
+) -> list[_PendingChange]:
+    """Collect directory timestamp changes without printing or applying.
+
+    Args:
+        newest_files: Dictionary mapping directory paths to their newest file info.
+
+    Returns:
+        List of pending changes as ``(name, tag, old_ts, new_ts, path)`` tuples.
+    """
+    pending: list[_PendingChange] = []
+    for directory, file_info in newest_files.items():
+        dir_path = Path(directory)
+        file_path = Path(str(file_info["path"]))
+
+        try:
+            new_time = file_path.stat().st_mtime
+            current_time = dir_path.stat().st_mtime
+        except FileNotFoundError:
+            print(
+                f"Error: File or directory '{directory}' does not exist",
+                file=sys.stderr,
+            )
+            continue
+        except PermissionError:
+            print(
+                f"Error: Permission denied accessing '{directory}'",
+                file=sys.stderr,
+            )
+            continue
+
+        if new_time != current_time:
+            pending.append(
+                (
+                    directory + "/",
+                    _TAG_DIR,
+                    current_time,
+                    new_time,
+                    dir_path,
+                    str(file_info["path"]),
+                )
+            )
+    return pending
+
+
+def _collect_json_changes(
+    json_file: str, dir_name: str, newest_entry: dict[str, str | int]
+) -> list[_PendingChange]:
+    """Collect JSON file and root directory timestamp changes.
+
+    Args:
+        json_file: Path to the JSON metadata file.
+        dir_name: Path to the directory corresponding to the JSON file.
+        newest_entry: Dictionary containing the newest file entry with a 'path' field.
+
+    Returns:
+        List of pending changes as ``(name, tag, old_ts, new_ts, path)`` tuples.
+
+    Raises:
+        OSError: If stat() calls fail on the json file or directory.
+    """
+    reference_path_str = newest_entry.get("path")
+    if not reference_path_str:
+        print("Error: Missing 'path' in newest entry", file=sys.stderr)
+        return []
+
+    reference_path = Path(str(reference_path_str))
+    if not reference_path.exists():
+        print(f"Error: Reference file '{reference_path}' does not exist", file=sys.stderr)
+        return []
+
+    reference_mtime = reference_path.stat().st_mtime  # may raise OSError
+
+    pending: list[_PendingChange] = []
+
+    json_path = Path(json_file)
+    json_mtime = json_path.stat().st_mtime
+    src = str(reference_path)
+
+    if json_mtime != reference_mtime:
+        pending.append((json_file, _TAG_JSON, json_mtime, reference_mtime, json_path, src))
+
+    dir_path = Path(dir_name)
+    dir_mtime = dir_path.stat().st_mtime
+    if dir_mtime != reference_mtime:
+        pending.append((dir_name + "/", _TAG_DIR, dir_mtime, reference_mtime, dir_path, src))
+
+    return pending
+
+
+def _apply_changes(pending: list[_PendingChange], name_width: int, dry_run: bool) -> int:
+    """Print aligned output and optionally apply timestamp changes.
+
+    Args:
+        pending: List of ``(name, tag, old_ts, new_ts, path)`` tuples.
+        name_width: Column width for the name field; 0 means no padding.
+        dry_run: If True, only prints without modifying timestamps.
+
+    Returns:
+        Number of changes printed (and applied if not dry_run).
+    """
+    for name, tag, old_ts, new_ts, path, src in pending:
+        print(format_change_line(name, tag, old_ts, new_ts, name_width=name_width, src=src))
+        if not dry_run:
+            try:
+                os.utime(path, (new_ts, new_ts))
+            except OSError as e:
+                print(f"Error: Failed to update timestamps for {name}: {e}", file=sys.stderr)
+    return len(pending)
+
+
+def set_files_timestamps(json_file: str, dry_run: bool = False) -> int:
+    """Update file modification timestamps based on JSON metadata.
+
+    Reads JSON metadata and updates the modification time of each file to match
+    the 'date' field in the metadata. This is useful for restoring original
+    timestamps after copying files.
+
+    Only updates files where the current modification time differs from the
+    expected timestamp. Files that don't exist or aren't writable are skipped
+    with a warning message.
+
+    Args:
+        json_file: Path to the JSON file containing file metadata with 'path'
+            and 'date' fields for each entry.
+        dry_run: If True, only prints what would be changed without actually
+            modifying any timestamps. Defaults to False.
+
+    Returns:
+        Number of timestamps updated (or that would be updated in dry-run).
+
+    Raises:
+        SystemExit: If the JSON file is empty or cannot be loaded.
+
+    Warnings:
+        Files with missing path/date fields, invalid dates, or that are
+        inaccessible are skipped with warning messages to stderr.
+
+    Examples:
+        >>> set_files_timestamps("archive.json", dry_run=True)
+        Set timestamp for file '/photos/img.jpg' to match '1704376496' time
+        >>> set_files_timestamps("archive.json")  # Actually updates files
+    """
+    pending = _collect_file_changes(json_file, dry_run)
+    name_width = _name_col_width(pending)
+    return _apply_changes(pending, name_width, dry_run)
 
 
 def set_dirs_timestamps(
@@ -195,49 +374,9 @@ def set_dirs_timestamps(
         >>> set_dirs_timestamps(newest, dry_run=True)
         Set timestamp for directory '/photos/2024' to match file '/photos/2024/img.jpg' (...)
     """
-    changes = 0
-    for directory, file_info in newest_files.items():
-        dir_path = Path(directory)
-        file_path = Path(str(file_info["path"]))
-
-        try:
-            new_time = file_path.stat().st_mtime
-            current_time = dir_path.stat().st_mtime
-        except FileNotFoundError:
-            print(
-                f"Error: File or directory '{directory}' does not exist",
-                file=sys.stderr,
-            )
-            continue
-        except PermissionError:
-            print(
-                f"Error: Permission denied accessing '{directory}'",
-                file=sys.stderr,
-            )
-            continue
-
-        if new_time != current_time:
-            changes += 1
-            print(
-                f"Set timestamp for directory '{directory}' to match file "
-                f"'{file_info['path']}' ({datetime.fromtimestamp(new_time)})"
-            )
-            if not dry_run:
-                try:
-                    os.utime(str(dir_path), (new_time, new_time))
-                except FileNotFoundError:
-                    print(f"Error: Directory '{directory}' does not exist", file=sys.stderr)
-                except PermissionError:
-                    print(
-                        f"Error: Permission denied setting timestamp for '{directory}'",
-                        file=sys.stderr,
-                    )
-                except OSError as e:
-                    print(
-                        f"Error setting timestamp for directory '{directory}': {e}",
-                        file=sys.stderr,
-                    )
-    return changes
+    pending = _collect_dir_changes(newest_files)
+    name_width = _name_col_width(pending)
+    return _apply_changes(pending, name_width, dry_run)
 
 
 def set_json_timestamps(
@@ -271,48 +410,13 @@ def set_json_timestamps(
         Set timestamp for 'photos.json' to match file '/photos/img.jpg' (...)
         Set timestamp for directory 'photos' to match file '/photos/img.jpg' (...)
     """
-    reference_path_str = newest_entry.get("path")
-    if not reference_path_str:
-        print("Error: Missing 'path' in newest entry", file=sys.stderr)
-        return 0
-
-    reference_path = Path(str(reference_path_str))
-    if not reference_path.exists():
-        print(f"Error: Reference file '{reference_path}' does not exist", file=sys.stderr)
-        return 0
-
-    changes = 0
     try:
-        reference_mtime = reference_path.stat().st_mtime
-
-        json_path = Path(json_file)
-        json_mtime = json_path.stat().st_mtime
-        if json_mtime != reference_mtime:
-            changes += 1
-            print(
-                f"Set timestamp for '{json_file}' to match file '{reference_path}' "
-                f"({datetime.fromtimestamp(reference_mtime)})"
-            )
-            if not dry_run:
-                os.utime(str(json_path), (reference_mtime, reference_mtime))
-
-        dir_path = Path(dir_name)
-        dir_mtime = dir_path.stat().st_mtime
-        if dir_mtime != reference_mtime:
-            changes += 1
-            print(
-                f"Set timestamp for directory '{dir_name}' to match file '{reference_path}' "
-                f"({datetime.fromtimestamp(reference_mtime)})"
-            )
-            if not dry_run:
-                os.utime(str(dir_path), (reference_mtime, reference_mtime))
-
+        pending = _collect_json_changes(json_file, dir_name, newest_entry)
     except OSError as e:
-        print(
-            f"Error setting timestamps for '{dir_name}': {e}",
-            file=sys.stderr,
-        )
-    return changes
+        print(f"Error setting timestamps for '{dir_name}': {e}", file=sys.stderr)
+        return 0
+    name_width = _name_col_width(pending)
+    return _apply_changes(pending, name_width, dry_run)
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -375,7 +479,6 @@ def run(args: argparse.Namespace) -> int:
         >>> exit_code = run(args)
         Set timestamp for directory '/photos' to match file ...
     """
-    # Iterate over each JSON file
     errors = 0
     for json_file in args.json_files:
         json_path = Path(json_file)
@@ -405,22 +508,33 @@ def run(args: argparse.Namespace) -> int:
 
         try:
             dry_run = not args.fix
-            changes = 0
+            all_pending: list[_PendingChange] = []
+
             if args.all:
-                changes += set_files_timestamps(json_file, dry_run=dry_run)
+                all_pending.extend(_collect_file_changes(json_file, dry_run))
 
             newest_files, newest_entry = get_newest_files(json_file)
 
-            # Exclude root dir — set_json_timestamps handles it with overall newest.
+            # Exclude root dir — _collect_json_changes handles it with overall newest.
             # Process subdirs deepest-first so parent timestamps are written last.
             newest_subdirs = {d: f for d, f in newest_files.items() if d != dir_name}
             sorted_subdirs = dict(
                 sorted(newest_subdirs.items(), key=lambda x: x[0].count(os.sep), reverse=True)
             )
-            changes += set_dirs_timestamps(sorted_subdirs, dry_run=dry_run)
-            changes += set_json_timestamps(json_file, dir_name, newest_entry, dry_run=dry_run)
-            if changes == 0:
+            all_pending.extend(_collect_dir_changes(sorted_subdirs))
+
+            try:
+                all_pending.extend(_collect_json_changes(json_file, dir_name, newest_entry))
+            except OSError as e:
+                print(f"Error setting timestamps for '{dir_name}': {e}", file=sys.stderr)
+                errors += 1
+                continue
+
+            if not all_pending:
                 print(f"All timestamps already correct for {json_file}")
+            else:
+                global_width = _name_col_width(all_pending)
+                _apply_changes(all_pending, global_width, dry_run)
 
         except SystemExit as e:
             print(str(e), file=sys.stderr)

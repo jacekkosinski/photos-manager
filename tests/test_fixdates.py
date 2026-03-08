@@ -10,12 +10,58 @@ from typing import cast
 import pytest
 
 from photos_manager.fixdates import (
+    format_change_line,
     get_newest_files,
     run,
     set_dirs_timestamps,
     set_files_timestamps,
     set_json_timestamps,
 )
+
+
+@pytest.mark.unit
+class TestFormatChangeLine:
+    """Tests for format_change_line helper."""
+
+    def test_contains_arrow_separator(self) -> None:
+        """Output must contain ' -> ' between old and new timestamps."""
+        line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
+        assert " -> " in line
+
+    def test_contains_delta_colon(self) -> None:
+        """Output must contain 'delta:' label."""
+        line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
+        assert "delta:" in line
+
+    def test_shows_human_readable_dates_not_epoch(self) -> None:
+        """Dates must be shown as YYYY-MM-DD HH:MM:SS, not as UNIX epoch integers."""
+        line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
+        assert "2001" in line  # year from epoch 1_000_000_000
+        assert "1000000000" not in line
+
+    def test_positive_delta_has_plus_sign(self) -> None:
+        line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_000_003_600.0)
+        assert "+3600s" in line
+
+    def test_negative_delta_has_minus_sign(self) -> None:
+        line = format_change_line("photo.jpg", "[FILE]", 1_000_003_600.0, 1_000_000_000.0)
+        assert "-3600s" in line
+
+    def test_path_appears_in_output(self) -> None:
+        line = format_change_line("subdir/photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
+        assert "subdir/photo.jpg" in line
+
+    def test_tag_appears_in_output(self) -> None:
+        for tag in ("[FILE]", "[DIR]", "[JSON]"):
+            line = format_change_line("x", tag, 1_000_000_000.0, 1_100_000_000.0)
+            assert tag in line
+
+    def test_name_width_pads_shorter_names(self) -> None:
+        """Tags align when name_width is larger than the name."""
+        ts0, ts1 = 1_000_000_000.0, 1_100_000_000.0
+        short = format_change_line("a.jpg", "[FILE]", ts0, ts1, name_width=20)
+        long = format_change_line("/path/to/photo.jpg", "[FILE]", ts0, ts1, name_width=20)
+        assert short.index("[FILE]") == long.index("[FILE]")
 
 
 @pytest.mark.unit
@@ -122,7 +168,7 @@ class TestSetFilesTimestamps:
 
         # Should print what would be done
         captured = capsys.readouterr()
-        assert "Set timestamp for file" in captured.out
+        assert "->" in captured.out
 
     def test_updates_file_timestamp(self, tmp_path: Path) -> None:
         """Test that file timestamp is actually updated."""
@@ -227,7 +273,7 @@ class TestSetDirsTimestamps:
 
         # Should print what would be done
         captured = capsys.readouterr()
-        assert "Set timestamp for directory" in captured.out
+        assert "->" in captured.out
 
     def test_skips_nonexistent_directory(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -299,7 +345,7 @@ class TestSetJsonTimestamps:
 
         # Should print what would be done
         captured = capsys.readouterr()
-        assert "Set timestamp" in captured.out
+        assert "->" in captured.out
 
     def test_handles_missing_path_in_entry(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -367,7 +413,7 @@ class TestRun:
 
         assert exit_code == os.EX_OK
         captured = capsys.readouterr()
-        assert "timestamps set" in captured.out.lower() or "timestamp" in captured.out.lower()
+        assert "->" in captured.out or "already correct" in captured.out
 
     def test_run_default_does_not_modify(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -401,7 +447,7 @@ class TestRun:
 
         assert exit_code == os.EX_OK
         captured = capsys.readouterr()
-        assert "Set timestamp" in captured.out  # Preview still prints messages
+        assert "->" in captured.out  # Preview still prints messages
 
         # Verify mtime wasn't actually changed without --fix
         assert test_dir.stat().st_mtime == original_dir_mtime
@@ -568,8 +614,12 @@ class TestRun:
         captured = capsys.readouterr()
 
         assert exit_code == os.EX_OK
-        # Root dir must appear exactly once in output
-        root_lines = [ln for ln in captured.out.splitlines() if f"'{root}'" in ln]
+        # Root dir must appear exactly once in output (not json file, not subdirs)
+        root_lines = [
+            ln
+            for ln in captured.out.splitlines()
+            if "[DIR]" in ln and ln.split("  [DIR]")[0].rstrip() == str(root) + "/"
+        ]
         assert len(root_lines) == 1, f"Root dir set {len(root_lines)} times: {root_lines}"
         # Root dir must be set to the overall newest file's time (sub_file)
         assert int(root.stat().st_mtime) == int(new_ts)
@@ -589,9 +639,12 @@ class TestRun:
 
         deep_file = deep / "photo.jpg"
         deep_file.write_text("z")
+        mid_file = deep.parent / "other.jpg"  # file directly in archive/a
+        mid_file.write_text("w")
 
         target_ts = 1_700_000_000.0
         os.utime(deep_file, (target_ts, target_ts))
+        os.utime(mid_file, (target_ts, target_ts))
 
         data = [
             {
@@ -600,7 +653,14 @@ class TestRun:
                 "sha1": "e",
                 "md5": "f",
                 "size": 1,
-            }
+            },
+            {
+                "path": str(mid_file),
+                "date": "2023-11-14T22:13:20+00:00",
+                "sha1": "g",
+                "md5": "h",
+                "size": 1,
+            },
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(data))
@@ -609,11 +669,10 @@ class TestRun:
         run(args)
         captured = capsys.readouterr()
 
-        # In output, deeper path (a/b) must appear before shallower path (a)
-        lines = [ln for ln in captured.out.splitlines() if "Set timestamp for directory" in ln]
-        paths = [ln.split("'")[1] for ln in lines]
-        depths = [p.count(os.sep) for p in paths]
-        assert depths == sorted(depths, reverse=True), f"Dirs not deepest-first: {paths}"
+        # In output, deeper dir 'b' must appear before its parent 'a'
+        dir_lines = [ln for ln in captured.out.splitlines() if "[DIR]" in ln]
+        dir_paths = [ln.split("  [DIR]")[0].rstrip() for ln in dir_lines]
+        assert dir_paths.index(str(deep) + "/") < dir_paths.index(str(deep.parent) + "/")
 
     def test_run_with_nonexistent_json_file(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test that run() handles nonexistent JSON file gracefully."""
