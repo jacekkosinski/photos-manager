@@ -484,9 +484,11 @@ class TestProcessDirectory:
 
         current_user, current_group = current_user_and_group
 
-        result = process_directory(tmp_path, current_user, current_group, dry_run=True)
+        success, _changes, _items = process_directory(
+            tmp_path, current_user, current_group, dry_run=True
+        )
 
-        assert result is True
+        assert success is True
 
     def test_fixes_file_permissions(
         self, tmp_path: Path, current_user_and_group: tuple[str, str]
@@ -560,9 +562,11 @@ class TestProcessDirectory:
 
         current_user, current_group = current_user_and_group
 
-        result = process_directory(uppercase_dir, current_user, current_group, dry_run=False)
+        success, _changes, _items = process_directory(
+            uppercase_dir, current_user, current_group, dry_run=False
+        )
 
-        assert result is True
+        assert success is True
         assert (tmp_path / "photos").exists()
         assert not uppercase_dir.exists()
 
@@ -765,9 +769,11 @@ class TestErrorHandling:
         current_user, current_group = current_user_and_group
 
         with patch.object(Path, "rename", side_effect=OSError("Cannot rename")):
-            result = process_directory(tmp_path, current_user, current_group, dry_run=False)
+            success, _changes, _items = process_directory(
+                tmp_path, current_user, current_group, dry_run=False
+            )
 
-        assert result is False
+        assert success is False
 
 
 @pytest.mark.integration
@@ -914,8 +920,8 @@ class TestRunIntegration:
             group=current_group,
         )
 
-        # Mock process_directory to return False (indicating failure)
-        with patch("photos_manager.prepare.process_directory", return_value=False):
+        # Mock process_directory to return (False, 0, 0) (indicating failure)
+        with patch("photos_manager.prepare.process_directory", return_value=(False, 0, 0)):
             exit_code = run(args)
 
         assert exit_code == 1
@@ -1002,9 +1008,9 @@ class TestRunIntegration:
         # Mock to return success for first dir, failure for second
         call_count = [0]
 
-        def mock_process(*_args: Any, **_kwargs: Any) -> bool:
+        def mock_process(*_args: Any, **_kwargs: Any) -> tuple[bool, int, int]:
             call_count[0] += 1
-            return call_count[0] == 1  # True for first call, False for second
+            return call_count[0] == 1, 0, 0  # True for first call, False for second
 
         with patch("photos_manager.prepare.process_directory", side_effect=mock_process):
             exit_code = run(args)

@@ -488,7 +488,7 @@ def _process_filenames(
 
 def _process_file_permissions(
     all_items: list[Path], dry_run: bool, root: Path | None = None
-) -> bool:
+) -> tuple[bool, int]:
     """Process file permission fixes.
 
     Args:
@@ -497,30 +497,30 @@ def _process_file_permissions(
         root: Root directory for relative display of paths in output.
 
     Returns:
-        True if any errors occurred.
+        Tuple of (has_errors, change_count).
     """
     print("\nFile permissions (644):")
     has_errors = False
-    has_fixes = False
+    count = 0
 
     for item in all_items:
         if item.is_symlink() or not item.is_file():
             continue
         is_ok, _current_perms = check_file_permissions(item)
         if not is_ok:
-            has_fixes = True
+            count += 1
             if not fix_file_permissions(item, dry_run, root=root):
                 has_errors = True
 
-    if not has_fixes:
+    if not count:
         print("  All files have correct permissions")
 
-    return has_errors
+    return has_errors, count
 
 
 def _process_dir_permissions(
     all_items: list[Path], dry_run: bool, root: Path | None = None
-) -> bool:
+) -> tuple[bool, int]:
     """Process directory permission fixes.
 
     Args:
@@ -529,30 +529,30 @@ def _process_dir_permissions(
         root: Root directory for relative display of paths in output.
 
     Returns:
-        True if any errors occurred.
+        Tuple of (has_errors, change_count).
     """
     print("\nDirectory permissions (755):")
     has_errors = False
-    has_fixes = False
+    count = 0
 
     for item in all_items:
         if item.is_symlink() or not item.is_dir():
             continue
         is_ok, _current_perms = check_dir_permissions(item)
         if not is_ok:
-            has_fixes = True
+            count += 1
             if not fix_dir_permissions(item, dry_run, root=root):
                 has_errors = True
 
-    if not has_fixes:
+    if not count:
         print("  All directories have correct permissions")
 
-    return has_errors
+    return has_errors, count
 
 
 def _process_ownership(
     all_items: list[Path], user: str, group: str, dry_run: bool, root: Path | None = None
-) -> bool:
+) -> tuple[bool, int]:
     """Process ownership fixes.
 
     Args:
@@ -563,25 +563,25 @@ def _process_ownership(
         root: Root directory for relative display of paths in output.
 
     Returns:
-        True if any errors occurred.
+        Tuple of (has_errors, change_count).
     """
     print(f"\nOwnership ({user}:{group}):")
     has_errors = False
-    has_fixes = False
+    count = 0
 
     for item in all_items:
         if not item.exists():
             continue
         is_ok, _curr_user, _curr_group = check_ownership(item, user, group)
         if not is_ok:
-            has_fixes = True
+            count += 1
             if not fix_ownership(item, user, group, dry_run, root=root):
                 has_errors = True
 
-    if not has_fixes:
+    if not count:
         print("  All items have correct ownership")
 
-    return has_errors
+    return has_errors, count
 
 
 def process_directory(
@@ -589,7 +589,7 @@ def process_directory(
     user: str,
     group: str,
     dry_run: bool,
-) -> bool:
+) -> tuple[bool, int, int]:
     """Process a single directory and fix all issues.
 
     Args:
@@ -599,16 +599,20 @@ def process_directory(
         dry_run: If True, only show what would be done.
 
     Returns:
-        True if processing completed without errors, False otherwise.
+        Tuple of (success, change_count, item_count). success is False if any
+        errors occurred. item_count is the total number of files and directories
+        scanned.
     """
     root = directory.parent
 
     # Get all items, deepest first (for renaming)
     items = get_items_depth_first(directory)
     all_items = [*items, directory]
+    item_count = len(all_items)
 
     # Phase 1: Rename to lowercase
     name_errors, path_map = _process_filenames(all_items, dry_run, root=root)
+    total_changes = len(path_map)
 
     # Re-scan or update paths after renames
     if not dry_run and path_map:
@@ -619,12 +623,15 @@ def process_directory(
         all_items = _update_paths_for_dry_run(all_items, path_map)
 
     # Phase 2-4: Fix permissions and ownership
-    file_perm_errors = _process_file_permissions(all_items, dry_run, root=root)
-    dir_perm_errors = _process_dir_permissions(all_items, dry_run, root=root)
-    ownership_errors = _process_ownership(all_items, user, group, dry_run, root=root)
+    file_perm_errors, file_perm_count = _process_file_permissions(all_items, dry_run, root=root)
+    dir_perm_errors, dir_perm_count = _process_dir_permissions(all_items, dry_run, root=root)
+    ownership_errors, ownership_count = _process_ownership(
+        all_items, user, group, dry_run, root=root
+    )
+    total_changes += file_perm_count + dir_perm_count + ownership_count
 
     has_errors = name_errors or file_perm_errors or dir_perm_errors or ownership_errors
-    return not has_errors
+    return not has_errors, total_changes, item_count
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -685,10 +692,22 @@ def run(args: argparse.Namespace) -> int:
 
     # Process each directory
     all_success = True
+    total_changes = 0
+    total_files = 0
     for directory in args.directories:
         path = Path(directory).resolve()
-        success = process_directory(path, args.owner, args.group, not args.fix)
+        success, changes, item_count = process_directory(path, args.owner, args.group, not args.fix)
+        total_changes += changes
+        total_files += item_count
         if not success:
             all_success = False
+
+    verb = "applied" if args.fix else "detected"
+    print(f"\n{total_changes} change(s) {verb} in {total_files} file(s).")
+    if total_changes:
+        if not args.fix:
+            print("Dry-run: use --fix to apply changes.")
+        else:
+            print("Run 'photos index' to generate JSON metadata.")
 
     return os.EX_OK if all_success else 1
