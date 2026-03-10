@@ -104,21 +104,15 @@ class TestComputeRollingStats:
 class TestFormatReportLine:
     @pytest.mark.unit
     def test_formats_gps_line(self) -> None:
+        """[GPS] tag is GPS-only fallback (no EXIF); line ends after delta, no bracket info."""
         old_dt = datetime(2023, 5, 14, 10, 23, 45)
         new_dt = datetime(2023, 5, 14, 11, 23, 45)
-        line = exifdates.format_report_line(
-            "DSC01234.JPG",
-            "[GPS]",
-            old_dt,
-            new_dt,
-            {"exif_dt": datetime(2023, 5, 14, 10, 23, 45), "delta": 3600},
-        )
+        line = exifdates.format_report_line("DSC01234.JPG", "[GPS]", old_dt, new_dt, {})
         assert "DSC01234.JPG" in line
         assert "[GPS]" in line
         assert "10:23:45 → 11:23:45" in line
         assert "(delta: +3600s)" in line
-        assert "EXIF 10:23:45" in line
-        assert "delta: +3600s" in line.split("[GPS]")[1]
+        assert line.endswith("(delta: +3600s)")
 
     @pytest.mark.unit
     def test_formats_exif_plus_gps_line(self) -> None:
@@ -225,8 +219,8 @@ class TestComputeCorrections:
         assert "11:23:45" in new_date
 
     @pytest.mark.unit
-    def test_gps_tag_when_gps_available(self) -> None:
-        """File with GPS timestamp gets [GPS] tag and GPS date is used."""
+    def test_exif_plus_gps_tag_when_gps_and_exif_available(self) -> None:
+        """File with both GPS and EXIF gets [EXIF+GPS] tag; GPS is used for drift, not directly."""
         entries = [_make_entry("DSC01234.JPG", "2023-05-14T10:23:45+02:00")]
         exif_dt = datetime(2023, 5, 14, 10, 23, 45)
         gps_dt = datetime(2023, 5, 14, 9, 23, 45, tzinfo=UTC)  # +02:00 → 11:23:45 local
@@ -234,7 +228,7 @@ class TestComputeCorrections:
         result = exifdates.compute_corrections(entries, exif_data, _TZ, _RADIUS, _GPS_RADIUS)
         assert result[0] is not None
         tag, new_date, _ = result[0]
-        assert tag == "[GPS]"
+        assert tag in ("[EXIF+GPS]", "[EXIF+GPS~]")
         assert "11:23:45" in new_date
 
     @pytest.mark.unit

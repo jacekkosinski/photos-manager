@@ -63,6 +63,21 @@ class TestFormatChangeLine:
         long = format_change_line("/path/to/photo.jpg", "[FILE]", ts0, ts1, name_width=20)
         assert short.index("[FILE]") == long.index("[FILE]")
 
+    def test_shows_time_only_when_same_date(self) -> None:
+        """When old and new timestamps fall on the same date, show HH:MM:SS only."""
+        # Two timestamps on the same day, 1 hour apart
+        base = datetime(2023, 5, 14, 10, 0, 0).timestamp()
+        line = format_change_line("photo.jpg", "[FILE]", base, base + 3600)
+        assert "10:00:00 → 11:00:00" in line
+        assert "2023" not in line
+
+    def test_shows_full_date_when_date_changes(self) -> None:
+        """When timestamps span a midnight boundary, show full YYYY-MM-DD HH:MM:SS."""
+        old_ts = datetime(2023, 5, 14, 23, 59, 59).timestamp()
+        new_ts = datetime(2023, 5, 15, 0, 0, 0).timestamp()
+        line = format_change_line("photo.jpg", "[FILE]", old_ts, new_ts)
+        assert "2023-05-14 23:59:59 → 2023-05-15 00:00:00" in line
+
 
 @pytest.mark.unit
 class TestGetNewestFiles:
