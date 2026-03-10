@@ -606,7 +606,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "-l",
         "--list",
         action="store_true",
-        help="Output one file path per line (no details, no summary)",
+        help="Output one tagged line per file with date, size, and archive ref (no summary)",
     )
     parser.add_argument(
         "-M",
