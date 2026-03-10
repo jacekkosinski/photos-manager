@@ -652,7 +652,7 @@ class TestDisplayFunctions:
             )
         ]
 
-        fw, tw = dedup.display_duplicates(duplicates, False, False, 1)
+        fw, tw = dedup.display_duplicates(duplicates, 1)
 
         captured = capsys.readouterr()
         assert "Duplicates" in captured.out
@@ -684,7 +684,7 @@ class TestDisplayFunctions:
             )
         ]
 
-        fw, tw = dedup.display_duplicates(duplicates, True, False, 1)
+        fw, tw = dedup.display_duplicates(duplicates, 1)
 
         captured = capsys.readouterr()
         assert "Filename differs" in captured.err
@@ -716,7 +716,7 @@ class TestDisplayFunctions:
             )
         ]
 
-        fw, tw = dedup.display_duplicates(duplicates, False, True, 1)
+        fw, tw = dedup.display_duplicates(duplicates, 1)
 
         captured = capsys.readouterr()
         assert "Timestamp differs" in captured.err
@@ -725,7 +725,7 @@ class TestDisplayFunctions:
 
     def test_display_duplicates_empty(self) -> None:
         """Test displaying empty duplicates list."""
-        fw, tw = dedup.display_duplicates([], False, False, 1)
+        fw, tw = dedup.display_duplicates([], 1)
         assert fw == 0
         assert tw == 0
 
@@ -790,7 +790,7 @@ class TestMain:
     """Integration tests for main/run functions."""
 
     def test_run_no_flags(self, tmp_path: Path) -> None:
-        """Test run without -d or -m flags shows error."""
+        """Test run without -d or -m flags (normal mode) succeeds."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
         scan_dir = tmp_path / "scan"
@@ -812,6 +812,52 @@ class TestMain:
 
         result = dedup.run(args)
         assert result == os.EX_OK
+
+    def test_run_list_no_dm_flags_shows_both(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """--list without -d/-m shows both [DUP] and [MISS] entries."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_file = archive_dir / "dup.txt"
+        archive_file.write_text("content")
+
+        json_file = tmp_path / "archive.json"
+        json_data = [
+            {
+                "path": str(archive_file.resolve()),
+                "size": 7,
+                "sha1": "040f06fd774092478d450774f5ba30c5da78acc8",
+                "md5": "9a0364b9e99bb480dd25e1f0284c8555",
+                "date": datetime.now(UTC).isoformat(),
+            }
+        ]
+        json_file.write_text(json.dumps(json_data))
+
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        (scan_dir / "dup.txt").write_text("content")  # duplicate
+        (scan_dir / "new.txt").write_text("new content")  # missing
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=str(scan_dir),
+            show_duplicates=False,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=True,
+            move=None,
+            copy=None,
+            start=1,
+        )
+
+        result = dedup.run(args)
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "[DUP]" in captured.out
+        assert "[MISS]" in captured.out
 
     def test_run_show_duplicates(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with -d flag showing duplicates."""
@@ -895,30 +941,40 @@ class TestMain:
     def test_run_with_filename_check(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test run with -f flag checking filenames."""
-        # Create archive with different filename
+        """Test --list -f filter: shows only duplicates with filename differences."""
+        # Two archive entries with same content but different sizes to distinguish them.
+        # Entry 1: "content" (7 bytes) stored as "original.txt"
+        # Entry 2: "content2" (8 bytes) stored as "same.txt"
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
-        archive_file = archive_dir / "original.txt"
-        archive_file.write_text("content")
 
         json_file = tmp_path / "archive.json"
         json_data = [
             {
-                "path": str(archive_file.resolve()),
+                "path": str(archive_dir / "original.txt"),
                 "size": 7,
                 "sha1": "040f06fd774092478d450774f5ba30c5da78acc8",
                 "md5": "9a0364b9e99bb480dd25e1f0284c8555",
                 "date": datetime.now(UTC).isoformat(),
-            }
+            },
+            {
+                "path": str(archive_dir / "same.txt"),
+                "size": 8,
+                "sha1": "105e7a844ac896f68e6f7dc0a9389d3e9be95abc",
+                "md5": "7e55db001d319a94b0b713529a756623",
+                "date": datetime.now(UTC).isoformat(),
+            },
         ]
         json_file.write_text(json.dumps(json_data))
 
-        # Create scan directory with different filename but same content
+        # Scan dir: renamed.txt has different name from archive (original.txt) -> should appear
+        # same.txt has same name as archive (same.txt) -> should NOT appear with -f filter
         scan_dir = tmp_path / "scan"
         scan_dir.mkdir()
-        scan_file = scan_dir / "renamed.txt"
-        scan_file.write_text("content")
+        renamed_file = scan_dir / "renamed.txt"
+        renamed_file.write_text("content")  # matches original.txt by checksum
+        same_name_file = scan_dir / "same.txt"
+        same_name_file.write_text("content2")  # matches same.txt by checksum
 
         args = argparse.Namespace(
             json_file=str(json_file),
@@ -928,7 +984,7 @@ class TestMain:
             check_filenames=True,
             check_timestamps=False,
             tolerance=1,
-            list=False,
+            list=True,
             move=None,
             copy=None,
             start=1,
@@ -938,47 +994,61 @@ class TestMain:
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
-        assert "Filename differs" in captured.err
+        # renamed.txt (name differs from original.txt) should appear
+        assert "renamed.txt" in captured.out
+        # same.txt (name matches) should NOT appear
+        assert "same.txt" not in captured.out
 
     def test_run_with_timestamp_check(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test run with -t flag checking timestamps."""
-        # Create archive
+        """Test --list -t filter: shows only duplicates with date differences."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
-        archive_file = archive_dir / "file.txt"
-        archive_file.write_text("content")
 
-        # Use old timestamp in JSON
-        old_date = (datetime.now(UTC) - timedelta(days=100)).isoformat()
+        now = datetime.now(UTC)
+        old_date = (now - timedelta(days=100)).isoformat()
+
         json_file = tmp_path / "archive.json"
         json_data = [
             {
-                "path": str(archive_file.resolve()),
+                # file1.txt: stored with old date -> date differs -> should appear
+                "path": str(archive_dir / "file1.txt"),
                 "size": 7,
                 "sha1": "040f06fd774092478d450774f5ba30c5da78acc8",
                 "md5": "9a0364b9e99bb480dd25e1f0284c8555",
                 "date": old_date,
-            }
+            },
+            {
+                # file2.txt: stored with same date as PSV -> no date diff -> should NOT appear
+                "path": str(archive_dir / "file2.txt"),
+                "size": 8,
+                "sha1": "105e7a844ac896f68e6f7dc0a9389d3e9be95abc",
+                "md5": "7e55db001d319a94b0b713529a756623",
+                "date": now.isoformat(),
+            },
         ]
         json_file.write_text(json.dumps(json_data))
 
-        # Create scan directory with same content but current timestamp
-        scan_dir = tmp_path / "scan"
-        scan_dir.mkdir()
-        scan_file = scan_dir / "file.txt"
-        scan_file.write_text("content")
+        # Use a PSV file so we can control the scanned dates precisely
+        psv_file = tmp_path / "files.psv"
+        lines = [
+            f"/scan/file1.txt|040f06fd774092478d450774f5ba30c5da78acc8"
+            f"|9a0364b9e99bb480dd25e1f0284c8555|{now.isoformat()}|7",
+            f"/scan/file2.txt|105e7a844ac896f68e6f7dc0a9389d3e9be95abc"
+            f"|7e55db001d319a94b0b713529a756623|{now.isoformat()}|8",
+        ]
+        psv_file.write_text("\n".join(lines) + "\n")
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=str(psv_file),
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
             check_timestamps=True,
             tolerance=1,
-            list=False,
+            list=True,
             move=None,
             copy=None,
             start=1,
@@ -988,7 +1058,10 @@ class TestMain:
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
-        assert "Timestamp differs" in captured.err
+        # file1.txt has date diff (old_date vs now) -> should appear
+        assert "file1.txt" in captured.out
+        # file2.txt has same date -> should NOT appear
+        assert "file2.txt" not in captured.out
 
     def test_run_nonexistent_json(self, tmp_path: Path) -> None:
         """Test run with nonexistent JSON file."""
@@ -1174,7 +1247,9 @@ class TestMain:
         # Should only have one line with the file path
         lines = captured.out.strip().split("\n")
         assert len(lines) == 1
-        assert str(scan_file.resolve()) in lines[0]
+        assert "[DUP]" in lines[0]
+        assert "file.txt" in lines[0]
+        assert "[ref:" in lines[0]
         # Should not have progress messages or summary
         assert "Loading" not in captured.out
         assert "Summary" not in captured.out
@@ -1211,7 +1286,9 @@ class TestMain:
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
         assert len(lines) == 1
-        assert str(scan_file.resolve()) in lines[0]
+        assert "[MISS]" in lines[0]
+        assert "new.txt" in lines[0]
+        assert "[date:" in lines[0]
         assert "Loading" not in captured.out
         assert "Summary" not in captured.out
 
@@ -1263,10 +1340,11 @@ class TestMain:
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
         assert len(lines) == 2
-        # Both files should be in output
         output = captured.out
-        assert str(dup_file.resolve()) in output
-        assert str(new_file.resolve()) in output
+        assert "[DUP]" in output
+        assert "[MISS]" in output
+        assert "file1.txt" in output
+        assert "file2.txt" in output
 
     def test_main_entry_point(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test main() entry point."""
@@ -1515,3 +1593,96 @@ class TestMain:
         captured = capsys.readouterr()
         assert "dir00100" in captured.out
         assert "dir00001" not in captured.out
+
+
+@pytest.mark.unit
+class TestFormatListLine:
+    """Tests for format_list_line function."""
+
+    def test_miss_line_contains_date_and_size(self) -> None:
+        """MISS line contains date and human-readable size."""
+        line = dedup.format_list_line(
+            "dir/a.jpg",
+            "[MISS]",
+            {"date": "2023-01-01T10:00:00", "size": 100},
+        )
+        assert "[MISS]" in line
+        assert "2023" in line
+        assert "100 B" in line
+
+    def test_dup_line_no_differences(self) -> None:
+        """DUP with same name/date shows path, [DUP], and [ref:]."""
+        scanned = {"path": "/scan/a.jpg", "date": "2023-01-01T10:00:00", "size": 100}
+        archive = {"path": "/archive/a.jpg", "date": "2023-01-01T10:00:00", "size": 100}
+        line = dedup.format_list_line("scan/a.jpg", "[DUP]", scanned, archive)
+        assert "[DUP]" in line
+        assert "[ref:" in line
+        # No date delta (dates are equal)
+        assert "delta" not in line
+        # No filename change (basenames are equal)
+        assert "->" not in line
+
+    def test_dup_line_date_diff_same_day(self) -> None:
+        """DUP with date diff on same day shows time-only format."""
+        scanned = {"path": "/scan/a.jpg", "date": "2023-01-01T10:00:00", "size": 100}
+        archive = {"path": "/archive/a.jpg", "date": "2023-01-01T10:00:05", "size": 100}
+        line = dedup.format_list_line("scan/a.jpg", "[DUP]", scanned, archive)
+        assert "10:00:00" in line
+        assert "10:00:05" in line
+        assert "delta: +5s" in line
+        # Full date should NOT appear (same day)
+        assert "2023-01-01" not in line
+
+    def test_dup_line_date_diff_crosses_midnight(self) -> None:
+        """DUP with date diff crossing midnight shows full YYYY-MM-DD HH:MM:SS."""
+        scanned = {"path": "/scan/a.jpg", "date": "2023-01-01T23:59:00", "size": 100}
+        archive = {"path": "/archive/a.jpg", "date": "2023-01-02T00:01:00", "size": 100}
+        line = dedup.format_list_line("scan/a.jpg", "[DUP]", scanned, archive)
+        assert "2023-01-01" in line
+        assert "2023-01-02" in line
+
+    def test_dup_line_name_diff(self) -> None:
+        """DUP with name diff shows 'A -> B'."""
+        scanned = {"path": "/scan/IMG_1.JPG", "date": "2023-01-01T10:00:00", "size": 100}
+        archive = {"path": "/archive/img_2.jpg", "date": "2023-01-01T10:00:00", "size": 100}
+        line = dedup.format_list_line("scan/IMG_1.JPG", "[DUP]", scanned, archive)
+        assert "IMG_1.JPG" in line
+        assert "img_2.jpg" in line
+        assert "->" in line
+
+
+@pytest.mark.unit
+class TestDupFilters:
+    """Tests for _dup_has_name_change and _dup_has_date_change helpers."""
+
+    def test_has_name_change_true(self) -> None:
+        """Different basenames returns True."""
+        assert dedup._dup_has_name_change(({"path": "IMG_1.JPG"}, {"path": "img_2.jpg"})) is True
+
+    def test_has_name_change_false_same_case(self) -> None:
+        """Identical basenames returns False."""
+        assert dedup._dup_has_name_change(({"path": "a/IMG.JPG"}, {"path": "b/IMG.JPG"})) is False
+
+    def test_has_name_change_false_different_case(self) -> None:
+        """Same name different case returns False (case-insensitive)."""
+        assert dedup._dup_has_name_change(({"path": "IMG.JPG"}, {"path": "img.jpg"})) is False
+
+    def test_has_date_change_true(self) -> None:
+        """Date difference beyond tolerance returns True."""
+        now = datetime.now(UTC)
+        later = now + timedelta(seconds=100)
+        dup: tuple[dict[str, str | int], dict[str, str | int]] = (
+            {"date": now.isoformat()},
+            {"date": later.isoformat()},
+        )
+        assert dedup._dup_has_date_change(dup, 1) is True
+
+    def test_has_date_change_false_within_tolerance(self) -> None:
+        """Date difference within tolerance returns False."""
+        now = datetime.now(UTC)
+        almost = now + timedelta(seconds=0)
+        dup: tuple[dict[str, str | int], dict[str, str | int]] = (
+            {"date": now.isoformat()},
+            {"date": almost.isoformat()},
+        )
+        assert dedup._dup_has_date_change(dup, 1) is False

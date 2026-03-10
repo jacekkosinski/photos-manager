@@ -20,7 +20,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from photos_manager.common import calculate_checksums, format_count, human_size, load_json
+from photos_manager.common import (
+    TIME_FMT,
+    TS_FMT,
+    calculate_checksums,
+    format_count,
+    human_size,
+    load_json,
+)
 
 
 def scan_directory(directory: str) -> list[dict[str, str | int]]:
@@ -354,18 +361,162 @@ def format_size(size: int) -> str:
     return f"{size:,}"
 
 
+def _display_path(abs_path: str, source: str) -> str:
+    """Return path relative to the parent of source (includes source dir name).
+
+    Args:
+        abs_path: Absolute path to make relative.
+        source: Source directory or PSV file passed as CLI argument.
+
+    Returns:
+        Path relative to source's parent directory, or abs_path if not possible.
+
+    Examples:
+        >>> _display_path("/a/b/scan/file.txt", "/a/b/scan")
+        'scan/file.txt'
+    """
+    try:
+        return str(Path(abs_path).relative_to(Path(source).parent.resolve()))
+    except ValueError:
+        return abs_path
+
+
+def _dup_has_name_change(dup: tuple[dict[str, str | int], dict[str, str | int]]) -> bool:
+    """Return True if filenames differ (case-insensitive) between scanned and archive.
+
+    Args:
+        dup: ``(scanned_entry, archive_entry)`` tuple.
+
+    Returns:
+        True if basename differs case-insensitively.
+
+    Examples:
+        >>> _dup_has_name_change(({"path": "IMG.JPG"}, {"path": "img.jpg"}))
+        False
+        >>> _dup_has_name_change(({"path": "IMG_1.JPG"}, {"path": "img_2.jpg"}))
+        True
+    """
+    scanned_name = Path(str(dup[0].get("path", ""))).name
+    archive_name = Path(str(dup[1].get("path", ""))).name
+    return scanned_name.lower() != archive_name.lower()
+
+
+def _dup_has_date_change(
+    dup: tuple[dict[str, str | int], dict[str, str | int]], tolerance: int
+) -> bool:
+    """Return True if dates differ beyond tolerance between scanned and archive.
+
+    Args:
+        dup: ``(scanned_entry, archive_entry)`` tuple.
+        tolerance: Allowed difference in seconds.
+
+    Returns:
+        True if date difference exceeds tolerance.
+
+    Examples:
+        >>> from datetime import datetime, UTC, timedelta
+        >>> now = datetime.now(UTC)
+        >>> later = now + timedelta(seconds=100)
+        >>> _dup_has_date_change(({"date": now.isoformat()}, {"date": later.isoformat()}), 1)
+        True
+    """
+    try:
+        s_dt = datetime.fromisoformat(str(dup[0].get("date", "")))
+        a_dt = datetime.fromisoformat(str(dup[1].get("date", "")))
+        return abs((a_dt - s_dt).total_seconds()) > tolerance
+    except ValueError:
+        return False
+
+
+def format_list_line(
+    display_path: str,
+    tag: str,
+    scanned: dict[str, str | int],
+    archive: dict[str, str | int] | None = None,
+) -> str:
+    """Format one ``--list`` output line for a ``[DUP]`` or ``[MISS]`` entry.
+
+    For ``[MISS]``: shows date and human-readable size.
+    For ``[DUP]``: shows date delta (when dates differ), filename change (when
+    basenames differ case-insensitively), and the archive reference path.
+    Date format follows the same conditional logic as fixdates/exifdates:
+    time-only when both timestamps share the same calendar date, full
+    ``YYYY-MM-DD HH:MM:SS`` when they cross midnight.
+
+    Args:
+        display_path: Path to display (typically relative to source parent).
+        tag: ``"[DUP]"`` or ``"[MISS]"``.
+        scanned: Scanned file metadata dict.
+        archive: Archive file metadata dict; ``None`` for ``[MISS]`` entries.
+
+    Returns:
+        Formatted output line.
+
+    Examples:
+        >>> entry = {"date": "2023-01-01T10:00:00", "size": 100}
+        >>> line = format_list_line("dir/a.jpg", "[MISS]", entry)
+        >>> "[MISS]" in line and "2023" in line and "100 B" in line
+        True
+    """
+    prefix = f"{display_path}  {tag:<6}"
+
+    if tag == "[MISS]":
+        date_str = str(scanned.get("date", ""))
+        try:
+            dt = datetime.fromisoformat(date_str)
+            date_display = dt.strftime(TS_FMT)
+        except ValueError:
+            date_display = date_str
+        size_display = human_size(int(scanned.get("size", 0)))
+        return f"{prefix}  [date: {date_display}, size: {size_display}]"
+
+    # [DUP]
+    parts: list[str] = []
+
+    if archive is not None:
+        # Date comparison: scanned_date -> archive_date, delta = archive - scanned
+        scanned_date = str(scanned.get("date", ""))
+        archive_date = str(archive.get("date", ""))
+        if scanned_date and archive_date:
+            try:
+                scanned_dt = datetime.fromisoformat(scanned_date)
+                archive_dt = datetime.fromisoformat(archive_date)
+                if scanned_dt != archive_dt:
+                    delta_s = int((archive_dt - scanned_dt).total_seconds())
+                    delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
+                    if scanned_dt.date() != archive_dt.date():
+                        old_str = scanned_dt.strftime(TS_FMT)
+                        new_str = archive_dt.strftime(TS_FMT)
+                    else:
+                        old_str = scanned_dt.strftime(TIME_FMT)
+                        new_str = archive_dt.strftime(TIME_FMT)
+                    parts.append(f"{old_str} -> {new_str} (delta: {delta_str})")
+            except ValueError:
+                pass
+
+        # Filename comparison (case-insensitive)
+        scanned_name = Path(str(scanned.get("path", ""))).name
+        archive_name = Path(str(archive.get("path", ""))).name
+        if scanned_name.lower() != archive_name.lower():
+            parts.append(f"{scanned_name} -> {archive_name}")
+
+        # Ref path - always shown for DUP
+        archive_path = str(archive.get("path", ""))
+        if archive_path:
+            parts.append(f"[ref: {archive_path}]")
+
+    suffix = "  ".join(parts)
+    return f"{prefix}  {suffix}" if suffix else prefix
+
+
 def display_duplicates(
     duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
-    check_filenames: bool,
-    check_timestamps: bool,
     tolerance: int,
 ) -> tuple[int, int]:
-    """Display duplicate files with optional warnings.
+    """Display duplicate files with warnings.
 
     Args:
         duplicates: List of (scanned_entry, archive_entry) tuples
-        check_filenames: Whether to check and warn about filename differences
-        check_timestamps: Whether to check and warn about timestamp differences
         tolerance: Timestamp tolerance in seconds
 
     Returns:
@@ -386,19 +537,15 @@ def display_duplicates(
         print(f"         MD5: {scanned['md5']}")
         print(f"         Archive: {archive['path']}")
 
-        if check_filenames:
-            is_same, warning = compare_filenames(str(scanned["path"]), str(archive["path"]))
-            if not is_same and warning:
-                print(f"         Warning: {warning}", file=sys.stderr)
-                filename_warnings += 1
+        is_same, warning = compare_filenames(str(scanned["path"]), str(archive["path"]))
+        if not is_same and warning:
+            print(f"         Warning: {warning}", file=sys.stderr)
+            filename_warnings += 1
 
-        if check_timestamps:
-            is_within, diff = compare_timestamps(
-                str(scanned["date"]), str(archive["date"]), tolerance
-            )
-            if not is_within and diff:
-                print(f"         Warning: {diff}", file=sys.stderr)
-                timestamp_warnings += 1
+        is_within, diff = compare_timestamps(str(scanned["date"]), str(archive["date"]), tolerance)
+        if not is_within and diff:
+            print(f"         Warning: {diff}", file=sys.stderr)
+            timestamp_warnings += 1
 
         print()
 
@@ -486,13 +633,16 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "-f",
         "--check-filenames",
         action="store_true",
-        help="Compare filenames and warn if different (basename only)",
+        help=(
+            "Filter --list output to duplicates with filename differences"
+            " (basename, case-insensitive)"
+        ),
     )
     parser.add_argument(
         "-t",
         "--check-timestamps",
         action="store_true",
-        help="Compare timestamps and warn if different",
+        help="Filter --list output to duplicates with date differences",
     )
     parser.add_argument(
         "-T",
@@ -540,11 +690,11 @@ def validate_args(args: argparse.Namespace) -> None:
     Raises:
         SystemExit: On any validation error
     """
-    # -d/-m required only when using modes that need them
-    if (args.list or args.move or args.copy) and not args.show_duplicates and not args.show_missing:
+    # -d/-m required for --move/--copy (need to know which files to process)
+    if (args.move or args.copy) and not args.show_duplicates and not args.show_missing:
         raise SystemExit(
             "Error: At least one of -d/--show-duplicates or -m/--show-missing is required "
-            "when using --list, --move, or --copy\n"
+            "when using --move or --copy\n"
             "Use -h or --help for usage information"
         )
 
@@ -612,15 +762,35 @@ def process_list_mode(
 ) -> None:
     """Process list mode (--list).
 
+    Displays one line per file with tag and contextual info.  ``--check-filenames``
+    and ``--check-timestamps`` act as filters: when set, only duplicate entries
+    that have a filename change or a date change (respectively) are shown.
+    Both flags together form an AND filter.  Missing entries are always shown.
+
     Args:
         args: Parsed command-line arguments
         duplicates: List of duplicate file pairs
         missing: List of missing files
     """
-    if args.show_duplicates:
-        display_file_paths(duplicates, extract_path=lambda item: item[0]["path"])
-    if args.show_missing:
-        display_file_paths(missing)
+    source = str(args.source)
+    show_all = not args.show_duplicates and not args.show_missing
+
+    if args.show_duplicates or show_all:
+        filtered: list[tuple[dict[str, str | int], dict[str, str | int]]] = list(duplicates)
+        if args.check_filenames:
+            filtered = [d for d in filtered if _dup_has_name_change(d)]
+        if args.check_timestamps:
+            filtered = [d for d in filtered if _dup_has_date_change(d, args.tolerance)]
+        for scanned, archive in filtered:
+            line = format_list_line(
+                _display_path(str(scanned["path"]), source), "[DUP]", scanned, archive
+            )
+            print(line)
+
+    if args.show_missing or show_all:
+        for entry in missing:
+            line = format_list_line(_display_path(str(entry["path"]), source), "[MISS]", entry)
+            print(line)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -661,9 +831,7 @@ def run(args: argparse.Namespace) -> int:
             print(f"Loaded {Path(args.source).name} with {format_count(len(scanned_files))} files.")
 
         if args.show_duplicates:
-            display_duplicates(
-                duplicates, args.check_filenames, args.check_timestamps, args.tolerance
-            )
+            display_duplicates(duplicates, args.tolerance)
         if args.show_missing:
             display_missing(missing)
 
