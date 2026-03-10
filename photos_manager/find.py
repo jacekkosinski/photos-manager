@@ -531,10 +531,16 @@ def display_duplicates(
     timestamp_warnings = 0
 
     for idx, (scanned, archive) in enumerate(duplicates, 1):
+        size = int(scanned["size"])
+        try:
+            date_display = datetime.fromisoformat(str(scanned["date"])).isoformat(sep=" ")
+        except ValueError:
+            date_display = str(scanned["date"])
         print(f"  [{idx}/{len(duplicates)}] {scanned['path']}")
-        print(f"         Size: {format_size(int(scanned['size']))} bytes")
+        print(f"         date: {date_display}")
+        print(f"         size: {size:_} bytes ({human_size(size)})".replace("_", " "))
         print(f"         SHA1: {scanned['sha1']}")
-        print(f"         MD5: {scanned['md5']}")
+        print(f"         MD5:  {scanned['md5']}")
         print(f"         Archive: {archive['path']}")
 
         is_same, warning = compare_filenames(str(scanned["path"]), str(archive["path"]))
@@ -564,10 +570,16 @@ def display_missing(missing: list[dict[str, str | int]]) -> None:
     print("\nMissing from archive (files NOT in archive):\n")
 
     for idx, entry in enumerate(missing, 1):
+        size = int(entry["size"])
+        try:
+            date_display = datetime.fromisoformat(str(entry.get("date", ""))).isoformat(sep=" ")
+        except ValueError:
+            date_display = str(entry.get("date", ""))
         print(f"  [{idx}/{len(missing)}] {entry['path']}")
-        print(f"        Size: {format_size(int(entry['size']))} bytes")
+        print(f"        date: {date_display}")
+        print(f"        size: {size:_} bytes ({human_size(size)})".replace("_", " "))
         print(f"        SHA1: {entry['sha1']}")
-        print(f"        MD5: {entry['md5']}")
+        print(f"        MD5:  {entry['md5']}")
         print()
 
 
