@@ -30,6 +30,8 @@ Usage:
 """
 
 import argparse
+import contextlib
+import signal
 import sys
 from typing import cast
 
@@ -67,6 +69,10 @@ def main() -> int:
         $ photos fixdates archive.json --all
         $ photos verify /path/to/archive --all
     """
+    # Allow clean termination when stdout is closed (e.g. piping to head/less)
+    with contextlib.suppress(AttributeError):  # Windows has no SIGPIPE
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
     # Create main parser
     parser = argparse.ArgumentParser(
         prog="photos",
