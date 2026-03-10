@@ -10,7 +10,7 @@ management.
 
 - 🚀 Modern Python 3.12
 - 📝 Type-safe with mypy strict mode
-- ✅ Comprehensive testing with pytest (585 tests, 88% coverage)
+- ✅ Comprehensive testing with pytest (645 tests, 88% coverage)
 - 📚 Google-style docstrings with interrogate validation
 - 🔧 Pre-commit hooks for code quality
 - 🎯 Linting and formatting with Ruff
@@ -359,14 +359,14 @@ photos sync /source /dest --rewrite-dest /remote/dest --output sync.sh
 ### find - Find Duplicates and Missing Files
 
 Compare files in a directory against archive metadata to identify duplicates
-(files already in archive) and missing files (files in archive but not in the
-scanned directory). Matches by file size, then SHA1 and MD5 checksums.
+(files already in archive) and missing files (files in the scanned directory
+that are NOT in the archive). Matches by file size, then SHA1 and MD5 checksums.
 
 ```bash
 # Find duplicates (files that exist in archive)
 photos find archive.json /path/to/scan -d
 
-# Find missing files (files in archive but not in scan directory)
+# Find missing files (files in scan directory but NOT in archive)
 photos find archive.json /path/to/scan -m
 
 # Both duplicates and missing
@@ -483,7 +483,7 @@ photos-manager-cli/
 │   ├── info.py            # Show archive statistics
 │   ├── sync.py            # Synchronization tool
 │   └── find.py           # Find duplicates tool
-├── tests/                 # 585 tests, 88% coverage
+├── tests/                 # 645 tests, 88% coverage
 │   ├── conftest.py        # Shared fixtures
 │   ├── test_cli.py
 │   ├── test_common.py
@@ -579,7 +579,7 @@ poetry run interrogate -v --generate-badge . photos_manager/
 
 ### Testing
 
-The project has comprehensive test coverage with 585 tests covering all modules.
+The project has comprehensive test coverage with 645 tests covering all modules.
 
 ```bash
 # Run all tests
@@ -595,7 +595,7 @@ poetry run pytest tests/test_prepare.py
 poetry run pytest -v
 ```
 
-**Test Coverage:** 88% overall with 585 tests across all modules.
+**Test Coverage:** 88% overall with 645 tests across all modules.
 
 ### Documentation
 

@@ -106,7 +106,7 @@ photos-manager-cli/
 │   ├── info.py          # Show archive statistics
 │   ├── sync.py          # Synchronization tool
 │   └── find.py         # Find duplicates tool
-├── tests/               # Test files (535 tests)
+├── tests/               # Test files (645 tests)
 │   ├── conftest.py      # Shared fixtures
 │   ├── test_cli.py
 │   ├── test_common.py
@@ -210,7 +210,7 @@ photos sync /source/archive /dest/archive --execute
 # Find duplicates in scan directory (files that exist in archive)
 photos find archive.json /path/to/scan -d
 
-# Find missing files (files in archive but not in scan directory)
+# Find missing files (files in scan directory but NOT in archive)
 photos find archive.json /path/to/scan -m
 
 # Both duplicates and missing
