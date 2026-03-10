@@ -54,26 +54,6 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _human_size(size_bytes: int) -> str:
-    """Format bytes as a human-readable size string.
-
-    Args:
-        size_bytes: Size in bytes to format.
-
-    Returns:
-        Human-readable size string, e.g. '1.5 GB', '234.0 MB', '512 B'.
-    """
-    if size_bytes < 1024:
-        return f"{size_bytes} B"
-    if size_bytes < 1024**2:
-        return f"{size_bytes / 1024:.1f} kB"
-    if size_bytes < 1024**3:
-        return f"{size_bytes / 1024**2:.1f} MB"
-    if size_bytes < 1024**4:
-        return f"{size_bytes / 1024**3:.1f} GB"
-    return f"{size_bytes / 1024**4:.1f} TB"
-
-
 _TIME_THRESHOLDS: list[tuple[int, int, str]] = [
     (60, 1, "second"),
     (3600, 60, "minute"),
@@ -247,7 +227,7 @@ def _print_table(
     for label, count, size in shown:
         pct = size / denominator * 100 if denominator > 0 else 0.0
         count_str = f"{count:,}".replace(",", " ")
-        size_str = _human_size(size)
+        size_str = common.human_size(size)
         print(f"  {label:<{label_width}}{sep}{count_str:>8} files  {size_str:>10}  {pct:>8.2f}%")
     if len(rows) > top_n:
         print(f"  \u2026 and {len(rows) - top_n} more")
@@ -285,15 +265,15 @@ def _print_stats(
     tf_str = f"{total_files:,}".replace(",", " ")
     print(
         f"{'Index files:':<14}{ic_str:>8}  "
-        f"{_human_size(index_files_size):>10}  {index_files_size / denom * 100:>8.2f}%"
+        f"{common.human_size(index_files_size):>10}  {index_files_size / denom * 100:>8.2f}%"
     )
     print(
         f"{'Total files:':<14}{tf_str:>8}  "
-        f"{_human_size(total_size):>10}  {total_size / denom * 100:>8.2f}%"
+        f"{common.human_size(total_size):>10}  {total_size / denom * 100:>8.2f}%"
     )
     grand_count = index_file_count + total_files
     gc_str = f"{grand_count:,}".replace(",", " ")
-    print(f"{'Grand total:':<14}{gc_str:>8}  {_human_size(grand_total_size):>10}")
+    print(f"{'Grand total:':<14}{gc_str:>8}  {common.human_size(grand_total_size):>10}")
     print()
 
     date_min: str | None = stats["date_min"]
@@ -311,7 +291,7 @@ def _print_stats(
             pct = photo_bytes / grand_total_size * 100 if grand_total_size > 0 else 0.0
             count_str = f"{count:,}".replace(",", " ")
             pct_str = f"{pct:.2f}%"
-            rows.append((filename, count_str, _human_size(photo_bytes), pct_str))
+            rows.append((filename, count_str, common.human_size(photo_bytes), pct_str))
         name_w = max(len(r[0]) for r in rows)
         count_w = max(len(r[1]) for r in rows)
         size_w = max(len(r[2]) for r in rows)

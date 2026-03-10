@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from photos_manager.info import _date_span, _gather_stats, _human_size, _time_ago, run
+from photos_manager.common import human_size as _human_size
+from photos_manager.info import _date_span, _gather_stats, _time_ago, run
 
 _Record = dict[str, str | int]
 

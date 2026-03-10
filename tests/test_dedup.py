@@ -755,17 +755,11 @@ class TestDisplayFunctions:
         ]
         missing = [{"path": "/scan/new.txt", "size": 200, "sha1": "xyz", "md5": "uvw"}]
 
-        dedup.display_summary(10, duplicates, missing, 1, 2)
+        dedup.display_summary(duplicates, missing)
 
         captured = capsys.readouterr()
-        assert "Summary:" in captured.out
-        assert "Files scanned: 10" in captured.out
-        assert "Duplicates found: 1" in captured.out
-        assert "100 bytes" in captured.out
-        assert "Missing from archive: 1" in captured.out
-        assert "200 bytes" in captured.out
-        assert "Filename warnings: 1" in captured.out
-        assert "Timestamp warnings: 2" in captured.out
+        assert "1 duplicates found" in captured.out
+        assert "1 files missing" in captured.out
 
 
 @pytest.mark.unit
@@ -816,9 +810,8 @@ class TestMain:
             start=1,
         )
 
-        with pytest.raises(SystemExit) as exc_info:
-            dedup.run(args)
-        assert "At least one of" in str(exc_info.value)
+        result = dedup.run(args)
+        assert result == os.EX_OK
 
     def test_run_show_duplicates(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with -d flag showing duplicates."""
@@ -866,7 +859,7 @@ class TestMain:
 
         captured = capsys.readouterr()
         assert "Duplicates" in captured.out
-        assert "Summary:" in captured.out
+        assert "duplicates found" in captured.out
 
     def test_run_show_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with -m flag showing missing files."""
@@ -946,7 +939,6 @@ class TestMain:
 
         captured = capsys.readouterr()
         assert "Filename differs" in captured.err
-        assert "Filename warnings: 1" in captured.out
 
     def test_run_with_timestamp_check(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]

@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from photos_manager.common import calculate_checksums, load_json
+from photos_manager.common import calculate_checksums, format_count, human_size, load_json
 
 
 def scan_directory(directory: str) -> list[dict[str, str | int]]:
@@ -442,34 +442,21 @@ def display_file_paths(
 
 
 def display_summary(
-    scanned_count: int,
     duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
     missing: list[dict[str, str | int]],
-    filename_warnings: int,
-    timestamp_warnings: int,
 ) -> None:
     """Display summary statistics.
 
     Args:
-        scanned_count: Total number of files scanned
-        duplicates: List of duplicate entries
-        missing: List of missing entries
-        filename_warnings: Number of filename warnings
-        timestamp_warnings: Number of timestamp warnings
+        duplicates: List of duplicate entries.
+        missing: List of missing entries.
     """
     dup_size = sum(int(scanned["size"]) for scanned, _ in duplicates)
     miss_size = sum(int(entry["size"]) for entry in missing)
 
-    print("=" * 60)
-    print("Summary:")
-    print(f"  Files scanned: {scanned_count}")
-    print(f"  Duplicates found: {len(duplicates)} (total size: {format_size(dup_size)} bytes)")
-    print(f"  Missing from archive: {len(missing)} (total size: {format_size(miss_size)} bytes)")
-    if filename_warnings > 0:
-        print(f"  Filename warnings: {filename_warnings}")
-    if timestamp_warnings > 0:
-        print(f"  Timestamp warnings: {timestamp_warnings}")
-    print("=" * 60)
+    print()
+    print(f"{format_count(len(duplicates))} duplicates found ({human_size(dup_size)}).")
+    print(f"{format_count(len(missing))} files missing ({human_size(miss_size)}).")
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -556,10 +543,11 @@ def validate_args(args: argparse.Namespace) -> None:
     Raises:
         SystemExit: On any validation error
     """
-    # Check if at least one display flag is specified
-    if not args.show_duplicates and not args.show_missing:
+    # -d/-m required only when using modes that need them
+    if (args.list or args.move or args.copy) and not args.show_duplicates and not args.show_missing:
         raise SystemExit(
-            "Error: At least one of -d/--show-duplicates or -m/--show-missing is required\n"
+            "Error: At least one of -d/--show-duplicates or -m/--show-missing is required "
+            "when using --list, --move, or --copy\n"
             "Use -h or --help for usage information"
         )
 
@@ -638,37 +626,6 @@ def process_list_mode(
         display_file_paths(missing)
 
 
-def process_normal_mode(
-    args: argparse.Namespace,
-    scanned_files: list[dict[str, str | int]],
-    duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
-    missing: list[dict[str, str | int]],
-) -> None:
-    """Process normal display mode (detailed output with summary).
-
-    Args:
-        args: Parsed command-line arguments
-        scanned_files: List of scanned files
-        duplicates: List of duplicate file pairs
-        missing: List of missing files
-    """
-    filename_warnings = 0
-    timestamp_warnings = 0
-
-    if args.show_duplicates:
-        fw, tw = display_duplicates(
-            duplicates, args.check_filenames, args.check_timestamps, args.tolerance
-        )
-        filename_warnings += fw
-        timestamp_warnings += tw
-
-    if args.show_missing:
-        display_missing(missing)
-
-    # Display summary
-    display_summary(len(scanned_files), duplicates, missing, filename_warnings, timestamp_warnings)
-
-
 def run(args: argparse.Namespace) -> int:
     """Execute dedup command.
 
@@ -681,49 +638,39 @@ def run(args: argparse.Namespace) -> int:
     Raises:
         SystemExit: On validation or runtime errors
     """
-    # Validate arguments
     validate_args(args)
 
-    # Determine if we should suppress progress messages
-    suppress_progress = args.list or args.move or args.copy
-
-    # Load archive metadata
-    if not suppress_progress:
-        print(f"Loading archive metadata from {args.json_file}...")
     archive_data = load_json(args.json_file)
-    if not suppress_progress:
-        print(f"Loaded {len(archive_data)} files from archive")
-
-    # Build indexes for efficient lookup
     size_index, checksum_index = build_archive_index(archive_data)
 
-    # Collect scanned files from directory or PSV file
     source = Path(args.source)
-    if source.is_dir():
-        if not suppress_progress:
-            print(f"\nScanning directory {args.source}...")
-        scanned_files = scan_directory(args.source)
-        if not suppress_progress:
-            print(f"Scanned {len(scanned_files)} files")
-    else:
-        if not suppress_progress:
-            print(f"\nLoading file list from {args.source}...")
-        scanned_files = load_psv(args.source)
-        if not suppress_progress:
-            print(f"Loaded {len(scanned_files)} files")
+    scanned_files = scan_directory(args.source) if source.is_dir() else load_psv(args.source)
 
-    # Find duplicates and missing
-    if not suppress_progress:
-        print("\nComparing files...")
     duplicates, missing = find_duplicates(scanned_files, size_index, checksum_index)
 
-    # Display results based on flags
     if args.move or args.copy:
         process_command_mode(args, duplicates, missing)
     elif args.list:
         process_list_mode(args, duplicates, missing)
     else:
-        process_normal_mode(args, scanned_files, duplicates, missing)
+        archive_size = sum(int(e.get("size", 0)) for e in archive_data)
+        print(
+            f"Loaded {Path(args.json_file).name} with "
+            f"{format_count(len(archive_data))} files ({human_size(archive_size)})."
+        )
+        if source.is_dir():
+            print(f"Scanned directory {args.source} with {format_count(len(scanned_files))} files.")
+        else:
+            print(f"Loaded {Path(args.source).name} with {format_count(len(scanned_files))} files.")
+
+        if args.show_duplicates:
+            display_duplicates(
+                duplicates, args.check_filenames, args.check_timestamps, args.tolerance
+            )
+        if args.show_missing:
+            display_missing(missing)
+
+        display_summary(duplicates, missing)
 
     return os.EX_OK
 

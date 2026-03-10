@@ -107,6 +107,50 @@ def calculate_checksums_strict(file_path: str) -> tuple[str, str]:
     return _hash_file(file_path)
 
 
+def format_count(n: int) -> str:
+    """Format integer with space as thousands separator.
+
+    Args:
+        n: Integer to format.
+
+    Returns:
+        String with spaces as thousands separators, e.g. ``280 924``.
+
+    Examples:
+        >>> format_count(280924)
+        '280 924'
+        >>> format_count(100)
+        '100'
+    """
+    return f"{n:,}".replace(",", " ")
+
+
+def human_size(size_bytes: int) -> str:
+    """Format bytes as a human-readable size string.
+
+    Args:
+        size_bytes: Size in bytes to format.
+
+    Returns:
+        Human-readable size string, e.g. ``1.5 GB``, ``234.0 MB``, ``512 B``.
+
+    Examples:
+        >>> human_size(0)
+        '0 B'
+        >>> human_size(1500000)
+        '1.4 MB'
+    """
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    if size_bytes < 1024**2:
+        return f"{size_bytes / 1024:.1f} kB"
+    if size_bytes < 1024**3:
+        return f"{size_bytes / 1024**2:.1f} MB"
+    if size_bytes < 1024**4:
+        return f"{size_bytes / 1024**3:.1f} GB"
+    return f"{size_bytes / 1024**4:.1f} TB"
+
+
 def _validate_directory(directory: str) -> Path:
     """Validate that the given path is an existing directory.
 
