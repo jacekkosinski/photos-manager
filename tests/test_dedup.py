@@ -777,7 +777,7 @@ class TestSetupParser:
         )
 
         assert args.json_file == "archive.json"
-        assert args.source == "/scan/dir"
+        assert args.source == ["/scan/dir"]
         assert args.show_duplicates is True
         assert args.show_missing is True
         assert args.check_filenames is True
@@ -798,7 +798,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=False,
             show_missing=False,
             check_filenames=False,
@@ -841,7 +841,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=False,
             show_missing=False,
             check_filenames=False,
@@ -888,7 +888,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -920,7 +920,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=False,
             show_missing=True,
             check_filenames=False,
@@ -978,7 +978,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=False,
             check_filenames=True,
@@ -1042,7 +1042,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(psv_file),
+            source=[str(psv_file)],
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1070,7 +1070,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file="/nonexistent.json",
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1092,7 +1092,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source="/nonexistent/dir",
+            source=["/nonexistent/dir"],
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1134,7 +1134,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(psv_file),
+            source=[str(psv_file)],
             show_duplicates=True,
             show_missing=True,
             check_filenames=False,
@@ -1183,7 +1183,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=True,
             check_filenames=True,
@@ -1228,7 +1228,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1268,7 +1268,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=False,
             show_missing=True,
             check_filenames=False,
@@ -1322,7 +1322,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=True,
             check_filenames=False,
@@ -1378,7 +1378,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=False,
             show_missing=True,
             check_filenames=False,
@@ -1430,7 +1430,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1462,7 +1462,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1488,7 +1488,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1514,7 +1514,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1544,7 +1544,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=True,
             show_missing=False,
             check_filenames=False,
@@ -1575,7 +1575,7 @@ class TestMain:
 
         args = argparse.Namespace(
             json_file=str(json_file),
-            source=str(scan_dir),
+            source=[str(scan_dir)],
             show_duplicates=False,
             show_missing=True,
             check_filenames=False,
@@ -1686,3 +1686,176 @@ class TestDupFilters:
             {"date": almost.isoformat()},
         )
         assert dedup._dup_has_date_change(dup, 1) is False
+
+
+@pytest.mark.integration
+class TestMultipleSources:
+    """Integration tests for multiple source arguments."""
+
+    def _make_archive_json(self, tmp_path: Path, files: list[tuple[Path, str]]) -> Path:
+        """Write archive JSON for given (path, content) pairs."""
+        import hashlib
+
+        json_file = tmp_path / "archive.json"
+        entries = []
+        for file_path, content in files:
+            data = content.encode()
+            entries.append(
+                {
+                    "path": str(file_path.resolve()),
+                    "size": len(data),
+                    "sha1": hashlib.sha1(data, usedforsecurity=False).hexdigest(),
+                    "md5": hashlib.md5(data, usedforsecurity=False).hexdigest(),
+                    "date": datetime.now(UTC).isoformat(),
+                }
+            )
+        json_file.write_text(json.dumps(entries))
+        return json_file
+
+    def test_run_two_directories_combined(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Scanning two directories combines their files into one result."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        dir_a = tmp_path / "a"
+        dir_a.mkdir()
+        (dir_a / "file_a.txt").write_text("aaa")
+
+        dir_b = tmp_path / "b"
+        dir_b.mkdir()
+        (dir_b / "file_b.txt").write_text("bbb")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(dir_a), str(dir_b)],
+            show_duplicates=False,
+            show_missing=True,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=False,
+            move=None,
+            copy=None,
+            start=1,
+        )
+
+        result = dedup.run(args)
+
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "2 files missing" in captured.out
+
+    def test_run_directory_and_psv_combined(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A directory and a PSV file can be given together."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        (scan_dir / "from_dir.txt").write_text("dir content")
+
+        psv_file = tmp_path / "extra.psv"
+        psv_file.write_text(
+            "/some/path/from_psv.jpg"
+            "|aabbccddaabbccddaabbccddaabbccddaabbccdd"
+            "|11223344112233441122334411223344"
+            "|2024-01-01T10:00:00+00:00|12345\n"
+        )
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir), str(psv_file)],
+            show_duplicates=False,
+            show_missing=True,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=False,
+            move=None,
+            copy=None,
+            start=1,
+        )
+
+        result = dedup.run(args)
+
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "2 files missing" in captured.out
+
+    def test_run_two_directories_list_mode(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """List mode works with multiple directories."""
+        content = "shared"
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+        archive_file = archive_dir / "shared.txt"
+        archive_file.write_text(content)
+        json_file = self._make_archive_json(tmp_path, [(archive_file, content)])
+
+        dir_a = tmp_path / "a"
+        dir_a.mkdir()
+        (dir_a / "shared.txt").write_text(content)  # duplicate
+
+        dir_b = tmp_path / "b"
+        dir_b.mkdir()
+        (dir_b / "unique.txt").write_text("only in b")  # missing
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(dir_a), str(dir_b)],
+            show_duplicates=False,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=True,
+            move=None,
+            copy=None,
+            start=1,
+        )
+
+        result = dedup.run(args)
+
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "[DUP]" in captured.out
+        assert "[MISS]" in captured.out
+
+    def test_validate_args_nonexistent_second_source(self, tmp_path: Path) -> None:
+        """validate_args raises SystemExit if any source does not exist."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir), "/nonexistent/path"],
+            show_duplicates=False,
+            show_missing=False,
+            check_filenames=False,
+            check_timestamps=False,
+            tolerance=1,
+            list=False,
+            move=None,
+            copy=None,
+            start=1,
+        )
+
+        with pytest.raises(SystemExit, match="Source not found"):
+            dedup.validate_args(args)
+
+    def test_setup_parser_multiple_sources(self) -> None:
+        """Parser accepts multiple positional source arguments."""
+        parser = argparse.ArgumentParser()
+        dedup.setup_parser(parser)
+
+        args = parser.parse_args(["archive.json", "/dir/a", "/dir/b", "/file.psv"])
+
+        assert args.json_file == "archive.json"
+        assert args.source == ["/dir/a", "/dir/b", "/file.psv"]

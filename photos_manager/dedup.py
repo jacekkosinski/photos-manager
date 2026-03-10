@@ -361,22 +361,22 @@ def format_size(size: int) -> str:
     return f"{size:,}"
 
 
-def _display_path(abs_path: str, source: str) -> str:
-    """Return path relative to the parent of source (includes source dir name).
+def _display_path(abs_path: str) -> str:
+    """Return path relative to the current working directory.
 
     Args:
         abs_path: Absolute path to make relative.
-        source: Source directory or PSV file passed as CLI argument.
 
     Returns:
-        Path relative to source's parent directory, or abs_path if not possible.
+        Path relative to CWD, or abs_path if not possible.
 
     Examples:
-        >>> _display_path("/a/b/scan/file.txt", "/a/b/scan")
+        >>> import os
+        >>> _display_path(os.path.join(os.getcwd(), "scan", "file.txt"))
         'scan/file.txt'
     """
     try:
-        return str(Path(abs_path).relative_to(Path(source).parent.resolve()))
+        return str(Path(abs_path).relative_to(Path.cwd()))
     except ValueError:
         return abs_path
 
@@ -615,7 +615,11 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "source",
-        help="Directory to scan, or PSV file with pre-computed metadata (path|sha1|md5|date|size)",
+        nargs="+",
+        help=(
+            "Directories to scan and/or PSV files with pre-computed metadata"
+            " (path|sha1|md5|date|size); multiple values may be mixed freely"
+        ),
     )
     parser.add_argument(
         "-d",
@@ -711,11 +715,12 @@ def validate_args(args: argparse.Namespace) -> None:
     # Validate inputs
     if not Path(args.json_file).exists():
         raise SystemExit(f"Error: JSON file not found: {args.json_file}")
-    source = Path(args.source)
-    if not source.exists():
-        raise SystemExit(f"Error: Source not found: {args.source}")
-    if not source.is_dir() and not source.is_file():
-        raise SystemExit(f"Error: Source must be a directory or PSV file: {args.source}")
+    for src in args.source:
+        source = Path(src)
+        if not source.exists():
+            raise SystemExit(f"Error: Source not found: {src}")
+        if not source.is_dir() and not source.is_file():
+            raise SystemExit(f"Error: Source must be a directory or PSV file: {src}")
 
 
 def process_command_mode(
@@ -772,7 +777,6 @@ def process_list_mode(
         duplicates: List of duplicate file pairs
         missing: List of missing files
     """
-    source = str(args.source)
     show_all = not args.show_duplicates and not args.show_missing
 
     if args.show_duplicates or show_all:
@@ -782,14 +786,12 @@ def process_list_mode(
         if args.check_timestamps:
             filtered = [d for d in filtered if _dup_has_date_change(d, args.tolerance)]
         for scanned, archive in filtered:
-            line = format_list_line(
-                _display_path(str(scanned["path"]), source), "[DUP]", scanned, archive
-            )
+            line = format_list_line(_display_path(str(scanned["path"])), "[DUP]", scanned, archive)
             print(line)
 
     if args.show_missing or show_all:
         for entry in missing:
-            line = format_list_line(_display_path(str(entry["path"]), source), "[MISS]", entry)
+            line = format_list_line(_display_path(str(entry["path"])), "[MISS]", entry)
             print(line)
 
 
@@ -810,8 +812,10 @@ def run(args: argparse.Namespace) -> int:
     archive_data = load_json(args.json_file)
     size_index, checksum_index = build_archive_index(archive_data)
 
-    source = Path(args.source)
-    scanned_files = scan_directory(args.source) if source.is_dir() else load_psv(args.source)
+    scanned_files: list[dict[str, str | int]] = []
+    for src in args.source:
+        source = Path(src)
+        scanned_files.extend(scan_directory(src) if source.is_dir() else load_psv(src))
 
     duplicates, missing = find_duplicates(scanned_files, size_index, checksum_index)
 
@@ -825,10 +829,13 @@ def run(args: argparse.Namespace) -> int:
             f"Loaded {Path(args.json_file).name} with "
             f"{format_count(len(archive_data))} files ({human_size(archive_size)})."
         )
-        if source.is_dir():
-            print(f"Scanned directory {args.source} with {format_count(len(scanned_files))} files.")
-        else:
-            print(f"Loaded {Path(args.source).name} with {format_count(len(scanned_files))} files.")
+        for src in args.source:
+            source = Path(src)
+            if source.is_dir():
+                print(f"Scanned directory {src}.")
+            else:
+                print(f"Loaded {source.name}.")
+        print(f"Total: {format_count(len(scanned_files))} files scanned.")
 
         if args.show_duplicates:
             display_duplicates(duplicates, args.tolerance)

@@ -64,7 +64,6 @@ services:
     command: ["--help"]
     profiles:
       - runtime
-
 # ==============================================================================
 # Usage Examples:
 #
