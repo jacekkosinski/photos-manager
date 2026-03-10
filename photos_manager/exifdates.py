@@ -135,10 +135,13 @@ def format_report_line(
     """
     delta_s = int((new_dt - old_dt).total_seconds())
     delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
-    core = (
-        f"{filename}  {tag:<{_TAG_WIDTH}}"
-        f"  {old_dt:%H:%M:%S} → {new_dt:%H:%M:%S} (delta: {delta_str})"
-    )
+    if old_dt.date() != new_dt.date():
+        old_str = f"{old_dt:%Y-%m-%d %H:%M:%S}"
+        new_str = f"{new_dt:%Y-%m-%d %H:%M:%S}"
+    else:
+        old_str = f"{old_dt:%H:%M:%S}"
+        new_str = f"{new_dt:%H:%M:%S}"
+    core = f"{filename}  {tag:<{_TAG_WIDTH}}  {old_str} → {new_str} (delta: {delta_str})"
 
     if tag == "[GPS]":
         exif_str = info["exif_dt"].strftime("%H:%M:%S")

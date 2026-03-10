@@ -167,6 +167,21 @@ class TestFormatReportLine:
         line = exifdates.format_report_line("DSC01234.JPG", "[EXIF]", old_dt, new_dt, {})
         assert "delta: -3600s" in line
 
+    @pytest.mark.unit
+    def test_shows_full_date_when_date_changes(self) -> None:
+        old_dt = datetime(2013, 1, 1, 23, 59, 59)
+        new_dt = datetime(2013, 1, 2, 0, 0, 0)
+        line = exifdates.format_report_line("DSC01234.JPG", "[EXIF]", old_dt, new_dt, {})
+        assert "2013-01-01 23:59:59 → 2013-01-02 00:00:00" in line
+
+    @pytest.mark.unit
+    def test_shows_time_only_when_same_date(self) -> None:
+        old_dt = datetime(2023, 5, 14, 10, 0, 0)
+        new_dt = datetime(2023, 5, 14, 11, 0, 0)
+        line = exifdates.format_report_line("DSC01234.JPG", "[EXIF]", old_dt, new_dt, {})
+        assert "10:00:00 → 11:00:00" in line
+        assert "2023" not in line
+
 
 # ---------------------------------------------------------------------------
 # compute_corrections
