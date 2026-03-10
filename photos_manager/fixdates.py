@@ -21,9 +21,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from photos_manager.common import load_json
+from photos_manager.common import TIME_FMT, TS_FMT, load_json
 
-_TS_FMT = "%Y-%m-%d %H:%M:%S"
 _TAG_WIDTH = 6  # max(len("[FILE]"), len("[JSON]")) — "[DIR]" is 5, padded to 6
 _TAG_FILE = "[FILE]"
 _TAG_DIR = "[DIR]"
@@ -56,16 +55,22 @@ def format_change_line(
             parentheses.  None for ``[FILE]`` entries.
 
     Returns:
-        Aligned line:
-        ``name  [TAG]  YYYY-MM-DD HH:MM:SS → YYYY-MM-DD HH:MM:SS (delta: +Xs[, src: path])``
+        Aligned line with full date when the date changes, time only otherwise:
+        ``name  [TAG]  HH:MM:SS → HH:MM:SS (delta: +Xs[, src: path])``
 
     Examples:
         >>> line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_000_003_600.0)
         >>> "->" in line and "delta:" in line
         True
     """
-    old_str = datetime.fromtimestamp(old_ts).strftime(_TS_FMT)
-    new_str = datetime.fromtimestamp(new_ts).strftime(_TS_FMT)
+    old_dt = datetime.fromtimestamp(old_ts)
+    new_dt = datetime.fromtimestamp(new_ts)
+    if old_dt.date() != new_dt.date():
+        old_str = old_dt.strftime(TS_FMT)
+        new_str = new_dt.strftime(TS_FMT)
+    else:
+        old_str = old_dt.strftime(TIME_FMT)
+        new_str = new_dt.strftime(TIME_FMT)
     delta_s = int(new_ts - old_ts)
     delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
     suffix = f"delta: {delta_str}, src: {src}" if src is not None else f"delta: {delta_str}"

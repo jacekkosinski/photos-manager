@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from photos_manager.common import load_json
+from photos_manager.common import TIME_FMT, TS_FMT, load_json
 
 # Optional EXIF support
 try:
@@ -136,21 +136,21 @@ def format_report_line(
     delta_s = int((new_dt - old_dt).total_seconds())
     delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
     if old_dt.date() != new_dt.date():
-        old_str = f"{old_dt:%Y-%m-%d %H:%M:%S}"
-        new_str = f"{new_dt:%Y-%m-%d %H:%M:%S}"
+        old_str = old_dt.strftime(TS_FMT)
+        new_str = new_dt.strftime(TS_FMT)
     else:
-        old_str = f"{old_dt:%H:%M:%S}"
-        new_str = f"{new_dt:%H:%M:%S}"
+        old_str = old_dt.strftime(TIME_FMT)
+        new_str = new_dt.strftime(TIME_FMT)
     core = f"{filename}  {tag:<{_TAG_WIDTH}}  {old_str} → {new_str} (delta: {delta_str})"
 
     if tag == "[GPS]":
-        exif_str = info["exif_dt"].strftime("%H:%M:%S")
+        exif_str = info["exif_dt"].strftime(TIME_FMT)
         d = info["delta"]
         d_str = f"+{d}s" if d >= 0 else f"{d}s"
         return f"{core} [EXIF {exif_str}, delta: {d_str}]"
 
     if tag in ("[EXIF+GPS]", "[EXIF+GPS~]"):
-        exif_str = info["exif_dt"].strftime("%H:%M:%S")
+        exif_str = info["exif_dt"].strftime(TIME_FMT)
         off = info["offset"]
         off_str = f"+{off}s" if off >= 0 else f"{off}s"
         std = round(info["std"])

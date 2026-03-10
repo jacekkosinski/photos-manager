@@ -12,6 +12,10 @@ from pathlib import Path
 # Constants
 CHUNK_SIZE = 65536  # 64KB chunks for file operations
 
+# Timestamp display formats
+TS_FMT = "%Y-%m-%d %H:%M:%S"
+TIME_FMT = "%H:%M:%S"
+
 
 def load_json(file_path: str) -> list[dict[str, str | int]]:
     """Load and parse JSON metadata file.
