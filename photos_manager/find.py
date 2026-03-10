@@ -532,27 +532,40 @@ def display_duplicates(
 
     for idx, (scanned, archive) in enumerate(duplicates, 1):
         size = int(scanned["size"])
+
+        # Date field — show delta inline if dates differ beyond tolerance
+        scanned_date_str = str(scanned.get("date", ""))
+        archive_date_str = str(archive.get("date", ""))
+        date_display = scanned_date_str
         try:
-            date_display = datetime.fromisoformat(str(scanned["date"])).isoformat(sep=" ")
+            scanned_dt = datetime.fromisoformat(scanned_date_str)
+            archive_dt = datetime.fromisoformat(archive_date_str)
+            date_display = scanned_dt.isoformat(sep=" ")
+            delta_s = int((archive_dt - scanned_dt).total_seconds())
+            if abs(delta_s) > tolerance:
+                timestamp_warnings += 1
+                delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
+                date_display = (
+                    f"{date_display} -> {archive_dt.isoformat(sep=' ')} (delta: {delta_str})"
+                )
         except ValueError:
-            date_display = str(scanned["date"])
+            pass
+
+        # Filename check — case-insensitive; only flag real name changes
+        scanned_name = Path(str(scanned["path"])).name
+        archive_name = Path(str(archive["path"])).name
+        has_name_diff = scanned_name.lower() != archive_name.lower()
+        if has_name_diff:
+            filename_warnings += 1
+
         print(f"  [{idx}/{len(duplicates)}] {scanned['path']}")
         print(f"         date: {date_display}")
         print(f"         size: {size:_} bytes ({human_size(size)})".replace("_", " "))
         print(f"         SHA1: {scanned['sha1']}")
         print(f"         MD5:  {scanned['md5']}")
-        print(f"         Archive: {archive['path']}")
-
-        is_same, warning = compare_filenames(str(scanned["path"]), str(archive["path"]))
-        if not is_same and warning:
-            print(f"         Warning: {warning}", file=sys.stderr)
-            filename_warnings += 1
-
-        is_within, diff = compare_timestamps(str(scanned["date"]), str(archive["date"]), tolerance)
-        if not is_within and diff:
-            print(f"         Warning: {diff}", file=sys.stderr)
-            timestamp_warnings += 1
-
+        if has_name_diff:
+            print(f"         name: {scanned_name} -> {archive_name}")
+        print(f"         ref:  {archive['path']}")
         print()
 
     return filename_warnings, timestamp_warnings

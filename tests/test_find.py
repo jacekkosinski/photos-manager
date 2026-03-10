@@ -664,7 +664,7 @@ class TestDisplayFunctions:
     def test_display_duplicates_with_filename_warnings(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test displaying duplicates with filename warnings."""
+        """Test displaying duplicates with real filename change (case-insensitive diff)."""
         duplicates = [
             (
                 {
@@ -687,14 +687,46 @@ class TestDisplayFunctions:
         fw, tw = find.display_duplicates(duplicates, 1)
 
         captured = capsys.readouterr()
-        assert "Filename differs" in captured.err
+        assert "name: file1.txt -> file2.txt" in captured.out
+        assert captured.err == ""
         assert fw == 1
+        assert tw == 0
+
+    def test_display_duplicates_case_only_filename_ignored(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that case-only filename differences are not flagged."""
+        duplicates = [
+            (
+                {
+                    "path": "/scan/FILE.TXT",
+                    "size": 100,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": "2024-01-01T12:00:00",
+                },
+                {
+                    "path": "/archive/file.txt",
+                    "size": 100,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": "2024-01-01T12:00:00",
+                },
+            )
+        ]
+
+        fw, tw = find.display_duplicates(duplicates, 1)
+
+        captured = capsys.readouterr()
+        assert "name:" not in captured.out
+        assert captured.err == ""
+        assert fw == 0
         assert tw == 0
 
     def test_display_duplicates_with_timestamp_warnings(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test displaying duplicates with timestamp warnings."""
+        """Test displaying duplicates with date change shown inline."""
         dt1 = datetime.now(UTC)
         dt2 = dt1 + timedelta(seconds=100)
         duplicates = [
@@ -719,7 +751,9 @@ class TestDisplayFunctions:
         fw, tw = find.display_duplicates(duplicates, 1)
 
         captured = capsys.readouterr()
-        assert "Timestamp differs" in captured.err
+        assert "-> " in captured.out
+        assert "delta: +100s" in captured.out
+        assert captured.err == ""
         assert fw == 0
         assert tw == 1
 
