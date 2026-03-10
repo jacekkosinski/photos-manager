@@ -11,6 +11,7 @@ additional warnings when files differ in these attributes.
 """
 
 import argparse
+import concurrent.futures
 import os
 import shlex
 import sys
@@ -32,7 +33,6 @@ def scan_directory(directory: str) -> list[dict[str, str | int]]:
         List of file metadata dictionaries with keys:
         path (str), sha1 (str), md5 (str), date (str), size (int)
     """
-    files: list[dict[str, str | int]] = []
     dir_path = Path(directory)
 
     if not dir_path.exists():
@@ -40,32 +40,29 @@ def scan_directory(directory: str) -> list[dict[str, str | int]]:
     if not dir_path.is_dir():
         raise SystemExit(f"Error: Not a directory: {directory}")
 
-    for root, _, filenames in os.walk(directory):
-        for filename in filenames:
-            file_path = Path(root) / filename
+    # Phase 1: collect paths and stat info (sequential)
+    file_entries: list[tuple[str, str, int]] = []
+    for file_path in dir_path.rglob("*"):
+        if not file_path.is_file():
+            continue
+        try:
+            stat_result = file_path.stat()
+            date = datetime.fromtimestamp(stat_result.st_mtime).astimezone().isoformat()
+            file_entries.append((str(file_path.resolve()), date, stat_result.st_size))
+        except OSError as e:
+            print(f"Warning: Could not process {file_path}: {e}", file=sys.stderr)
 
-            try:
-                stat_result = file_path.stat()
-                size: int = stat_result.st_size
-                mtime = datetime.fromtimestamp(stat_result.st_mtime).astimezone()
-                date = mtime.isoformat()
+    # Phase 2: compute checksums in parallel (hashlib releases the GIL)
+    workers = os.cpu_count() or 1
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        checksums = list(executor.map(calculate_checksums, [p for p, _, _ in file_entries]))
 
-                sha1, md5 = calculate_checksums(str(file_path))
-                if sha1 is None or md5 is None:
-                    continue  # Skip files we couldn't hash
-
-                files.append(
-                    {
-                        "path": str(file_path.resolve()),
-                        "sha1": sha1,
-                        "md5": md5,
-                        "date": date,
-                        "size": size,
-                    }
-                )
-            except OSError as e:
-                print(f"Warning: Could not process {file_path}: {e}", file=sys.stderr)
-                continue
+    # Phase 3: assemble results (order preserved by executor.map)
+    files: list[dict[str, str | int]] = []
+    for (path, date, size), (sha1, md5) in zip(file_entries, checksums, strict=True):
+        if sha1 is None or md5 is None:
+            continue
+        files.append({"path": path, "sha1": sha1, "md5": md5, "date": date, "size": size})
 
     return files
 
