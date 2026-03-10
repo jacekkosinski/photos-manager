@@ -34,7 +34,7 @@ poetry run photos manifest --help
 poetry run photos verify --help
 poetry run photos info --help
 poetry run photos sync --help
-poetry run photos dedup --help
+poetry run photos find --help
 
 # Or activate shell first
 poetry shell
@@ -105,7 +105,7 @@ photos-manager-cli/
 │   ├── verify.py        # Verify archive integrity
 │   ├── info.py          # Show archive statistics
 │   ├── sync.py          # Synchronization tool
-│   └── dedup.py         # Deduplication tool
+│   └── find.py         # Find duplicates tool
 ├── tests/               # Test files (535 tests)
 │   ├── conftest.py      # Shared fixtures
 │   ├── test_cli.py
@@ -117,7 +117,7 @@ photos-manager-cli/
 │   ├── test_verify.py
 │   ├── test_info.py
 │   ├── test_sync.py
-│   └── test_dedup.py
+│   └── test_find.py
 ├── Makefile             # Development commands
 └── pyproject.toml       # Project configuration
 ```
@@ -208,13 +208,13 @@ photos sync /source/archive /dest/archive --execute
 
 ```bash
 # Find duplicates in scan directory (files that exist in archive)
-photos dedup archive.json /path/to/scan -d
+photos find archive.json /path/to/scan -d
 
 # Find missing files (files in archive but not in scan directory)
-photos dedup archive.json /path/to/scan -m
+photos find archive.json /path/to/scan -m
 
 # Both duplicates and missing
-photos dedup archive.json /path/to/scan -d -m
+photos find archive.json /path/to/scan -d -m
 ```
 
 ## 8. Before Committing

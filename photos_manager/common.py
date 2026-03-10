@@ -1,7 +1,7 @@
 """Common utilities shared across photos_manager modules.
 
 This module provides shared functionality to eliminate code duplication
-across index, fixdates, manifest, verify, info, sync, and dedup modules.
+across index, fixdates, manifest, verify, info, sync, and find modules.
 """
 
 import hashlib
@@ -78,7 +78,7 @@ def calculate_checksums(file_path: str) -> tuple[str | None, str | None]:
     """Calculate SHA1 and MD5 checksums for a file (lenient).
 
     Returns (None, None) on error with warning. Use for batch processing
-    where you want to continue on errors (index, dedup).
+    where you want to continue on errors (index, find).
 
     Args:
         file_path: Path to the file to hash

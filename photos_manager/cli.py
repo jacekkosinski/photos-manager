@@ -3,7 +3,7 @@
 
 This is the main entry point for the photos-manager CLI suite, providing
 a unified interface to all photo management commands:
-- dedup: Find duplicate and missing files by comparing with archive
+- find: Find duplicate and missing files by comparing with archive
 - prepare: Prepare directories for archiving (fix permissions, ownership, filenames)
 - locate: Find archive directories for new photos based on timestamps
 - index: Generate JSON file with file metadata
@@ -16,7 +16,7 @@ a unified interface to all photo management commands:
 - sync: Synchronize source and destination archives
 
 Usage:
-    photos dedup archive.json /path/to/scan -d -m
+    photos find archive.json /path/to/scan -d -m
     photos prepare /path/to/directory
     photos locate /path/to/new/photos archive.json
     photos index /path/to/directory
@@ -37,8 +37,8 @@ from typing import cast
 
 from photos_manager import (
     __version__,
-    dedup,
     exifdates,
+    find,
     fixdates,
     index,
     info,
@@ -96,14 +96,14 @@ def main() -> int:
         help="Command to execute",
     )
 
-    # dedup subcommand
-    dedup_parser = subparsers.add_parser(
-        "dedup",
+    # find subcommand
+    find_parser = subparsers.add_parser(
+        "find",
         help="Find duplicate and missing files by comparing with archive",
         description="Find files that exist in archive (duplicates) and files not in archive",
     )
-    dedup.setup_parser(dedup_parser)
-    dedup_parser.set_defaults(func=dedup.run)
+    find.setup_parser(find_parser)
+    find_parser.set_defaults(func=find.run)
 
     # prepare subcommand
     prepare_parser = subparsers.add_parser(

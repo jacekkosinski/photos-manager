@@ -1,4 +1,4 @@
-"""Tests for dedup module."""
+"""Tests for find module."""
 
 import argparse
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from photos_manager import dedup
+from photos_manager import find
 
 
 @pytest.mark.unit
@@ -20,7 +20,7 @@ class TestScanDirectory:
         test_file = tmp_path / "file.txt"
         test_file.write_text("content")
 
-        result = dedup.scan_directory(str(tmp_path))
+        result = find.scan_directory(str(tmp_path))
 
         assert len(result) == 1
         assert result[0]["path"] == str(test_file.resolve())
@@ -34,7 +34,7 @@ class TestScanDirectory:
         (tmp_path / "file1.txt").write_text("content1")
         (tmp_path / "file2.txt").write_text("content2")
 
-        result = dedup.scan_directory(str(tmp_path))
+        result = find.scan_directory(str(tmp_path))
 
         assert len(result) == 2
         paths = {entry["path"] for entry in result}
@@ -48,7 +48,7 @@ class TestScanDirectory:
         subdir.mkdir()
         (subdir / "file2.txt").write_text("content2")
 
-        result = dedup.scan_directory(str(tmp_path))
+        result = find.scan_directory(str(tmp_path))
 
         assert len(result) == 2
         paths = {entry["path"] for entry in result}
@@ -57,13 +57,13 @@ class TestScanDirectory:
 
     def test_scan_empty_directory(self, tmp_path: Path) -> None:
         """Test scanning empty directory."""
-        result = dedup.scan_directory(str(tmp_path))
+        result = find.scan_directory(str(tmp_path))
         assert result == []
 
     def test_scan_nonexistent_directory(self) -> None:
         """Test scanning nonexistent directory raises SystemExit."""
         with pytest.raises(SystemExit, match="not found"):
-            dedup.scan_directory("/nonexistent/dir")
+            find.scan_directory("/nonexistent/dir")
 
     def test_scan_not_directory(self, tmp_path: Path) -> None:
         """Test scanning a file (not directory) raises SystemExit."""
@@ -71,7 +71,7 @@ class TestScanDirectory:
         test_file.write_text("content")
 
         with pytest.raises(SystemExit, match="Not a directory"):
-            dedup.scan_directory(str(test_file))
+            find.scan_directory(str(test_file))
 
 
 @pytest.mark.unit
@@ -87,7 +87,7 @@ class TestLoadPsv:
             "/c/doc.pdf|sha1ccc|md5ccc|2023-03-01T00:00:00+00:00|512\n"
         )
 
-        result = dedup.load_psv(str(psv))
+        result = find.load_psv(str(psv))
 
         assert len(result) == 3
         assert result[0] == {
@@ -112,7 +112,7 @@ class TestLoadPsv:
             "/b/file.jpg|sha1bbb|md5bbb|2023-01-02T00:00:00+00:00|200\n"
         )
 
-        result = dedup.load_psv(str(psv))
+        result = find.load_psv(str(psv))
 
         assert len(result) == 2
         assert result[0]["path"] == "/a/file.jpg"
@@ -129,7 +129,7 @@ class TestLoadPsv:
             "/b/file.jpg|sha1bbb|md5bbb|2023-01-02T00:00:00+00:00|200\n"
         )
 
-        result = dedup.load_psv(str(psv))
+        result = find.load_psv(str(psv))
 
         assert len(result) == 2
         captured = capsys.readouterr()
@@ -146,7 +146,7 @@ class TestLoadPsv:
             "/b/file.jpg|sha1bbb|md5bbb|2023-01-02T00:00:00+00:00|not-a-number\n"
         )
 
-        result = dedup.load_psv(str(psv))
+        result = find.load_psv(str(psv))
 
         assert len(result) == 1
         assert result[0]["path"] == "/a/file.jpg"
@@ -156,7 +156,7 @@ class TestLoadPsv:
     def test_load_psv_missing_file(self) -> None:
         """Test that a missing PSV file raises SystemExit."""
         with pytest.raises(SystemExit, match="Could not open PSV file"):
-            dedup.load_psv("/nonexistent/files.psv")
+            find.load_psv("/nonexistent/files.psv")
 
 
 @pytest.mark.unit
@@ -170,7 +170,7 @@ class TestBuildArchiveIndex:
             {"path": "/file2.txt", "size": 200, "sha1": "ghi", "md5": "jkl"},
         ]
 
-        size_index, checksum_index = dedup.build_archive_index(archive_data)
+        size_index, checksum_index = find.build_archive_index(archive_data)
 
         assert 100 in size_index
         assert 200 in size_index
@@ -185,13 +185,13 @@ class TestBuildArchiveIndex:
             {"path": "/file2.txt", "size": 100, "sha1": "ghi", "md5": "jkl"},
         ]
 
-        size_index, _ = dedup.build_archive_index(archive_data)
+        size_index, _ = find.build_archive_index(archive_data)
 
         assert len(size_index[100]) == 2
 
     def test_build_index_empty(self) -> None:
         """Test building index from empty archive."""
-        size_index, checksum_index = dedup.build_archive_index([])
+        size_index, checksum_index = find.build_archive_index([])
 
         assert size_index == {}
         assert checksum_index == {}
@@ -203,7 +203,7 @@ class TestBuildArchiveIndex:
             {"path": "/file2.txt", "size": 200},
         ]
 
-        size_index, _ = dedup.build_archive_index(archive_data)
+        size_index, _ = find.build_archive_index(archive_data)
 
         # Only the valid entry (size=200) should be indexed; "not_int" entry is skipped
         assert len(size_index) == 1
@@ -219,8 +219,8 @@ class TestFindDuplicates:
         scanned = [{"path": "/scan/file.txt", "size": 100, "sha1": "abc", "md5": "def"}]
         archive_data = [{"path": "/archive/file.txt", "size": 100, "sha1": "abc", "md5": "def"}]
 
-        size_index, checksum_index = dedup.build_archive_index(archive_data)
-        duplicates, missing = dedup.find_duplicates(scanned, size_index, checksum_index)
+        size_index, checksum_index = find.build_archive_index(archive_data)
+        duplicates, missing = find.find_duplicates(scanned, size_index, checksum_index)
 
         assert len(duplicates) == 1
         assert len(missing) == 0
@@ -232,8 +232,8 @@ class TestFindDuplicates:
         scanned = [{"path": "/scan/new.txt", "size": 100, "sha1": "xyz", "md5": "uvw"}]
         archive_data = [{"path": "/archive/old.txt", "size": 200, "sha1": "abc", "md5": "def"}]
 
-        size_index, checksum_index = dedup.build_archive_index(archive_data)
-        duplicates, missing = dedup.find_duplicates(scanned, size_index, checksum_index)
+        size_index, checksum_index = find.build_archive_index(archive_data)
+        duplicates, missing = find.find_duplicates(scanned, size_index, checksum_index)
 
         assert len(duplicates) == 0
         assert len(missing) == 1
@@ -244,8 +244,8 @@ class TestFindDuplicates:
         scanned = [{"path": "/scan/file.txt", "size": 100, "sha1": "xyz", "md5": "uvw"}]
         archive_data = [{"path": "/archive/file.txt", "size": 100, "sha1": "abc", "md5": "def"}]
 
-        size_index, checksum_index = dedup.build_archive_index(archive_data)
-        duplicates, missing = dedup.find_duplicates(scanned, size_index, checksum_index)
+        size_index, checksum_index = find.build_archive_index(archive_data)
+        duplicates, missing = find.find_duplicates(scanned, size_index, checksum_index)
 
         assert len(duplicates) == 0
         assert len(missing) == 1
@@ -254,8 +254,8 @@ class TestFindDuplicates:
         """Test with no scanned files."""
         archive_data = [{"path": "/archive/file.txt", "size": 100, "sha1": "abc", "md5": "def"}]
 
-        size_index, checksum_index = dedup.build_archive_index(archive_data)
-        duplicates, missing = dedup.find_duplicates([], size_index, checksum_index)
+        size_index, checksum_index = find.build_archive_index(archive_data)
+        duplicates, missing = find.find_duplicates([], size_index, checksum_index)
 
         assert len(duplicates) == 0
         assert len(missing) == 0
@@ -272,8 +272,8 @@ class TestFindDuplicates:
             {"path": "/archive/dup2.txt", "size": 200, "sha1": "ghi", "md5": "jkl"},
         ]
 
-        size_index, checksum_index = dedup.build_archive_index(archive_data)
-        duplicates, missing = dedup.find_duplicates(scanned, size_index, checksum_index)
+        size_index, checksum_index = find.build_archive_index(archive_data)
+        duplicates, missing = find.find_duplicates(scanned, size_index, checksum_index)
 
         assert len(duplicates) == 2
         assert len(missing) == 1
@@ -285,13 +285,13 @@ class TestCompareFilenames:
 
     def test_compare_identical_filenames(self) -> None:
         """Test comparing identical filenames."""
-        is_same, warning = dedup.compare_filenames("/scan/file.txt", "/archive/file.txt")
+        is_same, warning = find.compare_filenames("/scan/file.txt", "/archive/file.txt")
         assert is_same is True
         assert warning is None
 
     def test_compare_different_filenames(self) -> None:
         """Test comparing different filenames."""
-        is_same, warning = dedup.compare_filenames("/scan/file1.txt", "/archive/file2.txt")
+        is_same, warning = find.compare_filenames("/scan/file1.txt", "/archive/file2.txt")
         assert is_same is False
         assert warning is not None
         assert "file1.txt" in warning
@@ -299,7 +299,7 @@ class TestCompareFilenames:
 
     def test_compare_same_basename_different_paths(self) -> None:
         """Test comparing files with same basename but different paths."""
-        is_same, warning = dedup.compare_filenames("/scan/dir1/file.txt", "/archive/dir2/file.txt")
+        is_same, warning = find.compare_filenames("/scan/dir1/file.txt", "/archive/dir2/file.txt")
         assert is_same is True
         assert warning is None
 
@@ -311,7 +311,7 @@ class TestCompareTimestamps:
     def test_compare_identical_timestamps(self) -> None:
         """Test comparing identical timestamps."""
         dt = datetime.now(UTC).isoformat()
-        is_within, diff = dedup.compare_timestamps(dt, dt, 1)
+        is_within, diff = find.compare_timestamps(dt, dt, 1)
         assert is_within is True
         assert diff is None
 
@@ -319,7 +319,7 @@ class TestCompareTimestamps:
         """Test comparing timestamps within tolerance."""
         dt1 = datetime.now(UTC)
         dt2 = dt1 + timedelta(seconds=0.5)
-        is_within, diff = dedup.compare_timestamps(dt1.isoformat(), dt2.isoformat(), 1)
+        is_within, diff = find.compare_timestamps(dt1.isoformat(), dt2.isoformat(), 1)
         assert is_within is True
         assert diff is None
 
@@ -327,14 +327,14 @@ class TestCompareTimestamps:
         """Test comparing timestamps outside tolerance."""
         dt1 = datetime.now(UTC)
         dt2 = dt1 + timedelta(seconds=10)
-        is_within, diff = dedup.compare_timestamps(dt1.isoformat(), dt2.isoformat(), 1)
+        is_within, diff = find.compare_timestamps(dt1.isoformat(), dt2.isoformat(), 1)
         assert is_within is False
         assert diff is not None
         assert "10 seconds" in diff
 
     def test_compare_invalid_timestamps(self) -> None:
         """Test comparing invalid timestamps."""
-        is_within, diff = dedup.compare_timestamps("invalid", "also_invalid", 1)
+        is_within, diff = find.compare_timestamps("invalid", "also_invalid", 1)
         assert is_within is False
         assert diff is not None
         assert "Could not parse" in diff
@@ -346,15 +346,15 @@ class TestFormatSize:
 
     def test_format_small_size(self) -> None:
         """Test formatting small size."""
-        assert dedup.format_size(123) == "123"
+        assert find.format_size(123) == "123"
 
     def test_format_large_size(self) -> None:
         """Test formatting large size with thousands separators."""
-        assert dedup.format_size(1234567) == "1,234,567"
+        assert find.format_size(1234567) == "1,234,567"
 
     def test_format_zero(self) -> None:
         """Test formatting zero."""
-        assert dedup.format_size(0) == "0"
+        assert find.format_size(0) == "0"
 
 
 @pytest.mark.unit
@@ -368,7 +368,7 @@ class TestGroupFiles:
             {"path": "/scan/dir1/file2.txt", "size": 200},
         ]
 
-        groups = dedup.group_files_by_directory(files)
+        groups = find.group_files_by_directory(files)
 
         assert len(groups) == 1
         assert "/scan/dir1" in groups
@@ -382,7 +382,7 @@ class TestGroupFiles:
             {"path": "/scan/dir3/file3.txt", "size": 300},
         ]
 
-        groups = dedup.group_files_by_directory(files)
+        groups = find.group_files_by_directory(files)
 
         assert len(groups) == 3
         assert "/scan/dir1" in groups
@@ -391,7 +391,7 @@ class TestGroupFiles:
 
     def test_group_files_empty(self) -> None:
         """Test grouping empty list of files."""
-        groups = dedup.group_files_by_directory([])
+        groups = find.group_files_by_directory([])
         assert groups == {}
 
     def test_group_files_nested_paths(self) -> None:
@@ -401,7 +401,7 @@ class TestGroupFiles:
             {"path": "/scan/parent/child2/file2.txt", "size": 200},
         ]
 
-        groups = dedup.group_files_by_directory(files)
+        groups = find.group_files_by_directory(files)
 
         assert len(groups) == 2
         assert "/scan/parent/child1" in groups
@@ -416,7 +416,7 @@ class TestAssignDirectoryNumbers:
         """Test assigning number to single directory."""
         file_groups = {"/scan/dir1": []}
 
-        mapping = dedup.assign_directory_numbers(file_groups)
+        mapping = find.assign_directory_numbers(file_groups)
 
         assert mapping["/scan/dir1"] == "dir00001"
 
@@ -428,7 +428,7 @@ class TestAssignDirectoryNumbers:
             "/scan/dir3": [],
         }
 
-        mapping = dedup.assign_directory_numbers(file_groups)
+        mapping = find.assign_directory_numbers(file_groups)
 
         assert len(mapping) == 3
         # Should be sorted alphabetically
@@ -444,7 +444,7 @@ class TestAssignDirectoryNumbers:
             "/scan/beta": [],
         }
 
-        mapping = dedup.assign_directory_numbers(file_groups)
+        mapping = find.assign_directory_numbers(file_groups)
 
         assert mapping["/scan/alpha"] == "dir00001"
         assert mapping["/scan/beta"] == "dir00002"
@@ -457,7 +457,7 @@ class TestAssignDirectoryNumbers:
             "/scan/dir2": [],
         }
 
-        mapping = dedup.assign_directory_numbers(file_groups, start=10)
+        mapping = find.assign_directory_numbers(file_groups, start=10)
 
         assert mapping["/scan/dir1"] == "dir00010"
         assert mapping["/scan/dir2"] == "dir00011"
@@ -476,7 +476,7 @@ class TestGenerateCommands:
         target_dir = str(tmp_path / "target")
         dir_mapping = {"/scan/dir1": "dir00001"}
 
-        commands = dedup.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
+        commands = find.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
 
         assert len(commands) == 3  # 1 mkdir + 2 mv
         assert commands[0].startswith("mkdir -p")
@@ -494,7 +494,7 @@ class TestGenerateCommands:
         target_dir = str(tmp_path / "target")
         dir_mapping = {"/scan/dir1": "dir00001"}
 
-        commands = dedup.generate_file_operation_commands(files, target_dir, dir_mapping, "cp")
+        commands = find.generate_file_operation_commands(files, target_dir, dir_mapping, "cp")
 
         assert len(commands) == 2  # 1 mkdir + 1 cp
         assert commands[0].startswith("mkdir -p")
@@ -509,7 +509,7 @@ class TestGenerateCommands:
         target_dir = str(tmp_path / "my target")
         dir_mapping = {"/scan/my photos": "dir00001"}
 
-        commands = dedup.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
+        commands = find.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
 
         # Verify paths are quoted
         assert "'" in commands[0] or '"' in commands[0]
@@ -525,7 +525,7 @@ class TestGenerateCommands:
         target_dir = str(tmp_path / "target")
         dir_mapping = {"/scan/dir1": "dir00001", "/scan/dir2": "dir00002"}
 
-        commands = dedup.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
+        commands = find.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
 
         mkdir_commands = [cmd for cmd in commands if cmd.startswith("mkdir")]
         assert len(mkdir_commands) == 2
@@ -540,7 +540,7 @@ class TestGenerateCommands:
         target_dir = str(tmp_path / "target")
         dir_mapping = {"/scan/dir$": "dir00001"}
 
-        commands = dedup.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
+        commands = find.generate_file_operation_commands(files, target_dir, dir_mapping, "mv")
 
         # Should have proper quoting
         assert len(commands) == 2
@@ -559,7 +559,7 @@ class TestDisplayCommands:
             "mv -iv /scan/file.txt /target/dir00001/file.txt",
         ]
 
-        dedup.display_commands(commands)
+        find.display_commands(commands)
 
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
@@ -569,7 +569,7 @@ class TestDisplayCommands:
 
     def test_display_commands_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying empty command list."""
-        dedup.display_commands([])
+        find.display_commands([])
         captured = capsys.readouterr()
         assert captured.out == ""
 
@@ -591,7 +591,7 @@ class TestListDisplay:
             ),
         ]
 
-        dedup.display_file_paths(duplicates, extract_path=lambda item: item[0]["path"])
+        find.display_file_paths(duplicates, extract_path=lambda item: item[0]["path"])
 
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
@@ -601,7 +601,7 @@ class TestListDisplay:
 
     def test_display_list_duplicates_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying empty duplicates list in list format."""
-        dedup.display_file_paths([])
+        find.display_file_paths([])
         captured = capsys.readouterr()
         assert captured.out == ""
 
@@ -612,7 +612,7 @@ class TestListDisplay:
             {"path": "/scan/new2.txt", "size": 200, "sha1": "mno", "md5": "pqr"},
         ]
 
-        dedup.display_file_paths(missing)
+        find.display_file_paths(missing)
 
         captured = capsys.readouterr()
         lines = captured.out.strip().split("\n")
@@ -622,7 +622,7 @@ class TestListDisplay:
 
     def test_display_list_missing_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying empty missing list in list format."""
-        dedup.display_file_paths([])
+        find.display_file_paths([])
         captured = capsys.readouterr()
         assert captured.out == ""
 
@@ -652,7 +652,7 @@ class TestDisplayFunctions:
             )
         ]
 
-        fw, tw = dedup.display_duplicates(duplicates, 1)
+        fw, tw = find.display_duplicates(duplicates, 1)
 
         captured = capsys.readouterr()
         assert "Duplicates" in captured.out
@@ -684,7 +684,7 @@ class TestDisplayFunctions:
             )
         ]
 
-        fw, tw = dedup.display_duplicates(duplicates, 1)
+        fw, tw = find.display_duplicates(duplicates, 1)
 
         captured = capsys.readouterr()
         assert "Filename differs" in captured.err
@@ -716,7 +716,7 @@ class TestDisplayFunctions:
             )
         ]
 
-        fw, tw = dedup.display_duplicates(duplicates, 1)
+        fw, tw = find.display_duplicates(duplicates, 1)
 
         captured = capsys.readouterr()
         assert "Timestamp differs" in captured.err
@@ -725,7 +725,7 @@ class TestDisplayFunctions:
 
     def test_display_duplicates_empty(self) -> None:
         """Test displaying empty duplicates list."""
-        fw, tw = dedup.display_duplicates([], 1)
+        fw, tw = find.display_duplicates([], 1)
         assert fw == 0
         assert tw == 0
 
@@ -733,7 +733,7 @@ class TestDisplayFunctions:
         """Test displaying missing files."""
         missing = [{"path": "/scan/new.txt", "size": 100, "sha1": "xyz", "md5": "uvw"}]
 
-        dedup.display_missing(missing)
+        find.display_missing(missing)
 
         captured = capsys.readouterr()
         assert "Missing from archive" in captured.out
@@ -741,7 +741,7 @@ class TestDisplayFunctions:
 
     def test_display_missing_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying empty missing list."""
-        dedup.display_missing([])
+        find.display_missing([])
         captured = capsys.readouterr()
         assert captured.out == ""
 
@@ -755,7 +755,7 @@ class TestDisplayFunctions:
         ]
         missing = [{"path": "/scan/new.txt", "size": 200, "sha1": "xyz", "md5": "uvw"}]
 
-        dedup.display_summary(duplicates, missing)
+        find.display_summary(duplicates, missing)
 
         captured = capsys.readouterr()
         assert "1 duplicates found" in captured.out
@@ -769,7 +769,7 @@ class TestSetupParser:
     def test_setup_parser(self) -> None:
         """Test parser setup."""
         parser = argparse.ArgumentParser()
-        dedup.setup_parser(parser)
+        find.setup_parser(parser)
 
         # Test that parser accepts expected arguments
         args = parser.parse_args(
@@ -810,7 +810,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
     def test_run_list_no_dm_flags_shows_both(
@@ -853,7 +853,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert "[DUP]" in captured.out
@@ -900,7 +900,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -932,7 +932,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -990,7 +990,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -1054,7 +1054,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -1083,7 +1083,7 @@ class TestMain:
         )
 
         with pytest.raises(SystemExit, match="not found"):
-            dedup.run(args)
+            find.run(args)
 
     def test_run_nonexistent_directory(self, tmp_path: Path) -> None:
         """Test run with nonexistent directory."""
@@ -1105,7 +1105,7 @@ class TestMain:
         )
 
         with pytest.raises(SystemExit, match="not found"):
-            dedup.run(args)
+            find.run(args)
 
     def test_run_psv_input(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with a PSV file as source."""
@@ -1146,7 +1146,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -1195,7 +1195,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
     def test_run_list_mode_duplicates(
@@ -1240,7 +1240,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -1280,7 +1280,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -1334,7 +1334,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -1353,9 +1353,9 @@ class TestMain:
         scan_dir = tmp_path / "scan"
         scan_dir.mkdir()
 
-        monkeypatch.setattr("sys.argv", ["dedup", str(json_file), str(scan_dir), "-d"])
+        monkeypatch.setattr("sys.argv", ["find", str(json_file), str(scan_dir), "-d"])
 
-        result = dedup.main()
+        result = find.main()
         assert result == os.EX_OK
 
     def test_run_move_mode(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -1390,7 +1390,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -1442,7 +1442,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -1475,7 +1475,7 @@ class TestMain:
         )
 
         with pytest.raises(SystemExit, match="mutually exclusive"):
-            dedup.run(args)
+            find.run(args)
 
     def test_run_move_list_exclusive(self, tmp_path: Path) -> None:
         """Test error when --move and --list specified."""
@@ -1501,7 +1501,7 @@ class TestMain:
         )
 
         with pytest.raises(SystemExit, match="cannot be used with --list"):
-            dedup.run(args)
+            find.run(args)
 
     def test_run_move_no_files(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test no output when no files match."""
@@ -1526,7 +1526,7 @@ class TestMain:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -1557,7 +1557,7 @@ class TestMain:
         )
 
         with pytest.raises(SystemExit, match="does not exist"):
-            dedup.run(args)
+            find.run(args)
 
     def test_run_move_custom_start(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1587,7 +1587,7 @@ class TestMain:
             start=100,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
@@ -1601,7 +1601,7 @@ class TestFormatListLine:
 
     def test_miss_line_contains_date_and_size(self) -> None:
         """MISS line contains date and human-readable size."""
-        line = dedup.format_list_line(
+        line = find.format_list_line(
             "dir/a.jpg",
             "[MISS]",
             {"date": "2023-01-01T10:00:00", "size": 100},
@@ -1614,7 +1614,7 @@ class TestFormatListLine:
         """DUP with same name/date shows path, [DUP], and [ref:]."""
         scanned = {"path": "/scan/a.jpg", "date": "2023-01-01T10:00:00", "size": 100}
         archive = {"path": "/archive/a.jpg", "date": "2023-01-01T10:00:00", "size": 100}
-        line = dedup.format_list_line("scan/a.jpg", "[DUP]", scanned, archive)
+        line = find.format_list_line("scan/a.jpg", "[DUP]", scanned, archive)
         assert "[DUP]" in line
         assert "[ref:" in line
         # No date delta (dates are equal)
@@ -1626,7 +1626,7 @@ class TestFormatListLine:
         """DUP with date diff on same day shows time-only format."""
         scanned = {"path": "/scan/a.jpg", "date": "2023-01-01T10:00:00", "size": 100}
         archive = {"path": "/archive/a.jpg", "date": "2023-01-01T10:00:05", "size": 100}
-        line = dedup.format_list_line("scan/a.jpg", "[DUP]", scanned, archive)
+        line = find.format_list_line("scan/a.jpg", "[DUP]", scanned, archive)
         assert "10:00:00" in line
         assert "10:00:05" in line
         assert "delta: +5s" in line
@@ -1637,7 +1637,7 @@ class TestFormatListLine:
         """DUP with date diff crossing midnight shows full YYYY-MM-DD HH:MM:SS."""
         scanned = {"path": "/scan/a.jpg", "date": "2023-01-01T23:59:00", "size": 100}
         archive = {"path": "/archive/a.jpg", "date": "2023-01-02T00:01:00", "size": 100}
-        line = dedup.format_list_line("scan/a.jpg", "[DUP]", scanned, archive)
+        line = find.format_list_line("scan/a.jpg", "[DUP]", scanned, archive)
         assert "2023-01-01" in line
         assert "2023-01-02" in line
 
@@ -1645,7 +1645,7 @@ class TestFormatListLine:
         """DUP with name diff shows 'A -> B'."""
         scanned = {"path": "/scan/IMG_1.JPG", "date": "2023-01-01T10:00:00", "size": 100}
         archive = {"path": "/archive/img_2.jpg", "date": "2023-01-01T10:00:00", "size": 100}
-        line = dedup.format_list_line("scan/IMG_1.JPG", "[DUP]", scanned, archive)
+        line = find.format_list_line("scan/IMG_1.JPG", "[DUP]", scanned, archive)
         assert "IMG_1.JPG" in line
         assert "img_2.jpg" in line
         assert "->" in line
@@ -1657,15 +1657,15 @@ class TestDupFilters:
 
     def test_has_name_change_true(self) -> None:
         """Different basenames returns True."""
-        assert dedup._dup_has_name_change(({"path": "IMG_1.JPG"}, {"path": "img_2.jpg"})) is True
+        assert find._dup_has_name_change(({"path": "IMG_1.JPG"}, {"path": "img_2.jpg"})) is True
 
     def test_has_name_change_false_same_case(self) -> None:
         """Identical basenames returns False."""
-        assert dedup._dup_has_name_change(({"path": "a/IMG.JPG"}, {"path": "b/IMG.JPG"})) is False
+        assert find._dup_has_name_change(({"path": "a/IMG.JPG"}, {"path": "b/IMG.JPG"})) is False
 
     def test_has_name_change_false_different_case(self) -> None:
         """Same name different case returns False (case-insensitive)."""
-        assert dedup._dup_has_name_change(({"path": "IMG.JPG"}, {"path": "img.jpg"})) is False
+        assert find._dup_has_name_change(({"path": "IMG.JPG"}, {"path": "img.jpg"})) is False
 
     def test_has_date_change_true(self) -> None:
         """Date difference beyond tolerance returns True."""
@@ -1675,7 +1675,7 @@ class TestDupFilters:
             {"date": now.isoformat()},
             {"date": later.isoformat()},
         )
-        assert dedup._dup_has_date_change(dup, 1) is True
+        assert find._dup_has_date_change(dup, 1) is True
 
     def test_has_date_change_false_within_tolerance(self) -> None:
         """Date difference within tolerance returns False."""
@@ -1685,7 +1685,7 @@ class TestDupFilters:
             {"date": now.isoformat()},
             {"date": almost.isoformat()},
         )
-        assert dedup._dup_has_date_change(dup, 1) is False
+        assert find._dup_has_date_change(dup, 1) is False
 
 
 @pytest.mark.integration
@@ -1741,7 +1741,7 @@ class TestMultipleSources:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
 
         assert result == os.EX_OK
         captured = capsys.readouterr()
@@ -1780,7 +1780,7 @@ class TestMultipleSources:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
 
         assert result == os.EX_OK
         captured = capsys.readouterr()
@@ -1819,7 +1819,7 @@ class TestMultipleSources:
             start=1,
         )
 
-        result = dedup.run(args)
+        result = find.run(args)
 
         assert result == os.EX_OK
         captured = capsys.readouterr()
@@ -1848,12 +1848,12 @@ class TestMultipleSources:
         )
 
         with pytest.raises(SystemExit, match="Source not found"):
-            dedup.validate_args(args)
+            find.validate_args(args)
 
     def test_setup_parser_multiple_sources(self) -> None:
         """Parser accepts multiple positional source arguments."""
         parser = argparse.ArgumentParser()
-        dedup.setup_parser(parser)
+        find.setup_parser(parser)
 
         args = parser.parse_args(["archive.json", "/dir/a", "/dir/b", "/file.psv"])
 

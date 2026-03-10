@@ -68,7 +68,7 @@ photos <command> [options]
 - `verify` - Verify archive integrity
 - `info` - Show archive statistics
 - `sync` - Synchronize archives
-- `dedup` - Deduplicate files
+- `find` - Deduplicate files
 
 ### Quick Start
 
@@ -356,7 +356,7 @@ photos sync /source /dest --rewrite-dest /remote/dest --output sync.sh
 - Dry-run by default — use `--execute` to perform real operations
 - Requires `.version.json` and JSON metadata in both archives
 
-### dedup - Find Duplicates and Missing Files
+### find - Find Duplicates and Missing Files
 
 Compare files in a directory against archive metadata to identify duplicates
 (files already in archive) and missing files (files in archive but not in the
@@ -364,25 +364,25 @@ scanned directory). Matches by file size, then SHA1 and MD5 checksums.
 
 ```bash
 # Find duplicates (files that exist in archive)
-photos dedup archive.json /path/to/scan -d
+photos find archive.json /path/to/scan -d
 
 # Find missing files (files in archive but not in scan directory)
-photos dedup archive.json /path/to/scan -m
+photos find archive.json /path/to/scan -m
 
 # Both duplicates and missing
-photos dedup archive.json /path/to/scan -d -m
+photos find archive.json /path/to/scan -d -m
 
 # Output one path per line (for piping)
-photos dedup archive.json /path/to/scan -d -l
+photos find archive.json /path/to/scan -d -l
 
 # Generate move commands for duplicates
-photos dedup archive.json /path/to/scan -d -M /path/to/duplicates
+photos find archive.json /path/to/scan -d -M /path/to/duplicates
 
 # Compare from pre-computed PSV file (path|sha1|md5|date|size)
-photos dedup archive.json scan_results.psv -d -m
+photos find archive.json scan_results.psv -d -m
 
 # Also check filenames and timestamps
-photos dedup archive.json /path/to/scan -d -f -t
+photos find archive.json /path/to/scan -d -f -t
 ```
 
 ### Common Workflows
@@ -482,7 +482,7 @@ photos-manager-cli/
 │   ├── verify.py          # Verify archive integrity
 │   ├── info.py            # Show archive statistics
 │   ├── sync.py            # Synchronization tool
-│   └── dedup.py           # Deduplication tool
+│   └── find.py           # Find duplicates tool
 ├── tests/                 # 585 tests, 88% coverage
 │   ├── conftest.py        # Shared fixtures
 │   ├── test_cli.py
@@ -495,7 +495,7 @@ photos-manager-cli/
 │   ├── test_verify.py
 │   ├── test_info.py
 │   ├── test_sync.py
-│   └── test_dedup.py
+│   └── test_find.py
 ├── pyproject.toml         # Project configuration
 ├── .pre-commit-config.yaml # Pre-commit hooks config
 ├── Makefile               # Development commands

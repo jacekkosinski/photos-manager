@@ -604,7 +604,7 @@ def display_summary(
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
-    """Configure argument parser for dedup command.
+    """Configure argument parser for find command.
 
     Args:
         parser: ArgumentParser to configure
@@ -796,7 +796,7 @@ def process_list_mode(
 
 
 def run(args: argparse.Namespace) -> int:
-    """Execute dedup command.
+    """Execute find command.
 
     Args:
         args: Parsed command-line arguments
@@ -848,7 +848,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    """CLI entry point for dedup command.
+    """CLI entry point for find command.
 
     Returns:
         Exit code
