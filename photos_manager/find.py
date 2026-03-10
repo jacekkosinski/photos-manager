@@ -369,12 +369,14 @@ def format_list_line(
     tag: str,
     scanned: dict[str, str | int],
     archive: dict[str, str | int] | None = None,
+    tolerance: int = 0,
 ) -> str:
     """Format one ``--list`` output line for a ``[DUP]`` or ``[MISS]`` entry.
 
     For ``[MISS]``: shows date and human-readable size.
-    For ``[DUP]``: shows date delta (when dates differ), filename change (when
-    basenames differ case-insensitively), and the archive reference path.
+    For ``[DUP]``: shows date delta (when dates differ beyond tolerance),
+    filename change (when basenames differ case-insensitively), and the
+    archive reference path.
     Date format follows the same conditional logic as fixdates/exifdates:
     time-only when both timestamps share the same calendar date, full
     ``YYYY-MM-DD HH:MM:SS`` when they cross midnight.
@@ -384,6 +386,8 @@ def format_list_line(
         tag: ``"[DUP]"`` or ``"[MISS]"``.
         scanned: Scanned file metadata dict.
         archive: Archive file metadata dict; ``None`` for ``[MISS]`` entries.
+        tolerance: Timestamp tolerance in seconds; date delta shown only when
+            the difference exceeds this value (default: 0).
 
     Returns:
         Formatted output line.
@@ -417,7 +421,7 @@ def format_list_line(
             try:
                 scanned_dt = datetime.fromisoformat(scanned_date)
                 archive_dt = datetime.fromisoformat(archive_date)
-                if scanned_dt != archive_dt:
+                if abs((archive_dt - scanned_dt).total_seconds()) > tolerance:
                     delta_s = int((archive_dt - scanned_dt).total_seconds())
                     delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
                     if scanned_dt.date() != archive_dt.date():
@@ -733,7 +737,9 @@ def process_list_mode(
         if args.check_timestamps:
             filtered = [d for d in filtered if _dup_has_date_change(d, args.tolerance)]
         for scanned, archive in filtered:
-            line = format_list_line(_display_path(str(scanned["path"])), "[DUP]", scanned, archive)
+            line = format_list_line(
+                _display_path(str(scanned["path"])), "[DUP]", scanned, archive, args.tolerance
+            )
             print(line)
 
     if args.show_missing or show_all:
