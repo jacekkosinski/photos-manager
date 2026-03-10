@@ -1108,6 +1108,81 @@ class TestMain:
         # file2.txt has same date -> should NOT appear
         assert "file2.txt" not in captured.out
 
+    def test_run_combined_filename_and_timestamp_filter(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test --list -f -t AND filter: only shows entries matching both conditions."""
+        archive_dir = tmp_path / "archive"
+        archive_dir.mkdir()
+
+        now = datetime.now(UTC)
+        old_date = (now - timedelta(days=100)).isoformat()
+
+        json_file = tmp_path / "archive.json"
+        json_data = [
+            {
+                # file1.txt: different name AND date diff -> should appear (both conditions met)
+                "path": str(archive_dir / "file1_arch.txt"),
+                "size": 7,
+                "sha1": "040f06fd774092478d450774f5ba30c5da78acc8",
+                "md5": "9a0364b9e99bb480dd25e1f0284c8555",
+                "date": old_date,
+            },
+            {
+                # file2.txt: different name but SAME date -> should NOT appear (date cond fails)
+                "path": str(archive_dir / "file2_arch.txt"),
+                "size": 8,
+                "sha1": "105e7a844ac896f68e6f7dc0a9389d3e9be95abc",
+                "md5": "7e55db001d319a94b0b713529a756623",
+                "date": now.isoformat(),
+            },
+            {
+                # file3.txt: same name but date diff -> should NOT appear (name cond fails)
+                "path": str(archive_dir / "file3.txt"),
+                "size": 5,
+                "sha1": "ac3478d69a3c81fa62e60f5c3696165a4e5e6ac4",
+                "md5": "b026324c6904b2a9cb4b88d6d61c81d1",
+                "date": old_date,
+            },
+        ]
+        json_file.write_text(json.dumps(json_data))
+
+        psv_file = tmp_path / "files.psv"
+        lines = [
+            f"/scan/file1.txt|040f06fd774092478d450774f5ba30c5da78acc8"
+            f"|9a0364b9e99bb480dd25e1f0284c8555|{now.isoformat()}|7",
+            f"/scan/file2.txt|105e7a844ac896f68e6f7dc0a9389d3e9be95abc"
+            f"|7e55db001d319a94b0b713529a756623|{now.isoformat()}|8",
+            f"/scan/file3.txt|ac3478d69a3c81fa62e60f5c3696165a4e5e6ac4"
+            f"|b026324c6904b2a9cb4b88d6d61c81d1|{now.isoformat()}|5",
+        ]
+        psv_file.write_text("\n".join(lines) + "\n")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(psv_file)],
+            show_duplicates=True,
+            show_missing=False,
+            check_filenames=True,
+            check_timestamps=True,
+            tolerance=1,
+            list=True,
+            move=None,
+            copy=None,
+            start=1,
+        )
+
+        result = find.run(args)
+        assert result == os.EX_OK
+
+        captured = capsys.readouterr()
+        # Only file1 matches both: name diff AND date diff
+        assert "file1.txt" in captured.out
+        # file2: name diff but no date diff -> filtered out
+        assert "file2.txt" not in captured.out
+        # file3: date diff but no name diff -> filtered out
+        assert "file3.txt" not in captured.out
+
     def test_run_nonexistent_json(self, tmp_path: Path) -> None:
         """Test run with nonexistent JSON file."""
         scan_dir = tmp_path / "scan"
@@ -1695,6 +1770,24 @@ class TestFormatListLine:
         assert "img_2.jpg" in line
         assert "->" in line
 
+    def test_dup_line_date_and_name_diff_both_present(self) -> None:
+        """DUP with both date diff and name diff shows both in the same line."""
+        scanned = {"path": "/scan/IMG_1.JPG", "date": "2023-01-01T10:00:00", "size": 100}
+        archive = {"path": "/archive/img_2.jpg", "date": "2023-01-01T10:00:05", "size": 100}
+        line = find.format_list_line("scan/IMG_1.JPG", "[DUP]", scanned, archive)
+        assert "delta: +5s" in line
+        assert "IMG_1.JPG -> img_2.jpg" in line
+        assert "[ref:" in line
+
+    def test_dup_line_date_within_tolerance_not_shown(self) -> None:
+        """DUP date delta is suppressed when difference is within tolerance."""
+        scanned = {"path": "/scan/a.jpg", "date": "2023-01-01T10:00:00", "size": 100}
+        archive = {"path": "/archive/a.jpg", "date": "2023-01-01T10:00:00.5", "size": 100}
+        # tolerance=1 → 0.5s diff should not produce delta
+        line = find.format_list_line("scan/a.jpg", "[DUP]", scanned, archive, tolerance=1)
+        assert "delta" not in line
+        assert "->" not in line
+
 
 @pytest.mark.unit
 class TestDupFilters:
@@ -1729,6 +1822,14 @@ class TestDupFilters:
         dup: tuple[dict[str, str | int], dict[str, str | int]] = (
             {"date": now.isoformat()},
             {"date": almost.isoformat()},
+        )
+        assert find._dup_has_date_change(dup, 1) is False
+
+    def test_has_date_change_invalid_date_returns_false(self) -> None:
+        """Unparsable date string returns False without raising."""
+        dup: tuple[dict[str, str | int], dict[str, str | int]] = (
+            {"date": "not-a-date"},
+            {"date": "also-not-a-date"},
         )
         assert find._dup_has_date_change(dup, 1) is False
 
