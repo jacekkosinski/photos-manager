@@ -280,81 +280,51 @@ class TestFindDuplicates:
 
 
 @pytest.mark.unit
-class TestCompareFilenames:
-    """Tests for compare_filenames function."""
+class TestSizeDisplay:
+    """Tests for size display format (space as thousands separator)."""
 
-    def test_compare_identical_filenames(self) -> None:
-        """Test comparing identical filenames."""
-        is_same, warning = find.compare_filenames("/scan/file.txt", "/archive/file.txt")
-        assert is_same is True
-        assert warning is None
+    def test_display_missing_uses_space_thousands_separator(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that display_missing uses space as thousands separator."""
+        missing = [
+            {
+                "path": "/scan/file.txt",
+                "size": 1234567,
+                "sha1": "abc",
+                "md5": "def",
+                "date": "2024-01-01T12:00:00+01:00",
+            }
+        ]
+        find.display_missing(missing)
+        captured = capsys.readouterr()
+        assert "1 234 567 bytes" in captured.out
 
-    def test_compare_different_filenames(self) -> None:
-        """Test comparing different filenames."""
-        is_same, warning = find.compare_filenames("/scan/file1.txt", "/archive/file2.txt")
-        assert is_same is False
-        assert warning is not None
-        assert "file1.txt" in warning
-        assert "file2.txt" in warning
-
-    def test_compare_same_basename_different_paths(self) -> None:
-        """Test comparing files with same basename but different paths."""
-        is_same, warning = find.compare_filenames("/scan/dir1/file.txt", "/archive/dir2/file.txt")
-        assert is_same is True
-        assert warning is None
-
-
-@pytest.mark.unit
-class TestCompareTimestamps:
-    """Tests for compare_timestamps function."""
-
-    def test_compare_identical_timestamps(self) -> None:
-        """Test comparing identical timestamps."""
-        dt = datetime.now(UTC).isoformat()
-        is_within, diff = find.compare_timestamps(dt, dt, 1)
-        assert is_within is True
-        assert diff is None
-
-    def test_compare_within_tolerance(self) -> None:
-        """Test comparing timestamps within tolerance."""
-        dt1 = datetime.now(UTC)
-        dt2 = dt1 + timedelta(seconds=0.5)
-        is_within, diff = find.compare_timestamps(dt1.isoformat(), dt2.isoformat(), 1)
-        assert is_within is True
-        assert diff is None
-
-    def test_compare_outside_tolerance(self) -> None:
-        """Test comparing timestamps outside tolerance."""
-        dt1 = datetime.now(UTC)
-        dt2 = dt1 + timedelta(seconds=10)
-        is_within, diff = find.compare_timestamps(dt1.isoformat(), dt2.isoformat(), 1)
-        assert is_within is False
-        assert diff is not None
-        assert "10 seconds" in diff
-
-    def test_compare_invalid_timestamps(self) -> None:
-        """Test comparing invalid timestamps."""
-        is_within, diff = find.compare_timestamps("invalid", "also_invalid", 1)
-        assert is_within is False
-        assert diff is not None
-        assert "Could not parse" in diff
-
-
-@pytest.mark.unit
-class TestFormatSize:
-    """Tests for format_size function."""
-
-    def test_format_small_size(self) -> None:
-        """Test formatting small size."""
-        assert find.format_size(123) == "123"
-
-    def test_format_large_size(self) -> None:
-        """Test formatting large size with thousands separators."""
-        assert find.format_size(1234567) == "1,234,567"
-
-    def test_format_zero(self) -> None:
-        """Test formatting zero."""
-        assert find.format_size(0) == "0"
+    def test_display_duplicates_uses_space_thousands_separator(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that display_duplicates uses space as thousands separator."""
+        duplicates = [
+            (
+                {
+                    "path": "/scan/file.txt",
+                    "size": 3217638,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": "2024-01-01T12:00:00+01:00",
+                },
+                {
+                    "path": "/archive/file.txt",
+                    "size": 3217638,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": "2024-01-01T12:00:00+01:00",
+                },
+            )
+        ]
+        find.display_duplicates(duplicates, 1)
+        captured = capsys.readouterr()
+        assert "3 217 638 bytes" in captured.out
 
 
 @pytest.mark.unit
@@ -575,56 +545,97 @@ class TestDisplayCommands:
 
 
 @pytest.mark.unit
-class TestListDisplay:
-    """Tests for list display functions."""
+class TestProcessListMode:
+    """Tests for process_list_mode output format."""
 
-    def test_display_list_duplicates(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test displaying duplicates in list format."""
+    def _make_args(self, **kwargs: object) -> argparse.Namespace:
+        defaults = {
+            "show_duplicates": False,
+            "show_missing": False,
+            "check_filenames": False,
+            "check_timestamps": False,
+            "tolerance": 1,
+        }
+        defaults.update(kwargs)
+        return argparse.Namespace(**defaults)
+
+    def test_list_dup_tag_and_ref(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that [DUP] tag and ref path appear in --list output."""
         duplicates = [
             (
-                {"path": "/scan/file1.txt", "size": 100, "sha1": "abc", "md5": "def"},
-                {"path": "/archive/file1.txt", "size": 100, "sha1": "abc", "md5": "def"},
-            ),
-            (
-                {"path": "/scan/file2.txt", "size": 200, "sha1": "ghi", "md5": "jkl"},
-                {"path": "/archive/file2.txt", "size": 200, "sha1": "ghi", "md5": "jkl"},
-            ),
+                {
+                    "path": "/scan/file.txt",
+                    "size": 100,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": "2024-01-01T12:00:00+01:00",
+                },
+                {
+                    "path": "/archive/file.txt",
+                    "size": 100,
+                    "sha1": "abc",
+                    "md5": "def",
+                    "date": "2024-01-01T12:00:00+01:00",
+                },
+            )
         ]
-
-        find.display_file_paths(duplicates, extract_path=lambda item: item[0]["path"])
-
+        args = self._make_args(show_duplicates=True)
+        find.process_list_mode(args, duplicates, [])
         captured = capsys.readouterr()
-        lines = captured.out.strip().split("\n")
-        assert len(lines) == 2
-        assert lines[0] == "/scan/file1.txt"
-        assert lines[1] == "/scan/file2.txt"
+        assert "[DUP]" in captured.out
+        assert "[ref: /archive/file.txt]" in captured.out
 
-    def test_display_list_duplicates_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test displaying empty duplicates list in list format."""
-        find.display_file_paths([])
-        captured = capsys.readouterr()
-        assert captured.out == ""
-
-    def test_display_list_missing(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test displaying missing files in list format."""
+    def test_list_miss_tag_and_size(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that [MISS] tag and size appear in --list output."""
         missing = [
-            {"path": "/scan/new1.txt", "size": 100, "sha1": "xyz", "md5": "uvw"},
-            {"path": "/scan/new2.txt", "size": 200, "sha1": "mno", "md5": "pqr"},
+            {
+                "path": "/scan/new.txt",
+                "size": 2048,
+                "sha1": "xyz",
+                "md5": "uvw",
+                "date": "2024-06-01T08:00:00+02:00",
+            }
         ]
-
-        find.display_file_paths(missing)
-
+        args = self._make_args(show_missing=True)
+        find.process_list_mode(args, [], missing)
         captured = capsys.readouterr()
-        lines = captured.out.strip().split("\n")
-        assert len(lines) == 2
-        assert lines[0] == "/scan/new1.txt"
-        assert lines[1] == "/scan/new2.txt"
+        assert "[MISS]" in captured.out
+        assert "2.0 kB" in captured.out
 
-    def test_display_list_missing_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test displaying empty missing list in list format."""
-        find.display_file_paths([])
+    def test_list_empty_output_when_no_flags(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that no-flag mode shows both DUP and MISS."""
+        duplicates = [
+            (
+                {
+                    "path": "/scan/a.txt",
+                    "size": 10,
+                    "sha1": "a",
+                    "md5": "b",
+                    "date": "2024-01-01T00:00:00+00:00",
+                },
+                {
+                    "path": "/archive/a.txt",
+                    "size": 10,
+                    "sha1": "a",
+                    "md5": "b",
+                    "date": "2024-01-01T00:00:00+00:00",
+                },
+            )
+        ]
+        missing = [
+            {
+                "path": "/scan/b.txt",
+                "size": 5,
+                "sha1": "c",
+                "md5": "d",
+                "date": "2024-01-02T00:00:00+00:00",
+            }
+        ]
+        args = self._make_args()
+        find.process_list_mode(args, duplicates, missing)
         captured = capsys.readouterr()
-        assert captured.out == ""
+        assert "[DUP]" in captured.out
+        assert "[MISS]" in captured.out
 
 
 @pytest.mark.unit

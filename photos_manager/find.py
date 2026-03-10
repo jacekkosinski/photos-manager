@@ -15,10 +15,8 @@ import concurrent.futures
 import os
 import shlex
 import sys
-from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from photos_manager.common import (
     TIME_FMT,
@@ -299,68 +297,6 @@ def display_commands(commands: list[str]) -> None:
         print(cmd)
 
 
-def compare_filenames(scanned_path: str, archive_path: str) -> tuple[bool, str | None]:
-    """Compare filenames (basename only) between scanned and archive files.
-
-    Args:
-        scanned_path: Path of scanned file
-        archive_path: Path of archive file
-
-    Returns:
-        Tuple of (is_same, warning_message):
-        - is_same: True if basenames match
-        - warning_message: Description if different, None if same
-    """
-    scanned_name = Path(scanned_path).name
-    archive_name = Path(archive_path).name
-
-    if scanned_name == archive_name:
-        return True, None
-
-    return False, f"Filename differs - scanned: '{scanned_name}', archive: '{archive_name}'"
-
-
-def compare_timestamps(
-    scanned_date: str, archive_date: str, tolerance: int
-) -> tuple[bool, str | None]:
-    """Compare timestamps between scanned and archive files.
-
-    Args:
-        scanned_date: ISO 8601 timestamp of scanned file
-        archive_date: ISO 8601 timestamp of archive file
-        tolerance: Allowed difference in seconds
-
-    Returns:
-        Tuple of (is_within_tolerance, difference_message):
-        - is_within_tolerance: True if within tolerance
-        - difference_message: Description of difference, None if within tolerance
-    """
-    try:
-        scanned_dt = datetime.fromisoformat(scanned_date)
-        archive_dt = datetime.fromisoformat(archive_date)
-
-        diff_seconds = abs((scanned_dt - archive_dt).total_seconds())
-
-        if diff_seconds <= tolerance:
-            return True, None
-
-        return False, f"Timestamp differs by {int(diff_seconds)} seconds"
-    except (ValueError, TypeError) as e:
-        return False, f"Could not parse timestamps: {e}"
-
-
-def format_size(size: int) -> str:
-    """Format file size with thousands separators.
-
-    Args:
-        size: Size in bytes
-
-    Returns:
-        Formatted size string
-    """
-    return f"{size:,}"
-
-
 def _display_path(abs_path: str) -> str:
     """Return path relative to the current working directory.
 
@@ -594,20 +530,6 @@ def display_missing(missing: list[dict[str, str | int]]) -> None:
         print(f"        SHA1: {entry['sha1']}")
         print(f"        MD5:  {entry['md5']}")
         print()
-
-
-def display_file_paths(
-    items: Sequence[dict[str, str | int] | tuple[dict[str, str | int], dict[str, str | int]]],
-    extract_path: Callable[[Any], str] = lambda item: item["path"],
-) -> None:
-    """Display file paths in list format (one per line).
-
-    Args:
-        items: Sequence of items to display (dicts or tuples of dicts)
-        extract_path: Function to extract path from each item
-    """
-    for item in items:
-        print(extract_path(item))
 
 
 def display_summary(
