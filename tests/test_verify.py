@@ -10,7 +10,7 @@ from typing import cast
 
 import pytest
 
-from photos_manager.common import calculate_checksums_strict
+from photos_manager.common import calculate_checksums_strict, find_version_file
 from photos_manager.verify import (
     calculate_file_hash,
     collect_expected_files,
@@ -18,7 +18,6 @@ from photos_manager.verify import (
     find_duplicate_checksums,
     find_extra_files,
     find_invalid_dates,
-    find_version_file,
     find_zero_byte_files,
     load_version_json,
     normalize_paths,

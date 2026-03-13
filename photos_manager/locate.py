@@ -23,7 +23,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from photos_manager.common import load_json
+from photos_manager.common import load_json, validate_directory
 
 
 def load_archive_entries(
@@ -639,8 +639,7 @@ def validate_args(args: argparse.Namespace) -> None:
     Raises:
         SystemExit: If any argument is invalid.
     """
-    if not Path(args.directory).is_dir():
-        raise SystemExit(f"Error: Not a directory: {args.directory}")
+    validate_directory(args.directory)
     for json_file in args.json_files:
         if not Path(json_file).is_file():
             raise SystemExit(f"Error: JSON file not found: {json_file}")

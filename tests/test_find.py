@@ -62,7 +62,7 @@ class TestScanDirectory:
 
     def test_scan_nonexistent_directory(self) -> None:
         """Test scanning nonexistent directory raises SystemExit."""
-        with pytest.raises(SystemExit, match="not found"):
+        with pytest.raises(SystemExit, match="does not exist"):
             find.scan_directory("/nonexistent/dir")
 
     def test_scan_not_directory(self, tmp_path: Path) -> None:
@@ -70,7 +70,7 @@ class TestScanDirectory:
         test_file = tmp_path / "file.txt"
         test_file.write_text("content")
 
-        with pytest.raises(SystemExit, match="Not a directory"):
+        with pytest.raises(SystemExit, match="is not a directory"):
             find.scan_directory(str(test_file))
 
 

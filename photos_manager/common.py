@@ -4,8 +4,11 @@ This module provides shared functionality to eliminate code duplication
 across index, fixdates, manifest, verify, info, sync, and find modules.
 """
 
+import grp
 import hashlib
 import json
+import os
+import pwd
 import sys
 from pathlib import Path
 
@@ -155,17 +158,18 @@ def human_size(size_bytes: int) -> str:
     return f"{size_bytes / 1024**4:.1f} TB"
 
 
-def _validate_directory(directory: str) -> Path:
+def validate_directory(directory: str, check_readable: bool = False) -> Path:
     """Validate that the given path is an existing directory.
 
     Args:
-        directory: Path to validate
+        directory: Path to validate.
+        check_readable: If True, also verify the directory is readable.
 
     Returns:
-        Validated Path object
+        Validated Path object.
 
     Raises:
-        SystemExit: If path doesn't exist or isn't a directory
+        SystemExit: If path doesn't exist, isn't a directory, or isn't readable.
     """
     dir_path = Path(directory)
 
@@ -175,7 +179,62 @@ def _validate_directory(directory: str) -> Path:
     if not dir_path.is_dir():
         raise SystemExit(f"Error: '{directory}' is not a directory")
 
+    if check_readable and not os.access(directory, os.R_OK):
+        raise SystemExit(f"Error: Directory '{directory}' is not readable")
+
     return dir_path
+
+
+def find_version_file(directory: str) -> str | None:
+    """Find version JSON file in directory.
+
+    Searches for .version.json file in the specified directory (non-recursive).
+
+    Args:
+        directory: Path to the directory to search.
+
+    Returns:
+        Path to version file if found, None otherwise.
+
+    Examples:
+        >>> find_version_file("/path/to/archive")
+        '/path/to/archive/.version.json'
+    """
+    base_path = Path(directory).resolve()
+    version_path = base_path / ".version.json"
+    if version_path.exists():
+        return str(version_path)
+    return None
+
+
+def resolve_owner_name(uid: int) -> str | None:
+    """Resolve a UID to a username.
+
+    Args:
+        uid: User ID to resolve.
+
+    Returns:
+        Username string, or None if the UID has no associated user.
+    """
+    try:
+        return pwd.getpwuid(uid).pw_name
+    except KeyError:
+        return None
+
+
+def resolve_group_name(gid: int) -> str | None:
+    """Resolve a GID to a group name.
+
+    Args:
+        gid: Group ID to resolve.
+
+    Returns:
+        Group name string, or None if the GID has no associated group.
+    """
+    try:
+        return grp.getgrgid(gid).gr_name
+    except KeyError:
+        return None
 
 
 def _find_metadata_json_files(directory: str) -> list[Path]:
@@ -190,7 +249,7 @@ def _find_metadata_json_files(directory: str) -> list[Path]:
     Raises:
         SystemExit: If directory is invalid or no JSON files found
     """
-    dir_path = _validate_directory(directory)
+    dir_path = validate_directory(directory)
 
     json_files = [
         json_file

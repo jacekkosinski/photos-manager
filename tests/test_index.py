@@ -254,7 +254,7 @@ class TestRun:
         with pytest.raises(SystemExit) as exc_info:
             run(args)
 
-        assert "not a valid directory" in str(exc_info.value)
+        assert "does not exist" in str(exc_info.value)
 
     def test_run_with_merge(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that run() merges data from existing JSON."""

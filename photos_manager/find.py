@@ -25,6 +25,7 @@ from photos_manager.common import (
     format_count,
     human_size,
     load_json,
+    validate_directory,
 )
 
 
@@ -38,12 +39,7 @@ def scan_directory(directory: str) -> list[dict[str, str | int]]:
         List of file metadata dictionaries with keys:
         path (str), sha1 (str), md5 (str), date (str), size (int)
     """
-    dir_path = Path(directory)
-
-    if not dir_path.exists():
-        raise SystemExit(f"Error: Directory not found: {directory}")
-    if not dir_path.is_dir():
-        raise SystemExit(f"Error: Not a directory: {directory}")
+    dir_path = validate_directory(directory)
 
     # Phase 1: collect paths and stat info (sequential)
     file_entries: list[tuple[str, str, int]] = []

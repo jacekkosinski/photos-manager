@@ -30,8 +30,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import cast
 
-from photos_manager.common import find_json_files, format_count, load_json
-from photos_manager.verify import find_version_file
+from photos_manager.common import find_json_files, find_version_file, format_count, load_json
 
 # Type alias for file identity (sha1, md5, size)
 FileIdentity = tuple[str, str, int]

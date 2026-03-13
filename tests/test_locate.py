@@ -681,7 +681,7 @@ class TestRun:
             seq=False,
             prefix=False,
         )
-        with pytest.raises(SystemExit, match="Not a directory"):
+        with pytest.raises(SystemExit, match="does not exist"):
             locate.run(args)
 
     def test_empty_directory(self, tmp_path: Path) -> None:

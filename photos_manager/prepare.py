@@ -23,6 +23,8 @@ import sys
 from collections.abc import Iterator
 from pathlib import Path
 
+from photos_manager.common import resolve_group_name, resolve_owner_name, validate_directory
+
 # Expected permissions
 FILE_PERMISSIONS = 0o644
 DIR_PERMISSIONS = 0o755
@@ -140,15 +142,9 @@ def check_dir_permissions(path: Path) -> tuple[bool, int]:
 
 def _owner_group_names(st: os.stat_result) -> tuple[str, str]:
     """Return (username, groupname) from a stat result, falling back to uid/gid strings."""
-    try:
-        current_user = pwd.getpwuid(st.st_uid).pw_name
-    except KeyError:
-        current_user = str(st.st_uid)
-    try:
-        current_group = grp.getgrgid(st.st_gid).gr_name
-    except KeyError:
-        current_group = str(st.st_gid)
-    return current_user, current_group
+    return resolve_owner_name(st.st_uid) or str(st.st_uid), resolve_group_name(st.st_gid) or str(
+        st.st_gid
+    )
 
 
 def check_ownership(path: Path, user: str, group: str) -> tuple[bool, str, str]:
@@ -684,11 +680,7 @@ def run(args: argparse.Namespace) -> int:
     """
     # Validate all directories first
     for directory in args.directories:
-        path = Path(directory)
-        if not path.exists():
-            raise SystemExit(f"Error: Directory '{directory}' does not exist")
-        if not path.is_dir():
-            raise SystemExit(f"Error: '{directory}' is not a directory")
+        validate_directory(directory)
 
     # Process each directory
     all_success = True

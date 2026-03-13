@@ -29,11 +29,9 @@ Usage:
 
 import argparse
 import concurrent.futures
-import grp
 import hashlib
 import json
 import os
-import pwd
 import re
 import stat
 import sys
@@ -47,7 +45,10 @@ from photos_manager.common import (
 )
 from photos_manager.common import (
     find_json_files,
+    find_version_file,
     load_json,
+    resolve_group_name,
+    resolve_owner_name,
 )
 
 
@@ -81,29 +82,6 @@ def load_version_json(file_path: str) -> dict[str, Any]:
         raise SystemExit(
             f"Error: Version file '{file_path}' contains invalid format"
         ) from exception
-
-
-def find_version_file(directory: str) -> str | None:
-    """Find version JSON file in directory.
-
-    Searches for .version.json file in the specified directory (non-recursive).
-
-    Args:
-        directory: Path to the directory to search.
-
-    Returns:
-        Path to version file if found, None otherwise.
-
-    Examples:
-        >>> version_file = find_version_file("/path/to/archive")
-        >>> version_file
-        '/path/to/archive/.version.json'
-    """
-    base_path = Path(directory).resolve()
-    version_path = base_path / ".version.json"
-    if version_path.exists():
-        return str(version_path)
-    return None
 
 
 def calculate_file_hash(file_path: str) -> str:
@@ -1206,19 +1184,17 @@ def verify_permissions(
                     )
                 )
 
-            try:
-                current_owner = pwd.getpwuid(file_stat.st_uid).pw_name
-                if current_owner != expected_owner:
-                    path_errors.append(("owner", f"Expected {expected_owner}, got {current_owner}"))
-            except KeyError:
+            current_owner = resolve_owner_name(file_stat.st_uid)
+            if current_owner is None:
                 path_errors.append(("owner", f"Unknown owner UID: {file_stat.st_uid}"))
+            elif current_owner != expected_owner:
+                path_errors.append(("owner", f"Expected {expected_owner}, got {current_owner}"))
 
-            try:
-                current_group = grp.getgrgid(file_stat.st_gid).gr_name
-                if current_group != expected_group:
-                    path_errors.append(("group", f"Expected {expected_group}, got {current_group}"))
-            except KeyError:
+            current_group = resolve_group_name(file_stat.st_gid)
+            if current_group is None:
                 path_errors.append(("group", f"Unknown group GID: {file_stat.st_gid}"))
+            elif current_group != expected_group:
+                path_errors.append(("group", f"Expected {expected_group}, got {current_group}"))
 
             if path_errors:
                 errors[str(path)] = path_errors

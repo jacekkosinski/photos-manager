@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from photos_manager.common import calculate_checksums
+from photos_manager.common import calculate_checksums, validate_directory
 
 
 def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
@@ -213,8 +213,7 @@ def run(args: argparse.Namespace) -> int:
         >>> exit_code = run(args)
         File information written to photos.json
     """
-    if not Path(args.directory).is_dir():
-        raise SystemExit(f"Error: The specified path '{args.directory}' is not a valid directory")
+    validate_directory(args.directory)
 
     file_info_list = get_file_info(args.directory, args.time_zone)
 

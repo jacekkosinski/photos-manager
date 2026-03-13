@@ -226,7 +226,7 @@ def _print_table(
     sep = " " * col_gap
     for label, count, size in shown:
         pct = size / denominator * 100 if denominator > 0 else 0.0
-        count_str = f"{count:,}".replace(",", " ")
+        count_str = common.format_count(count)
         size_str = common.human_size(size)
         print(f"  {label:<{label_width}}{sep}{count_str:>8} files  {size_str:>10}  {pct:>8.2f}%")
     if len(rows) > top_n:
@@ -261,8 +261,8 @@ def _print_stats(
     index_file_count: int = stats["index_file_count"]
 
     denom = grand_total_size or 1
-    ic_str = f"{index_file_count:,}".replace(",", " ")
-    tf_str = f"{total_files:,}".replace(",", " ")
+    ic_str = common.format_count(index_file_count)
+    tf_str = common.format_count(total_files)
     print(
         f"{'Index files:':<14}{ic_str:>8}  "
         f"{common.human_size(index_files_size):>10}  {index_files_size / denom * 100:>8.2f}%"
@@ -272,7 +272,7 @@ def _print_stats(
         f"{common.human_size(total_size):>10}  {total_size / denom * 100:>8.2f}%"
     )
     grand_count = index_file_count + total_files
-    gc_str = f"{grand_count:,}".replace(",", " ")
+    gc_str = common.format_count(grand_count)
     print(f"{'Grand total:':<14}{gc_str:>8}  {common.human_size(grand_total_size):>10}")
     print()
 
@@ -289,7 +289,7 @@ def _print_stats(
         rows: list[tuple[str, str, str, str]] = []
         for filename, count, photo_bytes in per_index:
             pct = photo_bytes / grand_total_size * 100 if grand_total_size > 0 else 0.0
-            count_str = f"{count:,}".replace(",", " ")
+            count_str = common.format_count(count)
             pct_str = f"{pct:.2f}%"
             rows.append((filename, count_str, common.human_size(photo_bytes), pct_str))
         name_w = max(len(r[0]) for r in rows)
@@ -351,16 +351,16 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit(f"Error: not a directory: {directory}")
 
     # Look for a .version.json manifest
-    version_path = directory / ".version.json"
     version_info: dict[str, Any] | None = None
-    if version_path.exists():
+    version_file = common.find_version_file(str(directory))
+    if version_file is not None:
         try:
-            with version_path.open("r", encoding="utf-8") as fh:
+            with Path(version_file).open(encoding="utf-8") as fh:
                 raw = json.load(fh)
             if isinstance(raw, dict):
                 version_info = raw
         except (OSError, json.JSONDecodeError) as exc:
-            print(f"Warning: Could not read '{version_path}': {exc}", file=sys.stderr)
+            print(f"Warning: Could not read '{version_file}': {exc}", file=sys.stderr)
 
     # Find index JSON files (excludes *version.json automatically)
     try:
