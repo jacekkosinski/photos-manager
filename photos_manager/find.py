@@ -581,17 +581,16 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Display files NOT found in archive (missing)",
     )
     parser.add_argument(
-        "--check-filenames",
+        "-n",
+        "--filter-name",
         action="store_true",
-        help=(
-            "Filter --list output to duplicates with filename differences"
-            " (basename, case-insensitive)"
-        ),
+        help=("Filter output to duplicates with filename differences (basename, case-insensitive)"),
     )
     parser.add_argument(
-        "--check-timestamps",
+        "-D",
+        "--filter-date",
         action="store_true",
-        help="Filter --list output to duplicates with date differences",
+        help="Filter output to duplicates with date differences",
     )
     parser.add_argument(
         "-T",
@@ -712,8 +711,8 @@ def process_list_mode(
 ) -> None:
     """Process list mode (--list).
 
-    Displays one line per file with tag and contextual info.  ``--check-filenames``
-    and ``--check-timestamps`` act as filters: when set, only duplicate entries
+    Displays one line per file with tag and contextual info.  ``--filter-name``
+    and ``--filter-date`` act as filters: when set, only duplicate entries
     that have a filename change or a date change (respectively) are shown.
     Both flags together form an AND filter.  Missing entries are always shown.
 
@@ -726,9 +725,9 @@ def process_list_mode(
 
     if args.show_duplicates or show_all:
         filtered: list[tuple[dict[str, str | int], dict[str, str | int]]] = list(duplicates)
-        if args.check_filenames:
+        if args.filter_name:
             filtered = [d for d in filtered if _dup_has_name_change(d)]
-        if args.check_timestamps:
+        if args.filter_date:
             filtered = [d for d in filtered if _dup_has_date_change(d, args.tolerance)]
         for scanned, archive in filtered:
             line = format_list_line(
