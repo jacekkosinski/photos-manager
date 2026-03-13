@@ -15,7 +15,7 @@ Usage:
     photos sync /source/archive /dest/archive
     photos sync /source /dest --fix
     photos sync /source /dest --output sync.sh
-    photos sync /source /dest --no-delete --execute
+    photos sync /source /dest --no-delete --fix
 """
 
 import argparse
