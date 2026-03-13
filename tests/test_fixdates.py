@@ -238,6 +238,27 @@ class TestSetFilesTimestamps:
         captured = capsys.readouterr()
         assert "missing path or date" in captured.err
 
+    def test_raises_on_empty_json_array(self, tmp_path: Path) -> None:
+        """Test that SystemExit is raised for an empty JSON array."""
+        json_file = tmp_path / "empty.json"
+        json_file.write_text("[]")
+
+        with pytest.raises(SystemExit, match="empty"):
+            set_files_timestamps(str(json_file), dry_run=False)
+
+    def test_skips_entries_with_invalid_date(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that entries with unparsable date strings are skipped with error."""
+        json_file = tmp_path / "test.json"
+        data = [{"path": str(tmp_path / "photo.jpg"), "date": "not-a-date", "size": 5}]
+        json_file.write_text(json.dumps(data))
+
+        set_files_timestamps(str(json_file), dry_run=False)
+
+        captured = capsys.readouterr()
+        assert "Failed to parse date" in captured.err
+
 
 @pytest.mark.unit
 class TestSetDirsTimestamps:
@@ -311,6 +332,22 @@ class TestSetDirsTimestamps:
 
         captured = capsys.readouterr()
         assert "does not exist" in captured.err
+
+    def test_skips_entries_with_invalid_date(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that entries with invalid date strings are skipped with error."""
+        subdir = tmp_path / "photos"
+        subdir.mkdir()
+        newest_files = cast(
+            "dict[str, dict[str, str | int]]",
+            {str(subdir): {"path": str(subdir / "img.jpg"), "date": "not-a-date"}},
+        )
+
+        set_dirs_timestamps(newest_files, dry_run=False)
+
+        captured = capsys.readouterr()
+        assert "Invalid or missing date" in captured.err
 
 
 @pytest.mark.unit
@@ -709,3 +746,55 @@ class TestRun:
         captured = capsys.readouterr()
         assert captured.err != ""
         assert "non-existent" in captured.err.lower() or "unreadable" in captured.err.lower()
+
+    def test_run_skips_zero_byte_json_file(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() skips a zero-byte JSON file with an error."""
+        json_file = tmp_path / "empty.json"
+        json_file.write_bytes(b"")
+
+        args = argparse.Namespace(json_files=[str(json_file)], fix=False, all=False)
+
+        exit_code = run(args)
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "empty or invalid" in captured.err
+
+    def test_run_skips_json_with_no_matching_directory(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() skips a JSON file whose corresponding directory doesn't exist."""
+        # json_file named "nodirhere.json" → expected dir is "nodirhere" (doesn't exist)
+        json_file = tmp_path / "nodirhere.json"
+        data = [{"path": "/some/photo.jpg", "date": "2024-01-01T00:00:00+00:00", "size": 1}]
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(json_files=[str(json_file)], fix=False, all=False)
+
+        exit_code = run(args)
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "non-existent" in captured.err.lower() or "unreadable" in captured.err.lower()
+
+    def test_run_catches_systemexit_from_bad_json_data(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that run() catches SystemExit raised by get_newest_files and continues."""
+        # JSON file with entries missing 'path' — passes size/dir checks but
+        # causes get_newest_files to raise SystemExit
+        photos_dir = tmp_path / "photos"
+        photos_dir.mkdir()
+        json_file = tmp_path / "photos.json"
+        data = [{"date": "2024-01-01T00:00:00+00:00", "size": 1}]  # no 'path' key
+        json_file.write_text(json.dumps(data))
+
+        args = argparse.Namespace(json_files=[str(json_file)], fix=False, all=False)
+
+        exit_code = run(args)
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "path" in captured.err.lower() or "error" in captured.err.lower()

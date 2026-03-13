@@ -228,6 +228,301 @@ class TestVerifySubcommand:
 
 
 @pytest.mark.integration
+class TestFindSubcommand:
+    """Tests for find subcommand."""
+
+    def test_find_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that find subcommand delegates to find.run()."""
+        with patch("photos_manager.find.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "find", "archive.json", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert args.json_file == "archive.json"
+
+    def test_find_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that find --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "find", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "find" in captured.out
+        assert "archive" in captured.out.lower() or "duplicate" in captured.out.lower()
+
+    def test_find_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that find returns error code when run() fails."""
+        with patch("photos_manager.find.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "find", "archive.json", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+@pytest.mark.integration
+class TestPrepareSubcommand:
+    """Tests for prepare subcommand."""
+
+    def test_prepare_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that prepare subcommand delegates to prepare.run()."""
+        with patch("photos_manager.prepare.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "prepare", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert args.directories == ["/test/path"]
+
+    def test_prepare_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that prepare --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "prepare", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "prepare" in captured.out
+        assert "permission" in captured.out.lower() or "ownership" in captured.out.lower()
+
+    def test_prepare_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that prepare returns error code when run() fails."""
+        with patch("photos_manager.prepare.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "prepare", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+@pytest.mark.integration
+class TestLocateSubcommand:
+    """Tests for locate subcommand."""
+
+    def test_locate_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that locate subcommand delegates to locate.run()."""
+        with patch("photos_manager.locate.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "locate", "/test/path", "archive.json"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert args.directory == "/test/path"
+            assert args.json_files == ["archive.json"]
+
+    def test_locate_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that locate --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "locate", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "locate" in captured.out
+        assert "archive" in captured.out.lower() or "timestamp" in captured.out.lower()
+
+    def test_locate_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that locate returns error code when run() fails."""
+        with patch("photos_manager.locate.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "locate", "/test/path", "archive.json"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+@pytest.mark.integration
+class TestSeriesSubcommand:
+    """Tests for series subcommand."""
+
+    def test_series_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that series subcommand delegates to series.run()."""
+        with patch("photos_manager.series.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "series", "archive.json"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert args.json_files == ["archive.json"]
+
+    def test_series_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that series --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "series", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "series" in captured.out
+
+    def test_series_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that series returns error code when run() fails."""
+        with patch("photos_manager.series.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "series", "archive.json"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+@pytest.mark.integration
+class TestExifdatesSubcommand:
+    """Tests for exifdates subcommand."""
+
+    def test_exifdates_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that exifdates subcommand delegates to exifdates.run()."""
+        with patch("photos_manager.exifdates.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "exifdates", "archive.json"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert args.json_file == "archive.json"
+
+    def test_exifdates_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that exifdates --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "exifdates", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "exifdates" in captured.out
+        assert "exif" in captured.out.lower() or "date" in captured.out.lower()
+
+    def test_exifdates_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that exifdates returns error code when run() fails."""
+        with patch("photos_manager.exifdates.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "exifdates", "archive.json"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+@pytest.mark.integration
+class TestInfoSubcommand:
+    """Tests for info subcommand."""
+
+    def test_info_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that info subcommand delegates to info.run()."""
+        with patch("photos_manager.info.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "info", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert args.directory == "/test/path"
+
+    def test_info_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that info --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "info", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "info" in captured.out
+        assert "statistic" in captured.out.lower() or "archive" in captured.out.lower()
+
+    def test_info_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that info returns error code when run() fails."""
+        with patch("photos_manager.info.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "info", "/test/path"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+@pytest.mark.integration
+class TestSyncSubcommand:
+    """Tests for sync subcommand."""
+
+    def test_sync_subcommand_calls_run_function(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that sync subcommand delegates to sync.run()."""
+        with patch("photos_manager.sync.run", return_value=0) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "sync", "/source", "/dest"])
+
+            exit_code = main()
+
+            assert exit_code == 0
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert isinstance(args, argparse.Namespace)
+            assert args.source == "/source"
+            assert args.dest == "/dest"
+
+    def test_sync_with_help_flag(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that sync --help displays help message."""
+        monkeypatch.setattr(sys, "argv", ["photos", "sync", "--help"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert "sync" in captured.out
+        assert "source" in captured.out.lower() or "synchronize" in captured.out.lower()
+
+    def test_sync_returns_error_code_on_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test that sync returns error code when run() fails."""
+        with patch("photos_manager.sync.run", return_value=1) as mock_run:
+            monkeypatch.setattr(sys, "argv", ["photos", "sync", "/source", "/dest"])
+
+            exit_code = main()
+
+            assert exit_code == 1
+            mock_run.assert_called_once()
+
+
+@pytest.mark.integration
 class TestInvalidSubcommand:
     """Tests for invalid subcommand handling."""
 

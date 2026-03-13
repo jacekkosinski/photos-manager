@@ -13,7 +13,12 @@ from photos_manager.common import (
     calculate_checksums_strict,
     find_json_files,
     find_json_files_with_mtime,
+    find_version_file,
+    format_count,
     load_json,
+    resolve_group_name,
+    resolve_owner_name,
+    validate_directory,
 )
 
 
@@ -344,3 +349,123 @@ class TestFindJsonFilesWithMtime:
         result = find_json_files_with_mtime(str(tmp_path))
 
         assert len(result) == 2
+
+
+@pytest.mark.unit
+class TestFormatCount:
+    """Tests for format_count function."""
+
+    def test_zero(self) -> None:
+        """Test formatting zero."""
+        assert format_count(0) == "0"
+
+    def test_small_number(self) -> None:
+        """Test number below 1000 has no separator."""
+        assert format_count(999) == "999"
+
+    def test_thousands(self) -> None:
+        """Test thousands use space separator."""
+        assert format_count(1000) == "1 000"
+        assert format_count(12345) == "12 345"
+
+    def test_millions(self) -> None:
+        """Test millions use space separators."""
+        assert format_count(1234567) == "1 234 567"
+
+    def test_no_commas(self) -> None:
+        """Result must not contain commas."""
+        assert "," not in format_count(1_000_000)
+
+
+@pytest.mark.unit
+class TestValidateDirectory:
+    """Tests for validate_directory function."""
+
+    def test_valid_directory_returns_path(self, tmp_path: Path) -> None:
+        """Test that valid directory returns a Path object."""
+        result = validate_directory(str(tmp_path))
+        assert result == tmp_path
+
+    def test_nonexistent_raises_systemexit(self, tmp_path: Path) -> None:
+        """Test that nonexistent directory raises SystemExit."""
+        nonexistent = str(tmp_path / "missing")
+        with pytest.raises(SystemExit, match="does not exist"):
+            validate_directory(nonexistent)
+
+    def test_file_raises_systemexit(self, tmp_path: Path) -> None:
+        """Test that a file path raises SystemExit."""
+        f = tmp_path / "file.txt"
+        f.write_text("x")
+        with pytest.raises(SystemExit, match="is not a directory"):
+            validate_directory(str(f))
+
+    def test_check_readable_passes_for_readable_dir(self, tmp_path: Path) -> None:
+        """Test check_readable=True passes for a readable directory."""
+        result = validate_directory(str(tmp_path), check_readable=True)
+        assert result == tmp_path
+
+    @pytest.mark.skipif(os.getuid() == 0, reason="chmod 0o000 has no effect as root")
+    def test_check_readable_raises_for_unreadable_dir(self, tmp_path: Path) -> None:
+        """Test check_readable=True raises SystemExit for unreadable directory."""
+        locked = tmp_path / "locked"
+        locked.mkdir()
+        locked.chmod(0o000)
+        try:
+            with pytest.raises(SystemExit, match="is not readable"):
+                validate_directory(str(locked), check_readable=True)
+        finally:
+            locked.chmod(0o755)
+
+
+@pytest.mark.unit
+class TestFindVersionFile:
+    """Tests for find_version_file function."""
+
+    def test_finds_existing_version_file(self, tmp_path: Path) -> None:
+        """Test that .version.json is found when present."""
+        version_file = tmp_path / ".version.json"
+        version_file.write_text("{}")
+
+        result = find_version_file(str(tmp_path))
+
+        assert result is not None
+        assert result.endswith(".version.json")
+
+    def test_returns_none_when_absent(self, tmp_path: Path) -> None:
+        """Test that None is returned when .version.json is absent."""
+        result = find_version_file(str(tmp_path))
+        assert result is None
+
+
+@pytest.mark.unit
+class TestResolveOwnerName:
+    """Tests for resolve_owner_name function."""
+
+    def test_valid_uid_returns_name(self) -> None:
+        """Test that a valid UID returns a username string."""
+        uid = os.getuid()
+        result = resolve_owner_name(uid)
+        assert result is not None
+        assert isinstance(result, str)
+
+    def test_invalid_uid_returns_none(self) -> None:
+        """Test that an invalid UID returns None."""
+        result = resolve_owner_name(999999999)
+        assert result is None
+
+
+@pytest.mark.unit
+class TestResolveGroupName:
+    """Tests for resolve_group_name function."""
+
+    def test_valid_gid_returns_name(self) -> None:
+        """Test that a valid GID returns a group name string."""
+        gid = os.getgid()
+        result = resolve_group_name(gid)
+        assert result is not None
+        assert isinstance(result, str)
+
+    def test_invalid_gid_returns_none(self) -> None:
+        """Test that an invalid GID returns None."""
+        result = resolve_group_name(999999999)
+        assert result is None
