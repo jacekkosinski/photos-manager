@@ -10,7 +10,7 @@ management.
 
 - 🚀 Modern Python 3.12
 - 📝 Type-safe with mypy strict mode
-- ✅ Comprehensive testing with pytest (645 tests, 88% coverage)
+- ✅ Comprehensive testing with pytest (687 tests, 90% coverage)
 - 📚 Google-style docstrings with interrogate validation
 - 🔧 Pre-commit hooks for code quality
 - 🎯 Linting and formatting with Ruff
@@ -339,13 +339,13 @@ moves/renames and prioritize moves over copy+delete.
 photos sync /source/archive /dest/archive
 
 # Execute sync operations
-photos sync /source/archive /dest/archive --execute
+photos sync /source/archive /dest/archive --fix
 
 # Save sync commands to a shell script
 photos sync /source/archive /dest/archive --output sync.sh
 
 # Skip deletion operations
-photos sync /source/archive /dest/archive --no-delete --execute
+photos sync /source/archive /dest/archive --no-delete --fix
 
 # Rewrite destination path for remote execution
 photos sync /source /dest --rewrite-dest /remote/dest --output sync.sh
@@ -353,7 +353,7 @@ photos sync /source /dest --rewrite-dest /remote/dest --output sync.sh
 
 **Notes:**
 
-- Dry-run by default — use `--execute` to perform real operations
+- Dry-run by default — use `--fix` to perform real operations
 - Requires `.version.json` and JSON metadata in both archives
 
 ### find - Find Duplicates and Missing Files
@@ -382,7 +382,7 @@ photos find archive.json /path/to/scan -d -M /path/to/duplicates
 photos find archive.json scan_results.psv -d -m
 
 # Also check filenames and timestamps
-photos find archive.json /path/to/scan -d -f -t
+photos find archive.json /path/to/scan -d --check-filenames --check-timestamps
 ```
 
 ### Common Workflows
@@ -483,7 +483,7 @@ photos-manager-cli/
 │   ├── info.py            # Show archive statistics
 │   ├── sync.py            # Synchronization tool
 │   └── find.py           # Find duplicates tool
-├── tests/                 # 645 tests, 88% coverage
+├── tests/                 # 687 tests, 90% coverage
 │   ├── conftest.py        # Shared fixtures
 │   ├── test_cli.py
 │   ├── test_common.py
@@ -579,7 +579,7 @@ poetry run interrogate -v --generate-badge . photos_manager/
 
 ### Testing
 
-The project has comprehensive test coverage with 645 tests covering all modules.
+The project has comprehensive test coverage with 687 tests covering all modules.
 
 ```bash
 # Run all tests
@@ -595,7 +595,7 @@ poetry run pytest tests/test_prepare.py
 poetry run pytest -v
 ```
 
-**Test Coverage:** 88% overall with 645 tests across all modules.
+**Test Coverage:** 90% overall with 687 tests across all modules.
 
 ### Documentation
 

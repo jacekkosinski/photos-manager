@@ -1273,7 +1273,7 @@ def _handle_execution(
         return os.EX_OK if failed == 0 else 1
     else:
         print("\nDRY RUN: No changes made.")
-        print("To execute these operations, run with --execute flag.")
+        print("To execute these operations, run with --fix flag.")
         if args.output:
             print(f"To review commands, see: {args.output}")
 
