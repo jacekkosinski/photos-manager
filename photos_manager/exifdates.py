@@ -416,7 +416,7 @@ def apply_corrections(json_file: str, corrections: list[CorrectionResult]) -> No
         if correction is not None:
             _, new_date, _ = correction
             entry["date"] = new_date
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(data, indent=4, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -495,7 +495,7 @@ def run(args: argparse.Namespace) -> int:
     try:
         entries = load_json(args.json_file)
     except SystemExit as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(str(exc), file=sys.stderr)
         return 1
 
     json_dir = json_path.parent
@@ -523,7 +523,8 @@ def run(args: argparse.Namespace) -> int:
         print(format_report_line(filename, tag, old_dt_naive, new_dt_naive, info))
         changed += 1
 
-    print(f"\n{changed} change(s) detected in {len(entries)} entries.")
+    verb = "applied" if args.fix and changed else "detected"
+    print(f"\n{changed} change(s) {verb} in {len(entries)} entries.")
 
     if args.fix and changed:
         apply_corrections(args.json_file, corrections)
