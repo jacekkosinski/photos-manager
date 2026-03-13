@@ -499,13 +499,13 @@ def display_duplicates(
             filename_warnings += 1
 
         print(f"  [{idx}/{len(duplicates)}] {scanned['path']}")
-        print(f"         date: {date_display}")
-        print(f"         size: {size:_} bytes ({human_size(size)})".replace("_", " "))
-        print(f"         SHA1: {scanned['sha1']}")
-        print(f"         MD5:  {scanned['md5']}")
+        print(f"        date: {date_display}")
+        print(f"        size: {size:_} bytes ({human_size(size)})".replace("_", " "))
+        print(f"        SHA1: {scanned['sha1']}")
+        print(f"        MD5:  {scanned['md5']}")
         if has_name_diff:
-            print(f"         name: {scanned_name} -> {archive_name}")
-        print(f"         ref:  {archive['path']}")
+            print(f"        name: {scanned_name} -> {archive_name}")
+        print(f"        ref:  {archive['path']}")
         print()
 
     return filename_warnings, timestamp_warnings

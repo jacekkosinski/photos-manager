@@ -169,7 +169,7 @@ def _collect_file_changes(json_file: str, dry_run: bool = False) -> list[_Pendin
         try:
             expected_timestamp = int(datetime.fromisoformat(str(timestamp_str)).timestamp())
         except ValueError as e:
-            print(f"Error parsing date for {file_path}: {e}", file=sys.stderr)
+            print(f"Error: Failed to parse date for {file_path}: {e}", file=sys.stderr)
             continue
 
         path = Path(str(file_path))
@@ -425,7 +425,7 @@ def set_json_timestamps(
     try:
         pending = _collect_json_changes(json_file, dir_name, newest_entry)
     except OSError as e:
-        print(f"Error setting timestamps for '{dir_name}': {e}", file=sys.stderr)
+        print(f"Error: Failed to set timestamps for '{dir_name}': {e}", file=sys.stderr)
         return 0
     name_width = _name_col_width(pending)
     return _apply_changes(pending, name_width, dry_run)
@@ -539,7 +539,7 @@ def run(args: argparse.Namespace) -> int:
             try:
                 all_pending.extend(_collect_json_changes(json_file, dir_name, newest_entry))
             except OSError as e:
-                print(f"Error setting timestamps for '{dir_name}': {e}", file=sys.stderr)
+                print(f"Error: Failed to set timestamps for '{dir_name}': {e}", file=sys.stderr)
                 errors += 1
                 continue
 

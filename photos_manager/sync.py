@@ -13,7 +13,7 @@ Key features:
 
 Usage:
     photos sync /source/archive /dest/archive
-    photos sync /source /dest --execute
+    photos sync /source /dest --fix
     photos sync /source /dest --output sync.sh
     photos sync /source /dest --no-delete --execute
 """
@@ -30,7 +30,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import cast
 
-from photos_manager.common import find_json_files, load_json
+from photos_manager.common import find_json_files, format_count, load_json
 from photos_manager.verify import find_version_file
 
 # Type alias for file identity (sha1, md5, size)
@@ -1127,7 +1127,7 @@ def _validate_and_load_archives(
     if source_version:
         print(f"  Found version file: {Path(source_version).name}")
     print(f"  Found {len(source_json_files)} JSON metadata file(s)")
-    print(f"  Total files in source: {len(source_data):,}")
+    print(f"  Total files in source: {format_count(len(source_data))}")
 
     print(f"\nScanning destination archive: {args.dest}")
 
@@ -1143,7 +1143,7 @@ def _validate_and_load_archives(
     if dest_version:
         print(f"  Found version file: {Path(dest_version).name}")
     print(f"  Found {len(dest_json_files)} JSON metadata file(s)")
-    print(f"  Total files in destination: {len(dest_data):,}")
+    print(f"  Total files in destination: {format_count(len(dest_data))}")
 
     return (
         0,
@@ -1256,7 +1256,7 @@ def _handle_execution(
     # Execute operations or show dry-run message
     if args.fix:
         if dangerous:
-            print("\nWARNING: Dangerous operations detected!", file=sys.stderr)
+            print("\nWarning: Dangerous operations detected", file=sys.stderr)
             print("Review the operations carefully before proceeding.", file=sys.stderr)
 
             response = input("Continue with execution? (yes/no): ")

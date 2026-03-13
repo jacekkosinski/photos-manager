@@ -439,7 +439,7 @@ def _print_default(
         if candidates:
             print(f"{name}  \u2192  {', '.join(candidates)}")
         else:
-            print(f"{name}  \u2192  (no match found)", file=sys.stderr)
+            print(f"{name}  \u2192  (no match found)")
     return placements
 
 
@@ -536,7 +536,7 @@ def _print_list(
         for file_path, _ in new_files:
             placements.append((file_path, candidates))
     else:
-        print("\nNo matching directory found\n", file=sys.stderr)
+        print("\nNo matching directory found\n")
     return placements
 
 

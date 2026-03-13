@@ -920,7 +920,7 @@ def _get_json_files_list(directory: str, version_file: str | None) -> tuple[list
             else:
                 print("Warning: Version file has no 'files' field", file=sys.stderr)
         except SystemExit as e:
-            print(f"Error loading version file: {e}", file=sys.stderr)
+            print(f"Error: Failed to load version file: {e}", file=sys.stderr)
             return [], 1
     else:
         # No version file, scan for JSON files
@@ -1431,7 +1431,9 @@ def run(args: argparse.Namespace) -> int:
     print(f"Found {len(json_files)} JSON metadata file(s)")
 
     if args.all:
-        print("WARNING: Full checksum verification enabled (this may take a while)")
+        print(
+            "Warning: Full checksum verification enabled (this may take a while)", file=sys.stderr
+        )
 
     total_files = 0
     total_errors = 0
@@ -1501,7 +1503,7 @@ def run(args: argparse.Namespace) -> int:
     print("\nChecking for zero-byte files...")
     zero_byte_files = find_zero_byte_files(all_data)
     if zero_byte_files:
-        print(f"  Found {len(zero_byte_files)} zero-byte file(s):")
+        print(f"  Found {len(zero_byte_files)} zero-byte file(s):", file=sys.stderr)
         for file_path in sorted(zero_byte_files):
             print(f"    - {file_path}", file=sys.stderr)
             total_errors += 1
