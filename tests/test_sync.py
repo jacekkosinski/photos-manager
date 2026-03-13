@@ -1344,7 +1344,7 @@ class TestMain:
 
         parser = argparse.ArgumentParser()
         sync.setup_parser(parser)
-        args = parser.parse_args([str(source_dir), str(dest_dir), "--execute"])
+        args = parser.parse_args([str(source_dir), str(dest_dir), "--fix"])
 
         exit_code = sync.run(args)
 

@@ -368,7 +368,7 @@ def write_script(
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
-    """Configure argument parser for sequences command.
+    """Configure argument parser for series command.
 
     Args:
         parser: ArgumentParser instance to configure.
@@ -445,7 +445,7 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    """Execute sequences command with parsed arguments.
+    """Execute series command with parsed arguments.
 
     Pools all matching files, detects interleaved sequences, and optionally
     generates move commands to separate them.

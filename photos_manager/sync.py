@@ -982,7 +982,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "-x",
-        "--execute",
+        "--fix",
         action="store_true",
         help="Actually execute sync operations (default: dry-run preview only)",
     )
@@ -1081,7 +1081,7 @@ def _validate_and_load_archives(
 
     # Validate archives
     valid, errors = validate_archive_directories(
-        args.source, args.dest, check_dest_writable=args.execute
+        args.source, args.dest, check_dest_writable=args.fix
     )
     if not valid:
         for error in errors:
@@ -1254,7 +1254,7 @@ def _handle_execution(
         generate_sync_script(operations, args.output)
 
     # Execute operations or show dry-run message
-    if args.execute:
+    if args.fix:
         if dangerous:
             print("\nWARNING: Dangerous operations detected!", file=sys.stderr)
             print("Review the operations carefully before proceeding.", file=sys.stderr)
@@ -1296,7 +1296,7 @@ def run(args: argparse.Namespace) -> int:
         args: Parsed command-line arguments with fields:
             - source: Source archive directory
             - dest: Destination archive directory
-            - execute: Whether to actually execute operations (default: dry-run preview)
+            - fix: Whether to actually execute operations (default: dry-run preview)
             - no_delete: Whether to skip deletions
             - output: Optional output script path
             - verbose: Whether to show detailed information

@@ -171,7 +171,6 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "-o",
         "--output",
-        dest="output_file",
         default=None,
         help="Output file path (if not specified, writes to stdout)",
     )
@@ -201,7 +200,7 @@ def run(args: argparse.Namespace) -> int:
     Args:
         args: Parsed command-line arguments with fields:
             - directory: Path to archive directory
-            - output_file: Optional output file path (None for stdout)
+            - output: Optional output file path (None for stdout)
             - prefix: Archive name prefix for version string (default: 'photos')
 
     Returns:
@@ -260,20 +259,20 @@ def run(args: argparse.Namespace) -> int:
     }
     output_json = json.dumps(output, ensure_ascii=False, indent=4)
 
-    if args.output_file is None:
+    if args.output is None:
         print(output_json)
     else:
         try:
-            output_path = Path(args.output_file)
+            output_path = Path(args.output)
             output_path.write_text(output_json, encoding="utf-8")
             output_path.chmod(0o644)
             mtime = json_files_with_mtimes[0][0]
             os.utime(output_path, (mtime, mtime))
             os.utime(directory_path, (mtime, mtime))
-            print(f"Manifest written to {args.output_file} ({file_count} files)")
+            print(f"Manifest written to {args.output} ({file_count} files)")
         except OSError as exception:
             raise SystemExit(
-                f"Error: Could not write to output file '{args.output_file}': {exception}"
+                f"Error: Could not write to output file '{args.output}': {exception}"
             ) from exception
 
     return os.EX_OK

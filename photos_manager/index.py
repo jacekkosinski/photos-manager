@@ -165,7 +165,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Time zone for modification time (default: Europe/Warsaw)",
     )
     parser.add_argument(
-        "-N",
+        "-n",
         "--sort-by-number",
         action="store_true",
         help="Sort files numerically by number in second directory and filename",

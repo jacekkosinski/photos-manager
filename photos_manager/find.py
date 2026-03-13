@@ -585,7 +585,6 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Display files NOT found in archive (missing)",
     )
     parser.add_argument(
-        "-f",
         "--check-filenames",
         action="store_true",
         help=(
@@ -594,7 +593,6 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
-        "-t",
         "--check-timestamps",
         action="store_true",
         help="Filter --list output to duplicates with date differences",
@@ -798,21 +796,3 @@ def run(args: argparse.Namespace) -> int:
         display_summary(duplicates, missing)
 
     return os.EX_OK
-
-
-def main() -> int:
-    """CLI entry point for find command.
-
-    Returns:
-        Exit code
-    """
-    parser = argparse.ArgumentParser(
-        description="Find duplicate and missing files by comparing with archive"
-    )
-    setup_parser(parser)
-    args = parser.parse_args()
-    return run(args)
-
-
-if __name__ == "__main__":
-    sys.exit(main())

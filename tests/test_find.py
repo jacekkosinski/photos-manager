@@ -818,7 +818,16 @@ class TestSetupParser:
 
         # Test that parser accepts expected arguments
         args = parser.parse_args(
-            ["archive.json", "/scan/dir", "-d", "-m", "-f", "-t", "--tolerance", "5"]
+            [
+                "archive.json",
+                "/scan/dir",
+                "-d",
+                "-m",
+                "--check-filenames",
+                "--check-timestamps",
+                "--tolerance",
+                "5",
+            ]
         )
 
         assert args.json_file == "archive.json"
@@ -1047,7 +1056,7 @@ class TestMain:
     def test_run_with_timestamp_check(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test --list -t filter: shows only duplicates with date differences."""
+        """Test --list --check-timestamps filter: shows only duplicates with date differences."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
 
@@ -1111,7 +1120,7 @@ class TestMain:
     def test_run_combined_filename_and_timestamp_filter(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test --list -f -t AND filter: only shows entries matching both conditions."""
+        """Test --list --check-filenames --check-timestamps AND filter."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
 
@@ -1465,18 +1474,6 @@ class TestMain:
         assert "[MISS]" in output
         assert "file1.txt" in output
         assert "file2.txt" in output
-
-    def test_main_entry_point(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test main() entry point."""
-        json_file = tmp_path / "archive.json"
-        json_file.write_text("[]")
-        scan_dir = tmp_path / "scan"
-        scan_dir.mkdir()
-
-        monkeypatch.setattr("sys.argv", ["find", str(json_file), str(scan_dir), "-d"])
-
-        result = find.main()
-        assert result == os.EX_OK
 
     def test_run_move_mode(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with --move flag."""
