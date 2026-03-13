@@ -84,9 +84,6 @@ git-clean: ## Clean up git repository (prune, gc, remove stale branches)
 	git gc --aggressive --prune=now
 	git repack -a -d --depth=250 --window=250
 	git reflog expire --expire=now --all
-	@echo ""
-	@du -sh .git
-	@echo "Git repository cleaned."
 
 check-all: lint format-check type-check docstring-check complexity test pre-commit ## Run all quality checks
 
