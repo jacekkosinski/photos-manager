@@ -13,9 +13,8 @@ Key features:
 
 Usage:
     photos sync /source/archive /dest/archive
-    photos sync /source /dest --fix
     photos sync /source /dest --output sync.sh
-    photos sync /source /dest --no-delete --fix
+    photos sync /source /dest --no-delete --output sync.sh
 """
 
 import argparse
@@ -871,96 +870,6 @@ def generate_sync_script(
         raise SystemExit(f"Error: Cannot write sync script to '{output_path}': {e}") from e
 
 
-def check_for_dangerous_operations(
-    operations: list[SyncOperation],
-) -> tuple[bool, list[str]]:
-    """Check for potentially dangerous operations.
-
-    Warns about:
-    - Mass deletions (>30% or >100 files)
-
-    Args:
-        operations: List of sync operations
-
-    Returns:
-        Tuple containing:
-            - bool: True if operations seem dangerous
-            - list[str]: Warning messages
-
-    Examples:
-        >>> ops = [SyncOperation('delete', None, f'/file{i}', None, 'test') for i in range(150)]
-        >>> dangerous, warnings = check_for_dangerous_operations(ops)
-        >>> dangerous
-        True
-    """
-    warnings: list[str] = []
-    dangerous = False
-
-    # Count deletions
-    total_ops = len(operations)
-    delete_ops = sum(1 for op in operations if op.op_type == "delete")
-
-    if delete_ops > 100:
-        warnings.append(f"Mass deletion detected: {delete_ops} files will be deleted")
-        dangerous = True
-    elif total_ops > 0 and delete_ops / total_ops > 0.3:
-        percentage = 100 * delete_ops / total_ops
-        warnings.append(
-            f"Large proportion of deletions: {delete_ops}/{total_ops} ({percentage:.1f}%)"
-        )
-        dangerous = True
-
-    return dangerous, warnings
-
-
-def execute_sync(
-    operations: list[SyncOperation],
-    dry_run: bool = True,
-) -> tuple[int, int]:
-    """Execute sync operations.
-
-    Args:
-        operations: List of operations to execute
-        dry_run: If True, only print operations without executing
-
-    Returns:
-        Tuple containing:
-            - int: Number of successful operations
-            - int: Number of failed operations
-
-    Examples:
-        >>> ops = [SyncOperation('mkdir', None, '/dest/newdir', None, 'test')]
-        >>> success, failed = execute_sync(ops, dry_run=True)
-        >>> success >= 0
-        True
-    """
-    successful = 0
-    failed = 0
-
-    for op in operations:
-        commands = op.to_command()
-
-        for cmd in commands:
-            if dry_run:
-                print(f"[DRY RUN] {cmd}")
-                successful += 1
-            else:
-                try:
-                    # Execute command (intentional shell execution for sync operations)
-                    result = os.system(cmd)  # noqa: S605  # nosec B605
-                    if result == 0:
-                        print(f"[OK] {cmd}")
-                        successful += 1
-                    else:
-                        print(f"[FAIL] {cmd}")
-                        failed += 1
-                except Exception as e:
-                    print(f"[ERROR] {cmd}: {e}", file=sys.stderr)
-                    failed += 1
-
-    return successful, failed
-
-
 def setup_parser(parser: argparse.ArgumentParser) -> None:
     """Configure argument parser for sync command.
 
@@ -978,12 +887,6 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "dest",
         type=str,
         help="Destination archive directory",
-    )
-    parser.add_argument(
-        "-x",
-        "--fix",
-        action="store_true",
-        help="Actually execute sync operations (default: dry-run preview only)",
     )
     parser.add_argument(
         "-k",
@@ -1079,9 +982,7 @@ def _validate_and_load_archives(
     print(f"Scanning source archive: {args.source}")
 
     # Validate archives
-    valid, errors = validate_archive_directories(
-        args.source, args.dest, check_dest_writable=args.fix
-    )
+    valid, errors = validate_archive_directories(args.source, args.dest)
     if not valid:
         for error in errors:
             print(f"Error: {error}", file=sys.stderr)
@@ -1220,24 +1121,17 @@ def _handle_execution(
     op_counts: dict[str, int],
     args: argparse.Namespace,
 ) -> int:
-    """Handle operation execution or dry-run.
+    """Print summary and write output script if requested.
 
     Returns:
-        Exit code (0 for success, 1 for failure)
+        Exit code (always os.EX_OK)
     """
     # Print summary
     _print_operation_summary(op_counts, len(operations))
 
-    # Check for dangerous operations
-    dangerous, danger_warnings = check_for_dangerous_operations(operations)
-    if danger_warnings:
-        print("\nWarnings:", file=sys.stderr)
-        for warning in danger_warnings:
-            print(f"  - {warning}", file=sys.stderr)
-
-    # Print additional warnings
+    # Print warnings
     if warnings:
-        print("\nAdditional warnings:", file=sys.stderr)
+        print("\nWarnings:", file=sys.stderr)
         for warning in warnings:
             print(f"  - {warning}", file=sys.stderr)
 
@@ -1248,34 +1142,9 @@ def _handle_execution(
     if args.rewrite_dest:
         operations = rewrite_operation_paths(operations, args.dest, args.rewrite_dest)
 
-    # Generate script if requested
+    # Write script if requested
     if args.output:
         generate_sync_script(operations, args.output)
-
-    # Execute operations or show dry-run message
-    if args.fix:
-        if dangerous:
-            print("\nWarning: Dangerous operations detected", file=sys.stderr)
-            print("Review the operations carefully before proceeding.", file=sys.stderr)
-
-            response = input("Continue with execution? (yes/no): ")
-            if response.lower() != "yes":
-                print("Operation cancelled.")
-                return 1
-
-        print("\nExecuting operations...")
-        successful, failed = execute_sync(operations, dry_run=False)
-
-        print("\nExecution complete:")
-        print(f"  Successful: {successful}")
-        print(f"  Failed: {failed}")
-
-        return os.EX_OK if failed == 0 else 1
-    else:
-        print("\nDRY RUN: No changes made.")
-        print("To execute these operations, run with --fix flag.")
-        if args.output:
-            print(f"To review commands, see: {args.output}")
 
     return os.EX_OK
 

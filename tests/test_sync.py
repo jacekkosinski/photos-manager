@@ -4,7 +4,6 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -940,117 +939,6 @@ class TestGenerateSyncScript:
 
 
 @pytest.mark.unit
-class TestCheckForDangerousOperations:
-    """Tests for check_for_dangerous_operations function."""
-
-    def test_check_safe_operations(self) -> None:
-        """Test checking operations that are safe."""
-        operations = [
-            sync.SyncOperation("copy", "/src/a.jpg", "/dest/a.jpg", 123, "test"),
-            sync.SyncOperation("touch", None, "/dest/b.jpg", 456, "test"),
-        ]
-
-        dangerous, warnings = sync.check_for_dangerous_operations(operations)
-
-        assert not dangerous
-        assert len(warnings) == 0
-
-    def test_check_mass_deletion_count(self) -> None:
-        """Test checking for mass deletion by count (>100 files)."""
-        operations = [
-            sync.SyncOperation("delete", None, f"/dest/file{i}.jpg", None, "test")
-            for i in range(150)
-        ]
-
-        dangerous, warnings = sync.check_for_dangerous_operations(operations)
-
-        assert dangerous
-        assert len(warnings) > 0
-        assert any("mass deletion" in w.lower() for w in warnings)
-
-    def test_check_mass_deletion_percentage(self) -> None:
-        """Test checking for mass deletion by percentage (>30%)."""
-        operations = [
-            sync.SyncOperation("delete", None, f"/dest/del{i}.jpg", None, "test") for i in range(40)
-        ] + [
-            sync.SyncOperation("copy", f"/src/keep{i}.jpg", f"/dest/keep{i}.jpg", 123, "test")
-            for i in range(60)
-        ]
-
-        dangerous, warnings = sync.check_for_dangerous_operations(operations)
-
-        assert dangerous
-        assert len(warnings) > 0
-        assert any("deletion" in w.lower() for w in warnings)
-
-    def test_check_no_deletions(self) -> None:
-        """Test checking operations with no deletions."""
-        operations = [
-            sync.SyncOperation("copy", "/src/a.jpg", "/dest/a.jpg", 123, "test"),
-            sync.SyncOperation("move", "/dest/b.jpg", "/dest/c.jpg", None, "test"),
-        ]
-
-        dangerous, warnings = sync.check_for_dangerous_operations(operations)
-
-        assert not dangerous
-        assert len(warnings) == 0
-
-
-@pytest.mark.integration
-class TestExecuteSync:
-    """Tests for execute_sync function."""
-
-    def test_execute_dry_run(self) -> None:
-        """Test executing operations in dry-run mode."""
-        operations = [
-            sync.SyncOperation("mkdir", None, "/dest/newdir", None, "test"),
-            sync.SyncOperation("copy", "/src/photo.jpg", "/dest/photo.jpg", 123, "test"),
-        ]
-
-        successful, failed = sync.execute_sync(operations, dry_run=True)
-
-        # All operations should succeed in dry-run
-        assert successful > 0
-        assert failed == 0
-
-    def test_execute_empty_operations(self) -> None:
-        """Test executing empty operations list."""
-        successful, failed = sync.execute_sync([], dry_run=True)
-
-        assert successful == 0
-        assert failed == 0
-
-    @patch("os.system")
-    def test_execute_real_mode_success(self, mock_system: MagicMock) -> None:
-        """Test executing operations in real mode with success."""
-        mock_system.return_value = 0  # Success
-
-        operations = [
-            sync.SyncOperation("mkdir", None, "/dest/newdir", None, "test"),
-        ]
-
-        successful, failed = sync.execute_sync(operations, dry_run=False)
-
-        assert successful > 0
-        assert failed == 0
-        assert mock_system.called
-
-    @patch("os.system")
-    def test_execute_real_mode_failure(self, mock_system: MagicMock) -> None:
-        """Test executing operations in real mode with failure."""
-        mock_system.return_value = 1  # Failure
-
-        operations = [
-            sync.SyncOperation("mkdir", None, "/dest/newdir", None, "test"),
-        ]
-
-        successful, failed = sync.execute_sync(operations, dry_run=False)
-
-        assert successful == 0
-        assert failed > 0
-
-
-@pytest.mark.unit
 class TestLoadArchive:
     """Tests for load_archive function."""
 
@@ -1315,41 +1203,6 @@ class TestMain:
         assert "/remote/archive" in script_content
         # Original dest path should NOT be in the script (rewritten)
         assert str(dest_dir) not in script_content
-
-    @patch("builtins.input")
-    def test_run_execute_mode_cancellation(self, mock_input: MagicMock, tmp_path: Path) -> None:
-        """Test run with --execute flag but user cancels at prompt."""
-        mock_input.return_value = "no"
-
-        # Create archives with many deletions to trigger warning
-        source_dir = tmp_path / "source"
-        source_dir.mkdir()
-        source_json = source_dir / "photos.json"
-        source_json.write_text(json.dumps([]))
-
-        dest_dir = tmp_path / "dest"
-        dest_dir.mkdir()
-        dest_json = dest_dir / "photos.json"
-        dest_data = [
-            {
-                "path": str(dest_dir / f"photo{i}.jpg"),
-                "sha1": f"sha{i}",
-                "md5": f"md5{i}",
-                "size": 1000,
-                "date": "2024-01-01T12:00:00+01:00",
-            }
-            for i in range(150)  # More than 100 deletions
-        ]
-        dest_json.write_text(json.dumps(dest_data))
-
-        parser = argparse.ArgumentParser()
-        sync.setup_parser(parser)
-        args = parser.parse_args([str(source_dir), str(dest_dir), "--fix"])
-
-        exit_code = sync.run(args)
-
-        # Should cancel (exit code 1)
-        assert exit_code == 1
 
 
 @pytest.mark.unit
