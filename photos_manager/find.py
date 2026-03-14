@@ -28,6 +28,14 @@ from photos_manager.common import (
     validate_directory,
 )
 
+# Optional EXIF support (same guard pattern as exifdates.py)
+try:
+    import piexif
+
+    _PIEXIF_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _PIEXIF_AVAILABLE = False
+
 
 def scan_directory(directory: str) -> list[dict[str, str | int]]:
     """Scan directory recursively and collect file metadata.
@@ -191,6 +199,90 @@ def find_duplicates(
             missing.append(scanned)
 
     return duplicates, missing
+
+
+def normalize_camera_slug(make: str, model: str) -> str:
+    """Normalise EXIF Make/Model into a URL-safe slug.
+
+    Args:
+        make: Camera manufacturer string (e.g. ``"Canon"``).
+        model: Camera model string (e.g. ``"Canon EOS 5D Mark IV"``).
+
+    Returns:
+        Slug such as ``"canon-eos-5d-mark-iv"``.
+
+    Examples:
+        >>> normalize_camera_slug("Canon", "Canon EOS 5D Mark IV")
+        'canon-eos-5d-mark-iv'
+        >>> normalize_camera_slug("Apple", "iPhone 14 Pro")
+        'apple-iphone-14-pro'
+        >>> normalize_camera_slug("SONY", "DSC-W170")
+        'sony-dsc-w170'
+    """
+    make_clean = make.strip("\x00 ").lower()
+    model_clean = model.strip("\x00 ").lower()
+
+    # Strip make prefix from model if present
+    if model_clean.startswith(make_clean):
+        model_part = model_clean[len(make_clean) :].strip("\x00 ")
+    else:
+        model_part = model_clean
+
+    combined = f"{make_clean}-{model_part}" if model_part else make_clean
+
+    # Replace separator characters and collapse repeated hyphens
+    for ch in (" ", ".", "_", "/"):
+        combined = combined.replace(ch, "-")
+    while "--" in combined:
+        combined = combined.replace("--", "-")
+    return combined.strip("-")
+
+
+def read_camera_slug(file_path: str) -> str | None:
+    """Read EXIF Make/Model from a JPEG/TIFF and return a normalised slug.
+
+    Args:
+        file_path: Path to the image file.
+
+    Returns:
+        Camera slug (e.g. ``"canon-eos-5d-mark-iv"``) or ``None`` when piexif
+        is unavailable, the file has no Make/Model tags, or an error occurs.
+    """
+    if not _PIEXIF_AVAILABLE:  # pragma: no cover
+        return None
+    try:
+        exif_dict = piexif.load(file_path)
+        ifd = exif_dict.get("0th", {})
+        make_raw = ifd.get(piexif.ImageIFD.Make)
+        model_raw = ifd.get(piexif.ImageIFD.Model)
+        if not make_raw or not model_raw:
+            return None
+        make = make_raw.decode("ascii", errors="replace").strip("\x00 ")
+        model = model_raw.decode("ascii", errors="replace").strip("\x00 ")
+        if not make:
+            return None
+        return normalize_camera_slug(make, model)
+    except Exception:
+        return None
+
+
+def compute_camera_counts(
+    files: list[dict[str, str | int]],
+) -> dict[str, int]:
+    """Count files per camera slug across a list of file metadata dicts.
+
+    Args:
+        files: List of file metadata dicts containing at least a ``"path"`` key.
+
+    Returns:
+        Mapping of camera slug → file count.  Files whose EXIF cannot be read
+        are counted under ``"unknown"``.
+    """
+    counts: dict[str, int] = {}
+    for entry in files:
+        slug = read_camera_slug(str(entry["path"])) or "unknown"
+        counts[slug] = counts.get(slug, 0) + 1
+    return counts
 
 
 def group_files_by_directory(
@@ -366,10 +458,11 @@ def format_list_line(
     scanned: dict[str, str | int],
     archive: dict[str, str | int] | None = None,
     tolerance: int = 0,
+    camera_slug: str | None = None,
 ) -> str:
     """Format one ``--list`` output line for a ``[DUP]`` or ``[MISS]`` entry.
 
-    For ``[MISS]``: shows date and human-readable size.
+    For ``[MISS]``: shows date, human-readable size, and optional camera slug.
     For ``[DUP]``: shows date delta (when dates differ beyond tolerance),
     filename change (when basenames differ case-insensitively), and the
     archive reference path.
@@ -384,6 +477,7 @@ def format_list_line(
         archive: Archive file metadata dict; ``None`` for ``[MISS]`` entries.
         tolerance: Timestamp tolerance in seconds; date delta shown only when
             the difference exceeds this value (default: 0).
+        camera_slug: Camera slug for ``[MISS]`` entries; omitted when ``None``.
 
     Returns:
         Formatted output line.
@@ -404,7 +498,8 @@ def format_list_line(
         except ValueError:
             date_display = date_str
         size_display = human_size(int(scanned.get("size", 0)))
-        return f"{prefix}  [date: {date_display}, size: {size_display}]"
+        camera_part = f", camera: {camera_slug}" if camera_slug else ""
+        return f"{prefix}  [date: {date_display}, size: {size_display}{camera_part}]"
 
     # [DUP]
     parts: list[str] = []
@@ -529,18 +624,24 @@ def display_missing(missing: list[dict[str, str | int]]) -> None:
         print(f"        size: {size:_} bytes ({human_size(size)})".replace("_", " "))
         print(f"        SHA1: {entry['sha1']}")
         print(f"        MD5:  {entry['md5']}")
+        slug = read_camera_slug(str(entry["path"]))
+        if slug:
+            print(f"        camera: {slug}")
         print()
 
 
 def display_summary(
     duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
     missing: list[dict[str, str | int]],
+    camera_counts: dict[str, int] | None = None,
 ) -> None:
     """Display summary statistics.
 
     Args:
         duplicates: List of duplicate entries.
         missing: List of missing entries.
+        camera_counts: Optional mapping of camera slug to file count.  When
+            provided and non-empty, a ``Cameras detected:`` section is appended.
     """
     dup_size = sum(int(scanned["size"]) for scanned, _ in duplicates)
     miss_size = sum(int(entry["size"]) for entry in missing)
@@ -548,6 +649,12 @@ def display_summary(
     print()
     print(f"{format_count(len(duplicates))} duplicates found ({human_size(dup_size)}).")
     print(f"{format_count(len(missing))} files missing ({human_size(miss_size)}).")
+
+    if camera_counts:
+        print("\nCameras detected:")
+        max_slug_len = max(len(slug) for slug in camera_counts)
+        for slug, count in sorted(camera_counts.items(), key=lambda kv: -kv[1]):
+            print(f"  {slug:<{max_slug_len}}    {count} files")
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -627,6 +734,15 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         metavar="N",
         help="Starting number for target directory numbering (default: 1)",
     )
+    parser.add_argument(
+        "-k",
+        "--camera",
+        type=str,
+        metavar="SLUG",
+        help=(
+            "Filter --move/--copy to files matching this camera slug (e.g. canon-eos-5d-mark-iv)"
+        ),
+    )
 
 
 def validate_args(args: argparse.Namespace) -> None:
@@ -638,6 +754,12 @@ def validate_args(args: argparse.Namespace) -> None:
     Raises:
         SystemExit: On any validation error
     """
+    # --camera requires --move or --copy
+    if args.camera and not args.move and not args.copy:
+        raise SystemExit(
+            "Error: --camera requires --move or --copy\nUse -h or --help for usage information"
+        )
+
     # -d/-m required for --move/--copy (need to know which files to process)
     if (args.move or args.copy) and not args.show_duplicates and not args.show_missing:
         raise SystemExit(
@@ -682,6 +804,14 @@ def process_command_mode(
 
     if not files_to_process:
         return
+
+    # Filter to a specific camera slug when --camera is given
+    if args.camera:
+        files_to_process = [
+            f for f in files_to_process if read_camera_slug(str(f["path"])) == args.camera
+        ]
+        if not files_to_process:
+            return
 
     # Group files and assign directory numbers
     file_groups = group_files_by_directory(files_to_process)
@@ -732,7 +862,9 @@ def process_list_mode(
 
     if args.show_missing or show_all:
         for entry in missing:
-            line = format_list_line(_display_path(str(entry["path"])), "[MISS]", entry)
+            path = str(entry["path"])
+            slug = read_camera_slug(path)
+            line = format_list_line(_display_path(path), "[MISS]", entry, camera_slug=slug)
             print(line)
 
 
@@ -783,6 +915,11 @@ def run(args: argparse.Namespace) -> int:
         if args.show_missing:
             display_missing(missing)
 
-        display_summary(duplicates, missing)
+        if not args.show_duplicates and not args.show_missing:
+            all_files: list[dict[str, str | int]] = [s for s, _ in duplicates] + missing
+            camera_counts = compute_camera_counts(all_files)
+        else:
+            camera_counts = None
+        display_summary(duplicates, missing, camera_counts)
 
     return os.EX_OK

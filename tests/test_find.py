@@ -284,9 +284,10 @@ class TestSizeDisplay:
     """Tests for size display format (space as thousands separator)."""
 
     def test_display_missing_uses_space_thousands_separator(
-        self, capsys: pytest.CaptureFixture[str]
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Test that display_missing uses space as thousands separator."""
+        monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
         missing = [
             {
                 "path": "/scan/file.txt",
@@ -774,8 +775,11 @@ class TestDisplayFunctions:
         assert fw == 0
         assert tw == 0
 
-    def test_display_missing_basic(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_display_missing_basic(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Test displaying missing files."""
+        monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
         missing = [{"path": "/scan/new.txt", "size": 100, "sha1": "xyz", "md5": "uvw"}]
 
         find.display_missing(missing)
@@ -789,6 +793,24 @@ class TestDisplayFunctions:
         find.display_missing([])
         captured = capsys.readouterr()
         assert captured.out == ""
+
+    def test_display_missing_shows_camera_slug(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Camera slug is shown when EXIF is readable."""
+        monkeypatch.setattr(find, "read_camera_slug", lambda _: "canon-eos-5d-mark-iv")
+        missing = [{"path": "/scan/img.jpg", "size": 100, "sha1": "abc", "md5": "def"}]
+        find.display_missing(missing)
+        assert "camera: canon-eos-5d-mark-iv" in capsys.readouterr().out
+
+    def test_display_missing_omits_camera_when_no_exif(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Camera field is omitted when EXIF returns None."""
+        monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
+        missing = [{"path": "/scan/img.jpg", "size": 100, "sha1": "abc", "md5": "def"}]
+        find.display_missing(missing)
+        assert "camera" not in capsys.readouterr().out
 
     def test_display_summary(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying summary."""
@@ -862,6 +884,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -905,6 +928,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -952,6 +976,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -984,6 +1009,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1042,6 +1068,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1106,6 +1133,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1179,6 +1207,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1209,6 +1238,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         with pytest.raises(SystemExit, match="not found"):
@@ -1231,6 +1261,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         with pytest.raises(SystemExit, match="not found"):
@@ -1273,6 +1304,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1322,6 +1354,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1367,6 +1400,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1407,6 +1441,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1461,6 +1496,7 @@ class TestMain:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1505,6 +1541,7 @@ class TestMain:
             move=str(target_dir),
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1557,6 +1594,7 @@ class TestMain:
             move=None,
             copy=str(target_dir),
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1589,6 +1627,7 @@ class TestMain:
             move=str(target_dir),
             copy=str(target_dir),
             start=1,
+            camera=None,
         )
 
         with pytest.raises(SystemExit, match="mutually exclusive"):
@@ -1615,6 +1654,7 @@ class TestMain:
             move=str(target_dir),
             copy=None,
             start=1,
+            camera=None,
         )
 
         with pytest.raises(SystemExit, match="cannot be used with --list"):
@@ -1641,6 +1681,7 @@ class TestMain:
             move=str(target_dir),
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1678,6 +1719,7 @@ class TestMain:
             move=str(target_dir),
             copy=None,
             start=100,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1702,6 +1744,26 @@ class TestFormatListLine:
         assert "[MISS]" in line
         assert "2023" in line
         assert "100 B" in line
+
+    def test_miss_line_with_camera_slug(self) -> None:
+        """MISS line includes camera slug when provided."""
+        line = find.format_list_line(
+            "dir/a.jpg",
+            "[MISS]",
+            {"date": "2023-01-01T10:00:00", "size": 100},
+            camera_slug="canon-eos-5d-mark-iv",
+        )
+        assert "camera: canon-eos-5d-mark-iv" in line
+
+    def test_miss_line_no_camera_when_slug_none(self) -> None:
+        """MISS line omits camera field when camera_slug is None."""
+        line = find.format_list_line(
+            "dir/a.jpg",
+            "[MISS]",
+            {"date": "2023-01-01T10:00:00", "size": 100},
+            camera_slug=None,
+        )
+        assert "camera" not in line
 
     def test_dup_line_no_differences(self) -> None:
         """DUP with same name/date shows path, [DUP], and [ref:]."""
@@ -1858,6 +1920,7 @@ class TestMultipleSources:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1897,6 +1960,7 @@ class TestMultipleSources:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1936,6 +2000,7 @@ class TestMultipleSources:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         result = find.run(args)
@@ -1964,6 +2029,7 @@ class TestMultipleSources:
             move=None,
             copy=None,
             start=1,
+            camera=None,
         )
 
         with pytest.raises(SystemExit, match="Source not found"):
@@ -1978,3 +2044,396 @@ class TestMultipleSources:
 
         assert args.json_file == "archive.json"
         assert args.source == ["/dir/a", "/dir/b", "/file.psv"]
+
+
+@pytest.mark.unit
+class TestNormalizeCameraSlug:
+    """Tests for normalize_camera_slug."""
+
+    def test_canon_with_make_prefix_in_model(self) -> None:
+        """Model that starts with make: prefix is stripped."""
+        assert find.normalize_camera_slug("Canon", "Canon EOS 5D Mark IV") == "canon-eos-5d-mark-iv"
+
+    def test_apple_no_prefix(self) -> None:
+        """Model without make prefix: both joined with hyphen."""
+        assert find.normalize_camera_slug("Apple", "iPhone 14 Pro") == "apple-iphone-14-pro"
+
+    def test_sony_uppercase(self) -> None:
+        """Make normalised to lowercase."""
+        assert find.normalize_camera_slug("SONY", "DSC-W170") == "sony-dsc-w170"
+
+    def test_spaces_to_hyphens(self) -> None:
+        """Spaces in model become hyphens."""
+        assert find.normalize_camera_slug("Nikon", "D3500") == "nikon-d3500"
+
+    def test_dots_to_hyphens(self) -> None:
+        """Dots in model become hyphens."""
+        slug = find.normalize_camera_slug("Fuji", "X100.V")
+        assert "." not in slug
+        assert slug == "fuji-x100-v"
+
+    def test_nul_stripped(self) -> None:
+        """NUL bytes are stripped from make and model."""
+        slug = find.normalize_camera_slug("Canon\x00", "EOS\x00")
+        assert "\x00" not in slug
+        assert slug == "canon-eos"
+
+    def test_empty_model_returns_make_only(self) -> None:
+        """Empty model returns just the make slug."""
+        assert find.normalize_camera_slug("Sony", "") == "sony"
+
+    def test_case_insensitive_prefix_strip(self) -> None:
+        """Make prefix removal is case-insensitive."""
+        assert find.normalize_camera_slug("canon", "CANON EOS R5") == "canon-eos-r5"
+
+    def test_collapsed_double_hyphens(self) -> None:
+        """Multiple consecutive hyphens are collapsed."""
+        slug = find.normalize_camera_slug("A", "A  B")
+        assert "--" not in slug
+
+
+@pytest.mark.unit
+class TestReadCameraSlug:
+    """Tests for read_camera_slug (mocked piexif)."""
+
+    def test_returns_slug_when_make_and_model_present(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Returns normalised slug when EXIF Make/Model are readable."""
+        import types
+
+        fake_piexif = types.SimpleNamespace(
+            load=lambda _: {
+                "0th": {
+                    271: b"Canon",
+                    272: b"Canon EOS 5D Mark IV",
+                }
+            },
+            ImageIFD=types.SimpleNamespace(Make=271, Model=272),
+        )
+        monkeypatch.setattr(find, "_PIEXIF_AVAILABLE", True)
+        monkeypatch.setattr(find, "piexif", fake_piexif, raising=False)
+
+        result = find.read_camera_slug("/some/file.jpg")
+        assert result == "canon-eos-5d-mark-iv"
+
+    def test_returns_none_when_make_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Returns None when Make tag is absent."""
+        import types
+
+        fake_piexif = types.SimpleNamespace(
+            load=lambda _: {"0th": {272: b"EOS 5D"}},
+            ImageIFD=types.SimpleNamespace(Make=271, Model=272),
+        )
+        monkeypatch.setattr(find, "_PIEXIF_AVAILABLE", True)
+        monkeypatch.setattr(find, "piexif", fake_piexif, raising=False)
+
+        assert find.read_camera_slug("/some/file.jpg") is None
+
+    def test_returns_none_on_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Returns None when piexif raises an exception."""
+        import types
+
+        def bad_load(_: str) -> dict[str, object]:
+            raise OSError("read error")
+
+        fake_piexif = types.SimpleNamespace(
+            load=bad_load,
+            ImageIFD=types.SimpleNamespace(Make=271, Model=272),
+        )
+        monkeypatch.setattr(find, "_PIEXIF_AVAILABLE", True)
+        monkeypatch.setattr(find, "piexif", fake_piexif, raising=False)
+
+        assert find.read_camera_slug("/some/file.jpg") is None
+
+
+@pytest.mark.unit
+class TestComputeCameraCounts:
+    """Tests for compute_camera_counts."""
+
+    def test_counts_by_slug(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Files are grouped by camera slug."""
+        slugs = {
+            "/a.jpg": "canon-eos-5d-mark-iv",
+            "/b.jpg": "canon-eos-5d-mark-iv",
+            "/c.jpg": "apple-iphone-14-pro",
+        }
+        monkeypatch.setattr(find, "read_camera_slug", lambda p: slugs.get(p))
+
+        files = [{"path": p} for p in slugs]
+        counts = find.compute_camera_counts(files)
+
+        assert counts == {"canon-eos-5d-mark-iv": 2, "apple-iphone-14-pro": 1}
+
+    def test_unknown_for_unreadable_exif(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Files with no readable EXIF are counted as 'unknown'."""
+        monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
+
+        files = [{"path": "/x.jpg"}, {"path": "/y.jpg"}]
+        counts = find.compute_camera_counts(files)
+
+        assert counts == {"unknown": 2}
+
+    def test_empty_list_returns_empty_dict(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Empty file list returns empty dict."""
+        monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
+        assert find.compute_camera_counts([]) == {}
+
+
+@pytest.mark.unit
+class TestDisplaySummaryWithCameraCounts:
+    """Tests for display_summary with camera_counts parameter."""
+
+    def test_camera_counts_printed(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Camera counts section appears when camera_counts is non-empty."""
+        find.display_summary([], [], {"canon-eos-5d-mark-iv": 245, "apple-iphone-14-pro": 58})
+        out = capsys.readouterr().out
+        assert "Cameras detected:" in out
+        assert "canon-eos-5d-mark-iv" in out
+        assert "245" in out
+        assert "apple-iphone-14-pro" in out
+        assert "58" in out
+
+    def test_camera_counts_sorted_by_count_desc(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Camera slugs are listed highest-count first."""
+        find.display_summary([], [], {"rare": 1, "common": 100})
+        out = capsys.readouterr().out
+        lines = [line for line in out.splitlines() if "common" in line or "rare" in line]
+        assert lines[0].strip().startswith("common")
+        assert lines[1].strip().startswith("rare")
+
+    def test_no_camera_section_when_none(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """No camera section when camera_counts is None."""
+        find.display_summary([], [])
+        out = capsys.readouterr().out
+        assert "Cameras detected:" not in out
+
+    def test_no_camera_section_when_empty_dict(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """No camera section when camera_counts is empty dict."""
+        find.display_summary([], [], {})
+        out = capsys.readouterr().out
+        assert "Cameras detected:" not in out
+
+
+@pytest.mark.integration
+class TestRunCameraFilter:
+    """Integration tests for --camera flag in run()."""
+
+    def _make_archive_json(self, tmp_path: Path, entries: list[dict[str, object]]) -> Path:
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries))
+        return json_file
+
+    def test_camera_filter_limits_move_commands(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--camera filters --move output to matching files only."""
+        json_file = self._make_archive_json(tmp_path, [])
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        canon_file = scan_dir / "canon.jpg"
+        canon_file.write_text("canon content")
+        apple_file = scan_dir / "apple.jpg"
+        apple_file.write_text("apple content")
+
+        slugs = {
+            str(canon_file.resolve()): "canon-eos-5d-mark-iv",
+            str(apple_file.resolve()): "apple-iphone-14-pro",
+        }
+        monkeypatch.setattr(find, "read_camera_slug", lambda p: slugs.get(p))
+
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=True,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=False,
+            move=str(target_dir),
+            copy=None,
+            start=1,
+            camera="canon-eos-5d-mark-iv",
+        )
+
+        result = find.run(args)
+        assert result == os.EX_OK
+
+        out = capsys.readouterr().out
+        assert "canon.jpg" in out
+        assert "apple.jpg" not in out
+
+    def test_no_camera_filter_moves_all(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without --camera all missing files appear in --move output."""
+        json_file = self._make_archive_json(tmp_path, [])
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        (scan_dir / "file1.jpg").write_text("c1")
+        (scan_dir / "file2.jpg").write_text("c2")
+
+        monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
+
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=True,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=False,
+            move=str(target_dir),
+            copy=None,
+            start=1,
+            camera=None,
+        )
+
+        result = find.run(args)
+        assert result == os.EX_OK
+
+        out = capsys.readouterr().out
+        assert "file1.jpg" in out
+        assert "file2.jpg" in out
+
+    def test_camera_without_move_or_copy_raises(self, tmp_path: Path) -> None:
+        """--camera without --move/--copy raises SystemExit."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=True,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=False,
+            move=None,
+            copy=None,
+            start=1,
+            camera="canon-eos-5d-mark-iv",
+        )
+
+        with pytest.raises(SystemExit, match="--camera requires --move or --copy"):
+            find.validate_args(args)
+
+    def test_stats_mode_shows_camera_counts(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Stats mode (no -d/-m) includes camera counts in summary."""
+        json_file = self._make_archive_json(tmp_path, [])
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        (scan_dir / "file.jpg").write_text("content")
+
+        monkeypatch.setattr(find, "read_camera_slug", lambda _: "sony-dsc-w170")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=False,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=False,
+            move=None,
+            copy=None,
+            start=1,
+            camera=None,
+        )
+
+        result = find.run(args)
+        assert result == os.EX_OK
+
+        out = capsys.readouterr().out
+        assert "Cameras detected:" in out
+        assert "sony-dsc-w170" in out
+
+    def test_show_missing_mode_no_camera_counts(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With -m flag camera counts are NOT shown in summary."""
+        json_file = self._make_archive_json(tmp_path, [])
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        (scan_dir / "file.jpg").write_text("content")
+
+        monkeypatch.setattr(find, "read_camera_slug", lambda _: "sony-dsc-w170")
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=True,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=False,
+            move=None,
+            copy=None,
+            start=1,
+            camera=None,
+        )
+
+        result = find.run(args)
+        assert result == os.EX_OK
+
+        out = capsys.readouterr().out
+        assert "Cameras detected:" not in out
+
+    def test_camera_filter_with_copy(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--camera also filters --copy output to matching files only."""
+        json_file = self._make_archive_json(tmp_path, [])
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        canon_file = scan_dir / "canon.jpg"
+        canon_file.write_text("canon content")
+        apple_file = scan_dir / "apple.jpg"
+        apple_file.write_text("apple content")
+
+        slugs = {
+            str(canon_file.resolve()): "canon-eos-5d-mark-iv",
+            str(apple_file.resolve()): "apple-iphone-14-pro",
+        }
+        monkeypatch.setattr(find, "read_camera_slug", lambda p: slugs.get(p))
+
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=True,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=False,
+            move=None,
+            copy=str(target_dir),
+            start=1,
+            camera="apple-iphone-14-pro",
+        )
+
+        result = find.run(args)
+        assert result == os.EX_OK
+
+        out = capsys.readouterr().out
+        assert "apple.jpg" in out
+        assert "canon.jpg" not in out
+        assert "cp " in out
