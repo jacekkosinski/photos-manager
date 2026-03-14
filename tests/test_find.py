@@ -1652,30 +1652,6 @@ class TestMain:
         assert "mv -iv" not in captured.out
         assert "mkdir -p" not in captured.out
 
-    def test_run_move_target_not_exists(self, tmp_path: Path) -> None:
-        """Test error when target directory doesn't exist."""
-        json_file = tmp_path / "archive.json"
-        json_file.write_text("[]")
-        scan_dir = tmp_path / "scan"
-        scan_dir.mkdir()
-
-        args = argparse.Namespace(
-            json_file=str(json_file),
-            source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
-            tolerance=1,
-            list=False,
-            move="/nonexistent/target",
-            copy=None,
-            start=1,
-        )
-
-        with pytest.raises(SystemExit, match="does not exist"):
-            find.run(args)
-
     def test_run_move_custom_start(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:

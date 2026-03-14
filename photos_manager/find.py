@@ -651,11 +651,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise SystemExit("Error: --move and --copy are mutually exclusive")
     if (args.move or args.copy) and args.list:
         raise SystemExit("Error: --move/--copy cannot be used with --list")
-    if args.move and not Path(args.move).is_dir():
-        raise SystemExit(f"Error: Target directory does not exist: {args.move}")
-    if args.copy and not Path(args.copy).is_dir():
-        raise SystemExit(f"Error: Target directory does not exist: {args.copy}")
-
     # Validate inputs
     if not Path(args.json_file).exists():
         raise SystemExit(f"Error: JSON file not found: {args.json_file}")
