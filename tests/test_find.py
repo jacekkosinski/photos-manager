@@ -554,7 +554,7 @@ class TestProcessListMode:
             "show_missing": False,
             "filter_name": False,
             "filter_date": False,
-            "tolerance": 1,
+            "tolerance": 0,
         }
         defaults.update(kwargs)
         return argparse.Namespace(**defaults)

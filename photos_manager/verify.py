@@ -1307,8 +1307,8 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "-T",
         "--tolerance",
         type=int,
-        default=1,
-        help="Timestamp tolerance in seconds (default: 1)",
+        default=0,
+        help="Timestamp tolerance in seconds (default: 0)",
     )
     parser.add_argument(
         "-e",
