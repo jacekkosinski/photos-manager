@@ -465,6 +465,13 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         metavar="TZ",
         help="Timezone for GPS UTC→local conversion (default: Europe/Warsaw)",
     )
+    parser.add_argument(
+        "-G",
+        "--no-gps",
+        action="store_true",
+        dest="no_gps",
+        help="Ignore GPS timestamps entirely (use EXIF only)",
+    )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -504,7 +511,7 @@ def run(args: argparse.Namespace) -> int:
     for entry in entries:
         file_path = json_dir / str(entry.get("path", ""))
         exif_dt, gps_dt = read_file_exif(str(file_path))
-        exif_data.append((exif_dt, gps_dt))
+        exif_data.append((exif_dt, None if args.no_gps else gps_dt))
 
     corrections = compute_corrections(
         entries, exif_data, args.time_zone, args.radius, args.gps_radius

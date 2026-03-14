@@ -372,6 +372,7 @@ class TestRun:
                 radius=5,
                 gps_radius=20,
                 time_zone="Europe/Warsaw",
+                no_gps=False,
             )
             result = exifdates.run(args)
 
@@ -401,6 +402,7 @@ class TestRun:
                 radius=5,
                 gps_radius=20,
                 time_zone="Europe/Warsaw",
+                no_gps=False,
             )
             exifdates.run(args)
 
@@ -415,9 +417,111 @@ class TestRun:
             radius=5,
             gps_radius=20,
             time_zone="Europe/Warsaw",
+            no_gps=False,
         )
         with pytest.raises(SystemExit):
             exifdates.run(args)
+
+    @pytest.mark.integration
+    def test_run_no_gps_uses_exif_tag_when_gps_present(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """With --no-gps, GPS data is ignored; [EXIF] tag used instead of [EXIF+GPS]."""
+        data = [
+            {
+                "path": "a.jpg",
+                "sha1": "x",
+                "md5": "y",
+                "date": "2023-05-14T10:00:00+02:00",
+                "size": 1,
+            }
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        exif_dt = datetime(2023, 5, 14, 11, 0, 0)
+        gps_dt = datetime(
+            2023, 5, 14, 9, 0, 0, tzinfo=UTC
+        )  # would give [EXIF+GPS] without --no-gps
+
+        with patch.object(exifdates, "read_file_exif", return_value=(exif_dt, gps_dt)):
+            args = argparse.Namespace(
+                json_file=str(json_file),
+                fix=False,
+                radius=5,
+                gps_radius=20,
+                time_zone="Europe/Warsaw",
+                no_gps=True,
+            )
+            exifdates.run(args)
+
+        out = capsys.readouterr().out
+        assert "[EXIF]" in out
+        assert "[EXIF+GPS]" not in out
+
+    @pytest.mark.integration
+    def test_run_no_gps_skips_gps_only_files(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """With --no-gps, files that only have GPS data (no EXIF) are not corrected."""
+        data = [
+            {
+                "path": "a.jpg",
+                "sha1": "x",
+                "md5": "y",
+                "date": "2023-05-14T10:00:00+02:00",
+                "size": 1,
+            }
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(data))
+
+        gps_dt = datetime(2023, 5, 14, 9, 0, 0, tzinfo=UTC)  # GPS only, no EXIF
+
+        with patch.object(exifdates, "read_file_exif", return_value=(None, gps_dt)):
+            args = argparse.Namespace(
+                json_file=str(json_file),
+                fix=False,
+                radius=5,
+                gps_radius=20,
+                time_zone="Europe/Warsaw",
+                no_gps=True,
+            )
+            exifdates.run(args)
+
+        out = capsys.readouterr().out
+        assert "0 change(s)" in out
+
+
+# ---------------------------------------------------------------------------
+# setup_parser
+# ---------------------------------------------------------------------------
+
+
+class TestSetupParser:
+    @pytest.mark.unit
+    def test_no_gps_flag_long_form(self) -> None:
+        """--no-gps flag is registered and defaults to False."""
+        parser = argparse.ArgumentParser()
+        exifdates.setup_parser(parser)
+        args = parser.parse_args(["archive.json", "--no-gps"])
+        assert args.no_gps is True
+
+    @pytest.mark.unit
+    def test_no_gps_flag_short_form(self) -> None:
+        """-G short form is registered and sets no_gps=True."""
+        parser = argparse.ArgumentParser()
+        exifdates.setup_parser(parser)
+        args = parser.parse_args(["archive.json", "-G"])
+        assert args.no_gps is True
+
+    @pytest.mark.unit
+    def test_no_gps_defaults_to_false(self) -> None:
+        """no_gps defaults to False when flag not provided."""
+        parser = argparse.ArgumentParser()
+        exifdates.setup_parser(parser)
+        args = parser.parse_args(["archive.json"])
+        assert args.no_gps is False
 
 
 # ---------------------------------------------------------------------------
