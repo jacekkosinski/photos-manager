@@ -321,23 +321,42 @@ def read_camera_slug(file_path: str) -> str | None:
         return None
 
 
-def compute_camera_counts(
+def compute_camera_stats(
     files: list[dict[str, str | int]],
-) -> dict[str, int]:
-    """Count files per camera slug across a list of file metadata dicts.
+) -> dict[str, tuple[int, int, str | None, str | None]]:
+    """Aggregate file count, total size, and date range per camera slug.
 
     Args:
-        files: List of file metadata dicts containing at least a ``"path"`` key.
+        files: List of file metadata dicts with at least ``"path"``, ``"size"``,
+            and ``"date"`` keys.
 
     Returns:
-        Mapping of camera slug → file count.  Files whose EXIF cannot be read
-        are counted under ``"unknown"``.
+        Mapping of camera slug → ``(count, total_bytes, date_min, date_max)``.
+        Files whose EXIF cannot be read are counted under ``"unknown"``.
     """
     counts: dict[str, int] = {}
+    sizes: dict[str, int] = {}
+    date_mins: dict[str, str] = {}
+    date_maxs: dict[str, str] = {}
+
     for entry in files:
         slug = read_camera_slug(str(entry["path"])) or "unknown"
+        size = int(entry.get("size", 0))
+        date_str = str(entry.get("date", ""))
+        date_val: str | None = date_str[:10] if len(date_str) >= 10 else None
+
         counts[slug] = counts.get(slug, 0) + 1
-    return counts
+        sizes[slug] = sizes.get(slug, 0) + size
+        if date_val is not None:
+            if slug not in date_mins or date_val < date_mins[slug]:
+                date_mins[slug] = date_val
+            if slug not in date_maxs or date_val > date_maxs[slug]:
+                date_maxs[slug] = date_val
+
+    return {
+        slug: (counts[slug], sizes[slug], date_mins.get(slug), date_maxs.get(slug))
+        for slug in counts
+    }
 
 
 def group_files_by_directory(
@@ -688,15 +707,16 @@ def display_missing(missing: list[dict[str, str | int]]) -> None:
 def display_summary(
     duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
     missing: list[dict[str, str | int]],
-    camera_counts: dict[str, int] | None = None,
+    camera_stats: dict[str, tuple[int, int, str | None, str | None]] | None = None,
 ) -> None:
     """Display summary statistics.
 
     Args:
         duplicates: List of duplicate entries.
         missing: List of missing entries.
-        camera_counts: Optional mapping of camera slug to file count.  When
-            provided and non-empty, a ``Cameras detected:`` section is appended.
+        camera_stats: Optional mapping of camera slug to
+            ``(count, total_bytes, date_min, date_max)``.  When provided and
+            non-empty, a ``Cameras detected:`` table is appended.
     """
     dup_size = sum(int(scanned["size"]) for scanned, _ in duplicates)
     miss_size = sum(int(entry["size"]) for entry in missing)
@@ -705,11 +725,21 @@ def display_summary(
     print(f"{format_count(len(duplicates))} duplicates found ({human_size(dup_size)}).")
     print(f"{format_count(len(missing))} files missing ({human_size(miss_size)}).")
 
-    if camera_counts:
-        print("\nCameras detected:")
-        max_slug_len = max(len(slug) for slug in camera_counts)
-        for slug, count in sorted(camera_counts.items(), key=lambda kv: -kv[1]):
-            print(f"  {slug:<{max_slug_len}}    {count} files")
+    if not camera_stats:
+        return
+
+    print("\nCameras detected:")
+    rows = sorted(camera_stats.items(), key=lambda kv: -kv[1][0])
+    slug_w = max(len(slug) for slug, _ in rows)
+    count_w = max(len(format_count(v[0])) for _, v in rows)
+    size_w = max(len(human_size(v[1])) for _, v in rows)
+    for slug, (count, total_bytes, date_min, date_max) in rows:
+        count_str = format_count(count)
+        size_str = human_size(total_bytes)
+        date_part = f"    {date_min}  \u2192  {date_max}" if date_min and date_max else ""
+        print(
+            f"  {slug:<{slug_w}}    {count_str:>{count_w}} files    {size_str:>{size_w}}{date_part}"
+        )
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -788,6 +818,12 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         default=1,
         metavar="N",
         help="Starting number for target directory numbering (default: 1)",
+    )
+    parser.add_argument(
+        "-s",
+        "--stat",
+        action="store_true",
+        help="Show camera statistics (count, size, date range per camera) in summary",
     )
     parser.add_argument(
         "-k",
@@ -993,11 +1029,10 @@ def run(args: argparse.Namespace) -> int:
         if args.show_missing:
             display_missing(missing)
 
-        if not args.show_duplicates and not args.show_missing:
+        camera_stats: dict[str, tuple[int, int, str | None, str | None]] | None = None
+        if args.stat:
             all_files: list[dict[str, str | int]] = [s for s, _ in duplicates] + missing
-            camera_counts = compute_camera_counts(all_files)
-        else:
-            camera_counts = None
-        display_summary(duplicates, missing, camera_counts)
+            camera_stats = compute_camera_stats(all_files)
+        display_summary(duplicates, missing, camera_stats)
 
     return os.EX_OK

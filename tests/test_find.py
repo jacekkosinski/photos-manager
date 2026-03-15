@@ -556,6 +556,7 @@ class TestProcessListMode:
             "filter_name": False,
             "filter_date": False,
             "tolerance": 0,
+            "stat": False,
         }
         defaults.update(kwargs)
         return argparse.Namespace(**defaults)
@@ -955,6 +956,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -999,6 +1001,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1047,6 +1050,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1080,6 +1084,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1139,6 +1144,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1204,6 +1210,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1278,6 +1285,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1309,6 +1317,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         with pytest.raises(SystemExit, match="not found"):
@@ -1332,6 +1341,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         with pytest.raises(SystemExit, match="not found"):
@@ -1375,6 +1385,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1425,6 +1436,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1471,6 +1483,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1512,6 +1525,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1567,6 +1581,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1612,6 +1627,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1665,6 +1681,7 @@ class TestMain:
             copy=str(target_dir),
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1698,6 +1715,7 @@ class TestMain:
             copy=str(target_dir),
             start=1,
             camera=None,
+            stat=False,
         )
 
         with pytest.raises(SystemExit, match="mutually exclusive"):
@@ -1725,6 +1743,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         with pytest.raises(SystemExit, match="cannot be used with --list"):
@@ -1752,6 +1771,7 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1790,6 +1810,7 @@ class TestMain:
             copy=None,
             start=100,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -1991,6 +2012,7 @@ class TestMultipleSources:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -2031,6 +2053,7 @@ class TestMultipleSources:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -2071,6 +2094,7 @@ class TestMultipleSources:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -2100,6 +2124,7 @@ class TestMultipleSources:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         with pytest.raises(SystemExit, match="Source not found"):
@@ -2338,11 +2363,11 @@ class TestReadCameraSlug:
 
 
 @pytest.mark.unit
-class TestComputeCameraCounts:
-    """Tests for compute_camera_counts."""
+class TestComputeCameraStats:
+    """Tests for compute_camera_stats."""
 
-    def test_counts_by_slug(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Files are grouped by camera slug."""
+    def test_counts_and_sizes_by_slug(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Files are grouped by camera slug with count, size, and date range."""
         slugs = {
             "/a.jpg": "canon-eos-5d-mark-iv",
             "/b.jpg": "canon-eos-5d-mark-iv",
@@ -2350,59 +2375,87 @@ class TestComputeCameraCounts:
         }
         monkeypatch.setattr(find, "read_camera_slug", lambda p: slugs.get(p))
 
-        files = [{"path": p} for p in slugs]
-        counts = find.compute_camera_counts(files)
+        files = [
+            {"path": "/a.jpg", "size": 1000, "date": "2023-01-15T10:00:00+00:00"},
+            {"path": "/b.jpg", "size": 2000, "date": "2023-06-20T10:00:00+00:00"},
+            {"path": "/c.jpg", "size": 500, "date": "2022-03-01T10:00:00+00:00"},
+        ]
+        stats = find.compute_camera_stats(files)
 
-        assert counts == {"canon-eos-5d-mark-iv": 2, "apple-iphone-14-pro": 1}
+        assert stats["canon-eos-5d-mark-iv"] == (2, 3000, "2023-01-15", "2023-06-20")
+        assert stats["apple-iphone-14-pro"] == (1, 500, "2022-03-01", "2022-03-01")
 
     def test_unknown_for_unreadable_exif(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Files with no readable EXIF are counted as 'unknown'."""
         monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
 
-        files = [{"path": "/x.jpg"}, {"path": "/y.jpg"}]
-        counts = find.compute_camera_counts(files)
+        files = [
+            {"path": "/x.jpg", "size": 100, "date": "2024-05-01T12:00:00+00:00"},
+            {"path": "/y.jpg", "size": 200, "date": "2024-07-15T12:00:00+00:00"},
+        ]
+        stats = find.compute_camera_stats(files)
 
-        assert counts == {"unknown": 2}
+        assert stats == {"unknown": (2, 300, "2024-05-01", "2024-07-15")}
 
     def test_empty_list_returns_empty_dict(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Empty file list returns empty dict."""
         monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
-        assert find.compute_camera_counts([]) == {}
+        assert find.compute_camera_stats([]) == {}
 
 
 @pytest.mark.unit
-class TestDisplaySummaryWithCameraCounts:
-    """Tests for display_summary with camera_counts parameter."""
+class TestDisplaySummaryWithCameraStats:
+    """Tests for display_summary with camera_stats parameter."""
 
-    def test_camera_counts_printed(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Camera counts section appears when camera_counts is non-empty."""
-        find.display_summary([], [], {"canon-eos-5d-mark-iv": 245, "apple-iphone-14-pro": 58})
+    def test_camera_stats_printed(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Camera stats table appears when camera_stats is non-empty."""
+        stats = {
+            "canon-eos-5d-mark-iv": (245, 1_200_000_000, "2020-01-01", "2023-12-31"),
+            "apple-iphone-14-pro": (58, 473_300_000, "2022-06-01", "2022-09-30"),
+        }
+        find.display_summary([], [], stats)
         out = capsys.readouterr().out
         assert "Cameras detected:" in out
         assert "canon-eos-5d-mark-iv" in out
         assert "245" in out
         assert "apple-iphone-14-pro" in out
         assert "58" in out
+        assert "2020-01-01" in out
+        assert "2023-12-31" in out
+        assert "\u2192" in out
 
-    def test_camera_counts_sorted_by_count_desc(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_camera_stats_sorted_by_count_desc(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Camera slugs are listed highest-count first."""
-        find.display_summary([], [], {"rare": 1, "common": 100})
+        stats = {
+            "rare": (1, 100, "2023-01-01", "2023-01-01"),
+            "common": (100, 9000, "2022-01-01", "2023-12-31"),
+        }
+        find.display_summary([], [], stats)
         out = capsys.readouterr().out
         lines = [line for line in out.splitlines() if "common" in line or "rare" in line]
         assert lines[0].strip().startswith("common")
         assert lines[1].strip().startswith("rare")
 
     def test_no_camera_section_when_none(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """No camera section when camera_counts is None."""
+        """No camera section when camera_stats is None."""
         find.display_summary([], [])
         out = capsys.readouterr().out
         assert "Cameras detected:" not in out
 
     def test_no_camera_section_when_empty_dict(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """No camera section when camera_counts is empty dict."""
+        """No camera section when camera_stats is empty dict."""
         find.display_summary([], [], {})
         out = capsys.readouterr().out
         assert "Cameras detected:" not in out
+
+    def test_no_date_range_when_dates_missing(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Date range is omitted when date_min/date_max are None."""
+        stats = {"unknown": (3, 5000, None, None)}
+        find.display_summary([], [], stats)
+        out = capsys.readouterr().out
+        assert "Cameras detected:" in out
+        assert "unknown" in out
+        assert "\u2192" not in out
 
 
 @pytest.mark.integration
@@ -2448,6 +2501,7 @@ class TestRunCameraFilter:
             copy=None,
             start=1,
             camera="canon-eos-5d-mark-iv",
+            stat=False,
         )
 
         result = find.run(args)
@@ -2485,6 +2539,7 @@ class TestRunCameraFilter:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -2514,6 +2569,7 @@ class TestRunCameraFilter:
             copy=None,
             start=1,
             camera="canon-eos-5d-mark-iv",
+            stat=False,
         )
 
         with pytest.raises(SystemExit, match="--camera requires --move or --copy"):
@@ -2522,7 +2578,7 @@ class TestRunCameraFilter:
     def test_stats_mode_shows_camera_counts(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Stats mode (no -d/-m) includes camera counts in summary."""
+        """--stat flag includes camera stats table in summary."""
         json_file = self._make_archive_json(tmp_path, [])
         scan_dir = tmp_path / "scan"
         scan_dir.mkdir()
@@ -2543,6 +2599,7 @@ class TestRunCameraFilter:
             copy=None,
             start=1,
             camera=None,
+            stat=True,
         )
 
         result = find.run(args)
@@ -2576,6 +2633,7 @@ class TestRunCameraFilter:
             copy=None,
             start=1,
             camera=None,
+            stat=False,
         )
 
         result = find.run(args)
@@ -2618,6 +2676,7 @@ class TestRunCameraFilter:
             copy=str(target_dir),
             start=1,
             camera="apple-iphone-14-pro",
+            stat=False,
         )
 
         result = find.run(args)
