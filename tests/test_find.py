@@ -557,6 +557,7 @@ class TestProcessListMode:
             "filter_date": False,
             "tolerance": 0,
             "stat": False,
+            "camera": None,
         }
         defaults.update(kwargs)
         return argparse.Namespace(**defaults)
@@ -2572,7 +2573,7 @@ class TestRunCameraFilter:
             stat=False,
         )
 
-        with pytest.raises(SystemExit, match="--camera requires --move or --copy"):
+        with pytest.raises(SystemExit, match="--camera requires --move, --copy, or --list"):
             find.validate_args(args)
 
     def test_stats_mode_shows_camera_counts(
@@ -2686,3 +2687,70 @@ class TestRunCameraFilter:
         assert "apple.jpg" in out
         assert "canon.jpg" not in out
         assert "cp " in out
+
+    def test_camera_filter_limits_list_missing(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--camera with --list filters [MISS] entries to the matching camera only."""
+        json_file = self._make_archive_json(tmp_path, [])
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        canon_file = scan_dir / "canon.jpg"
+        canon_file.write_text("canon content")
+        apple_file = scan_dir / "apple.jpg"
+        apple_file.write_text("apple content")
+
+        slugs = {
+            str(canon_file.resolve()): "canon-eos-5d-mark-iv",
+            str(apple_file.resolve()): "apple-iphone-14-pro",
+        }
+        monkeypatch.setattr(find, "read_camera_slug", lambda p: slugs.get(p))
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=True,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=True,
+            move=None,
+            copy=None,
+            start=1,
+            camera="canon-eos-5d-mark-iv",
+            stat=False,
+        )
+
+        result = find.run(args)
+        assert result == os.EX_OK
+
+        out = capsys.readouterr().out
+        assert "canon.jpg" in out
+        assert "apple.jpg" not in out
+
+    def test_camera_filter_list_no_move_copy_is_valid(self, tmp_path: Path) -> None:
+        """--camera with --list does not raise (no --move/--copy required)."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=True,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=True,
+            move=None,
+            copy=None,
+            start=1,
+            camera="sony-dsc-w170",
+            stat=False,
+        )
+
+        # Should not raise
+        find.validate_args(args)

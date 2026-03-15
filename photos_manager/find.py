@@ -831,7 +831,8 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         type=str,
         metavar="SLUG",
         help=(
-            "Filter --move/--copy to files matching this camera slug (e.g. canon-eos-5d-mark-iv)"
+            "Filter --move/--copy/--list to files matching this camera slug"
+            " (e.g. canon-eos-5d-mark-iv)"
         ),
     )
 
@@ -845,10 +846,11 @@ def validate_args(args: argparse.Namespace) -> None:
     Raises:
         SystemExit: On any validation error
     """
-    # --camera requires --move or --copy
-    if args.camera and not args.move and not args.copy:
+    # --camera requires --move, --copy, or --list
+    if args.camera and not args.move and not args.copy and not args.list:
         raise SystemExit(
-            "Error: --camera requires --move or --copy\nUse -h or --help for usage information"
+            "Error: --camera requires --move, --copy, or --list\n"
+            "Use -h or --help for usage information"
         )
 
     # -d/-m required for --move/--copy (need to know which files to process)
@@ -964,6 +966,8 @@ def process_list_mode(
             filtered = [d for d in filtered if _dup_has_name_change(d)]
         if args.filter_date:
             filtered = [d for d in filtered if _dup_has_date_change(d, args.tolerance)]
+        if args.camera:
+            filtered = [d for d in filtered if read_camera_slug(str(d[0]["path"])) == args.camera]
         for scanned, archive in filtered:
             line = format_list_line(
                 _display_path(str(scanned["path"])), "[DUP]", scanned, archive, args.tolerance
@@ -974,6 +978,8 @@ def process_list_mode(
         for entry in missing:
             path = str(entry["path"])
             slug = read_camera_slug(path)
+            if args.camera and slug != args.camera:
+                continue
             line = format_list_line(_display_path(path), "[MISS]", entry, camera_slug=slug)
             entries.append((_list_date_sort_key(str(entry.get("date", ""))), line))
 
