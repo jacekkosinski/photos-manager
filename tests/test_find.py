@@ -710,6 +710,45 @@ class TestProcessListMode:
         assert "utc_plus1" in lines[0]  # 09:00 UTC — earlier
         assert "utc" in lines[1]  # 09:30 UTC — later
 
+    def test_camera_filter_limits_list_duplicates(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--camera with --list filters [DUP] entries to the matching camera only."""
+        canon_path = "/scan/canon.jpg"
+        apple_path = "/scan/apple.jpg"
+        slugs = {canon_path: "canon-eos-5d-mark-iv", apple_path: "apple-iphone-14-pro"}
+        monkeypatch.setattr(find, "read_camera_slug", lambda p: slugs.get(p))
+
+        archive_entry = {"path": "/archive/x.jpg", "size": 100, "sha1": "a", "md5": "b", "date": ""}
+        duplicates = [
+            (
+                {
+                    "path": canon_path,
+                    "size": 100,
+                    "sha1": "a",
+                    "md5": "b",
+                    "date": "2024-01-01T10:00:00+00:00",
+                },
+                archive_entry,
+            ),
+            (
+                {
+                    "path": apple_path,
+                    "size": 100,
+                    "sha1": "c",
+                    "md5": "d",
+                    "date": "2024-01-02T10:00:00+00:00",
+                },
+                archive_entry,
+            ),
+        ]
+        args = self._make_args(show_duplicates=True, camera="canon-eos-5d-mark-iv")
+        find.process_list_mode(args, duplicates, [])
+
+        out = capsys.readouterr().out
+        assert "canon.jpg" in out
+        assert "apple.jpg" not in out
+
 
 @pytest.mark.unit
 class TestDisplayFunctions:
@@ -2754,3 +2793,55 @@ class TestRunCameraFilter:
 
         # Should not raise
         find.validate_args(args)
+
+    def test_stat_with_list_raises(self, tmp_path: Path) -> None:
+        """--stat combined with --list raises SystemExit."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=False,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=True,
+            move=None,
+            copy=None,
+            start=1,
+            camera=None,
+            stat=True,
+        )
+
+        with pytest.raises(SystemExit, match="--stat can only be used in summary mode"):
+            find.validate_args(args)
+
+    def test_stat_with_move_raises(self, tmp_path: Path) -> None:
+        """--stat combined with --move raises SystemExit."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=True,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=False,
+            move=str(tmp_path / "target"),
+            copy=None,
+            start=1,
+            camera=None,
+            stat=True,
+        )
+
+        with pytest.raises(SystemExit, match="--stat can only be used in summary mode"):
+            find.validate_args(args)

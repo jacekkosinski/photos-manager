@@ -861,6 +861,14 @@ def validate_args(args: argparse.Namespace) -> None:
             "Use -h or --help for usage information"
         )
 
+    # --stat applies to summary mode only
+    if args.stat and (args.list or args.move or args.copy):
+        raise SystemExit(
+            "Error: --stat can only be used in summary mode "
+            "(incompatible with --list, --move, --copy)\n"
+            "Use -h or --help for usage information"
+        )
+
     # Validate mutually exclusive options
     if args.move and args.copy:
         raise SystemExit("Error: --move and --copy are mutually exclusive")
