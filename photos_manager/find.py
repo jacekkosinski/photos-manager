@@ -829,6 +829,21 @@ def process_command_mode(
     display_commands(commands)
 
 
+def _list_date_sort_key(date_str: str) -> float:
+    """Return a sort key (epoch seconds) for an ISO 8601 date string.
+
+    Args:
+        date_str: ISO 8601 date string, timezone-aware or naive.
+
+    Returns:
+        Seconds since epoch as a float; 0.0 on parse failure.
+    """
+    try:
+        return datetime.fromisoformat(date_str).timestamp()
+    except ValueError:
+        return 0.0
+
+
 def process_list_mode(
     args: argparse.Namespace,
     duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
@@ -836,8 +851,9 @@ def process_list_mode(
 ) -> None:
     """Process list mode (--list).
 
-    Displays one line per file with tag and contextual info.  ``--filter-name``
-    and ``--filter-date`` act as filters: when set, only duplicate entries
+    Displays one line per file with tag and contextual info, sorted by
+    file modification date ascending.  ``--filter-name`` and
+    ``--filter-date`` act as filters: when set, only duplicate entries
     that have a filename change or a date change (respectively) are shown.
     Both flags together form an AND filter.  Missing entries are always shown.
 
@@ -847,6 +863,9 @@ def process_list_mode(
         missing: List of missing files
     """
     show_all = not args.show_duplicates and not args.show_missing
+
+    # Collect (sort_key, line) pairs so the combined output can be sorted by date.
+    entries: list[tuple[float, str]] = []
 
     if args.show_duplicates or show_all:
         filtered: list[tuple[dict[str, str | int], dict[str, str | int]]] = list(duplicates)
@@ -858,14 +877,18 @@ def process_list_mode(
             line = format_list_line(
                 _display_path(str(scanned["path"])), "[DUP]", scanned, archive, args.tolerance
             )
-            print(line)
+            entries.append((_list_date_sort_key(str(scanned.get("date", ""))), line))
 
     if args.show_missing or show_all:
         for entry in missing:
             path = str(entry["path"])
             slug = read_camera_slug(path)
             line = format_list_line(_display_path(path), "[MISS]", entry, camera_slug=slug)
-            print(line)
+            entries.append((_list_date_sort_key(str(entry.get("date", ""))), line))
+
+    entries.sort(key=lambda t: t[0])
+    for _, line in entries:
+        print(line)
 
 
 def run(args: argparse.Namespace) -> int:

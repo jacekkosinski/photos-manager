@@ -638,6 +638,76 @@ class TestProcessListMode:
         assert "[DUP]" in captured.out
         assert "[MISS]" in captured.out
 
+    def test_list_sorted_by_date_ascending(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Entries are sorted by file modification date ascending."""
+        duplicates = [
+            (
+                {
+                    "path": "/scan/late_dup.txt",
+                    "size": 10,
+                    "sha1": "a",
+                    "md5": "b",
+                    "date": "2024-03-01T00:00:00+00:00",
+                },
+                {"path": "/archive/x.txt", "size": 10, "sha1": "a", "md5": "b", "date": ""},
+            )
+        ]
+        missing = [
+            {
+                "path": "/scan/early_miss.txt",
+                "size": 5,
+                "sha1": "c",
+                "md5": "d",
+                "date": "2024-01-01T00:00:00+00:00",
+            },
+            {
+                "path": "/scan/mid_miss.txt",
+                "size": 5,
+                "sha1": "e",
+                "md5": "f",
+                "date": "2024-02-01T00:00:00+00:00",
+            },
+        ]
+        args = self._make_args()
+        find.process_list_mode(args, duplicates, missing)
+        lines = capsys.readouterr().out.splitlines()
+        assert len(lines) == 3
+        assert "early_miss" in lines[0]
+        assert "mid_miss" in lines[1]
+        assert "late_dup" in lines[2]
+
+    def test_list_sort_mixed_timezones(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Sorting is correct across different timezone offsets."""
+        # 10:00 UTC+1 = 09:00 UTC  (earlier)
+        # 09:30 UTC   = 09:30 UTC  (later)
+        duplicates = [
+            (
+                {
+                    "path": "/scan/utc_plus1.txt",
+                    "size": 1,
+                    "sha1": "a",
+                    "md5": "b",
+                    "date": "2024-01-01T10:00:00+01:00",
+                },
+                {"path": "/archive/x.txt", "size": 1, "sha1": "a", "md5": "b", "date": ""},
+            )
+        ]
+        missing = [
+            {
+                "path": "/scan/utc.txt",
+                "size": 1,
+                "sha1": "c",
+                "md5": "d",
+                "date": "2024-01-01T09:30:00+00:00",
+            }
+        ]
+        args = self._make_args()
+        find.process_list_mode(args, duplicates, missing)
+        lines = capsys.readouterr().out.splitlines()
+        assert len(lines) == 2
+        assert "utc_plus1" in lines[0]  # 09:00 UTC — earlier
+        assert "utc" in lines[1]  # 09:30 UTC — later
+
 
 @pytest.mark.unit
 class TestDisplayFunctions:
