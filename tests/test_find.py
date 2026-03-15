@@ -2163,6 +2163,37 @@ class TestNormalizeCameraSlug:
 
 
 @pytest.mark.unit
+class TestFindExifInBytes:
+    """Tests for _find_exif_in_bytes."""
+
+    def test_finds_le_tiff_header(self) -> None:
+        """Locates EXIF block with little-endian TIFF header."""
+        data = b"junk" + b"Exif\x00\x00" + b"II\x2a\x00rest"
+        result = find._find_exif_in_bytes(data)
+        assert result == b"II\x2a\x00rest"
+
+    def test_finds_be_tiff_header(self) -> None:
+        """Locates EXIF block with big-endian TIFF header."""
+        data = b"Exif\x00\x00" + b"MM\x00\x2a" + b"data"
+        result = find._find_exif_in_bytes(data)
+        assert result == b"MM\x00\x2a" + b"data"
+
+    def test_returns_none_when_not_found(self) -> None:
+        """Returns None when no EXIF marker is present."""
+        assert find._find_exif_in_bytes(b"no exif here") is None
+
+    def test_skips_marker_without_valid_tiff_header(self) -> None:
+        """Skips Exif marker not followed by a valid TIFF header."""
+        data = b"Exif\x00\x00XXXX" + b"Exif\x00\x00" + b"II\x2a\x00real"
+        result = find._find_exif_in_bytes(data)
+        assert result == b"II\x2a\x00real"
+
+    def test_returns_none_on_empty_data(self) -> None:
+        """Returns None for empty bytes."""
+        assert find._find_exif_in_bytes(b"") is None
+
+
+@pytest.mark.unit
 class TestReadCameraSlug:
     """Tests for read_camera_slug (mocked piexif)."""
 
@@ -2201,10 +2232,10 @@ class TestReadCameraSlug:
         assert find.read_camera_slug("/some/file.jpg") is None
 
     def test_returns_none_on_exception(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Returns None when piexif raises an exception."""
+        """Returns None when piexif raises on both path and embedded bytes."""
         import types
 
-        def bad_load(_: str) -> dict[str, object]:
+        def bad_load(_: object) -> dict[str, object]:
             raise OSError("read error")
 
         fake_piexif = types.SimpleNamespace(
@@ -2215,6 +2246,95 @@ class TestReadCameraSlug:
         monkeypatch.setattr(find, "piexif", fake_piexif, raising=False)
 
         assert find.read_camera_slug("/some/file.jpg") is None
+
+    def test_heic_fallback_extracts_exif_from_bytes(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Falls back to byte-scan for HEIC: reads raw EXIF block when piexif.load(path) fails."""
+        import struct
+
+        # Build minimal raw EXIF bytes: TIFF LE header + IFD with Make and Model tags.
+        # This is what piexif.load(bytes) expects: raw TIFF starting at offset 0.
+        make_bytes = b"Apple\x00"
+        model_bytes = b"iPhone 14 Pro\x00"
+        # IFD entry: tag(2) + type(2) + count(4) + value_offset(4) = 12 bytes each
+        # We'll embed make/model as ASCII strings at fixed offsets after the IFD.
+        num_entries = 2
+        ifd_offset = 8  # right after TIFF header (8 bytes)
+        ifd_size = 2 + num_entries * 12 + 4  # entry count + entries + next IFD offset
+        data_offset = ifd_offset + ifd_size
+
+        make_offset = data_offset
+        model_offset = make_offset + len(make_bytes)
+
+        ifd_entries = struct.pack(
+            "<HHIIHHII",
+            271,
+            2,
+            len(make_bytes),
+            make_offset,  # Make: ASCII
+            272,
+            2,
+            len(model_bytes),
+            model_offset,  # Model: ASCII
+        )
+        ifd_data = struct.pack("<H", num_entries) + ifd_entries + struct.pack("<I", 0)
+        tiff_header = b"II" + struct.pack("<HI", 42, ifd_offset)
+        raw_exif = tiff_header + ifd_data + make_bytes + model_bytes
+
+        # Write a fake HEIC file: some junk + Exif\x00\x00 marker + raw EXIF
+        heic_file = tmp_path / "photo.heic"
+        heic_file.write_bytes(b"ftypheic" + b"\x00" * 20 + b"Exif\x00\x00" + raw_exif)
+
+        # piexif.load(path_str) raises (can't parse HEIC); piexif.load(bytes) works normally
+        try:
+            import piexif as _real_piexif
+        except ImportError:
+            pytest.skip("piexif not installed")
+
+        call_count: list[int] = [0]
+
+        # No return-type annotation: tests have disallow_untyped_defs=false
+        def selective_load(arg):
+            call_count[0] += 1
+            if isinstance(arg, str):
+                raise OSError("cannot parse HEIC")
+            assert isinstance(arg, bytes)
+            return _real_piexif.load(arg)
+
+        import types as _types
+
+        fake_piexif = _types.SimpleNamespace(
+            load=selective_load,
+            ImageIFD=_types.SimpleNamespace(Make=271, Model=272),
+        )
+        monkeypatch.setattr(find, "_PIEXIF_AVAILABLE", True)
+        monkeypatch.setattr(find, "piexif", fake_piexif, raising=False)
+
+        result = find.read_camera_slug(str(heic_file))
+        assert result == "apple-iphone-14-pro"
+        assert call_count[0] == 2  # first call (path) fails; second call (bytes) succeeds
+
+    def test_heic_fallback_returns_none_when_no_exif_block(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Returns None when HEIC file contains no recognisable EXIF block."""
+        import types
+
+        def bad_load(_: object) -> dict[str, object]:
+            raise OSError("cannot parse HEIC")
+
+        fake_piexif = types.SimpleNamespace(
+            load=bad_load,
+            ImageIFD=types.SimpleNamespace(Make=271, Model=272),
+        )
+        monkeypatch.setattr(find, "_PIEXIF_AVAILABLE", True)
+        monkeypatch.setattr(find, "piexif", fake_piexif, raising=False)
+
+        heic_file = tmp_path / "photo.heic"
+        heic_file.write_bytes(b"ftypheic" + b"\x00" * 100)  # no Exif\x00\x00 marker
+
+        assert find.read_camera_slug(str(heic_file)) is None
 
 
 @pytest.mark.unit

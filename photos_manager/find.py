@@ -238,20 +238,75 @@ def normalize_camera_slug(make: str, model: str) -> str:
     return combined.strip("-")
 
 
+# Marker and TIFF magic bytes used to locate raw EXIF data in HEIC/HEIF files.
+_EXIF_HEADER = b"Exif\x00\x00"
+_TIFF_HEADERS = (b"II\x2a\x00", b"MM\x00\x2a")
+# Read at most 8 MB when searching for an EXIF block in non-JPEG containers.
+_EXIF_SCAN_LIMIT = 8 * 1024 * 1024
+
+
+def _find_exif_in_bytes(data: bytes) -> bytes | None:
+    r"""Find a raw EXIF block inside arbitrary binary data.
+
+    Searches for the ``Exif\x00\x00`` marker immediately followed by a valid
+    TIFF header (little-endian ``II\x2a\x00`` or big-endian ``MM\x00\x2a``).
+    This allows extracting EXIF from HEIC/HEIF files, where the EXIF block is
+    embedded inside the ISOBMFF ``mdat`` box.
+
+    Args:
+        data: Binary data to search.
+
+    Returns:
+        Raw EXIF bytes starting from the TIFF header, or ``None`` if not found.
+
+    Examples:
+        >>> _find_exif_in_bytes(b"junk" + b"Exif\x00\x00" + b"II\x2a\x00rest") is not None
+        True
+        >>> _find_exif_in_bytes(b"no exif here") is None
+        True
+    """
+    offset = 0
+    while True:
+        idx = data.find(_EXIF_HEADER, offset)
+        if idx == -1:
+            return None
+        start = idx + len(_EXIF_HEADER)
+        if data[start : start + 4] in _TIFF_HEADERS:
+            return data[start:]
+        offset = idx + 1
+
+
 def read_camera_slug(file_path: str) -> str | None:
-    """Read EXIF Make/Model from a JPEG/TIFF and return a normalised slug.
+    """Read EXIF Make/Model from a JPEG, TIFF, or HEIC/HEIF file and return a normalised slug.
+
+    Tries ``piexif.load()`` first (handles JPEG/TIFF).  When that fails —
+    e.g. for HEIC/HEIF files whose container piexif cannot parse — falls back
+    to scanning the first ``_EXIF_SCAN_LIMIT`` bytes of the file for a raw
+    EXIF block and loading it directly.
 
     Args:
         file_path: Path to the image file.
 
     Returns:
-        Camera slug (e.g. ``"canon-eos-5d-mark-iv"``) or ``None`` when piexif
+        Camera slug (e.g. ``"apple-iphone-14-pro"``) or ``None`` when piexif
         is unavailable, the file has no Make/Model tags, or an error occurs.
     """
     if not _PIEXIF_AVAILABLE:  # pragma: no cover
         return None
     try:
         exif_dict = piexif.load(file_path)
+    except Exception:
+        # piexif cannot parse this container (e.g. HEIC/HEIF) — search for a
+        # raw EXIF block embedded in the binary data.
+        try:
+            raw_data = Path(file_path).read_bytes()[:_EXIF_SCAN_LIMIT]
+            exif_bytes = _find_exif_in_bytes(raw_data)
+            if exif_bytes is None:
+                return None
+            exif_dict = piexif.load(exif_bytes)
+        except Exception:
+            return None
+    try:
         ifd = exif_dict.get("0th", {})
         make_raw = ifd.get(piexif.ImageIFD.Make)
         model_raw = ifd.get(piexif.ImageIFD.Model)
