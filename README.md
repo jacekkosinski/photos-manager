@@ -363,26 +363,32 @@ Compare files in a directory against archive metadata to identify duplicates
 that are NOT in the archive). Matches by file size, then SHA1 and MD5 checksums.
 
 ```bash
-# Find duplicates (files that exist in archive)
+# Summary with camera statistics (default)
+photos find archive.json /path/to/scan
+
+# Summary filtered to duplicates only
 photos find archive.json /path/to/scan -d
 
-# Find missing files (files in scan directory but NOT in archive)
+# Summary filtered to missing files only
 photos find archive.json /path/to/scan -m
 
-# Both duplicates and missing
-photos find archive.json /path/to/scan -d -m
+# One tagged line per file (for piping)
+photos find archive.json /path/to/scan -l
 
-# Output one path per line (for piping)
-photos find archive.json /path/to/scan -d -l
+# Generate move commands for missing files
+photos find archive.json /path/to/scan -m -M /path/to/incoming
 
-# Generate move commands for duplicates
-photos find archive.json /path/to/scan -d -M /path/to/duplicates
+# Generate move commands for all files
+photos find archive.json /path/to/scan -M /path/to/incoming
 
 # Compare from pre-computed PSV file (path|sha1|md5|date|size)
 photos find archive.json scan_results.psv -d -m
 
-# Also check filenames and timestamps
-photos find archive.json /path/to/scan -d --check-filenames --check-timestamps
+# Filter duplicates with filename or date differences
+photos find archive.json /path/to/scan -d --name-changed --date-changed
+
+# Filter by camera model
+photos find archive.json /path/to/scan -k canon-eos-5d-mark-iv
 ```
 
 ### Common Workflows

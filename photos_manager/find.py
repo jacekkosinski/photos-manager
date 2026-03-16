@@ -6,8 +6,8 @@ archive metadata (JSON created by index) to identify:
 - Missing: Files that do NOT exist in the archive
 
 The comparison uses file size as a first filter, then SHA1 and MD5 checksums
-for exact matching. Optional filename and timestamp comparison can provide
-additional warnings when files differ in these attributes.
+for exact matching. Optional filters can narrow results to duplicates with
+filename or timestamp differences, or to a specific camera model.
 """
 
 import argparse
@@ -674,13 +674,13 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "-d",
         "--duplicates",
         action="store_true",
-        help="Display files found in archive (duplicates)",
+        help="Limit results to files found in archive (duplicates)",
     )
     parser.add_argument(
         "-m",
         "--missing",
         action="store_true",
-        help="Display files NOT found in archive (missing)",
+        help="Limit results to files NOT found in archive (missing)",
     )
     parser.add_argument(
         "-n",
@@ -783,9 +783,16 @@ def process_command_mode(
         missing: List of missing files
     """
     show_all = not args.duplicates and not args.missing
+
+    # Apply duplicate sub-filters before collecting files
+    filtered_dups = list(duplicates) if args.duplicates or show_all else []
+    if args.name_changed:
+        filtered_dups = [d for d in filtered_dups if _dup_has_name_change(d)]
+    if args.date_changed:
+        filtered_dups = [d for d in filtered_dups if _dup_has_date_change(d, args.tolerance)]
+
     files_to_process: list[dict[str, str | int]] = []
-    if args.duplicates or show_all:
-        files_to_process.extend([scanned for scanned, _ in duplicates])
+    files_to_process.extend([scanned for scanned, _ in filtered_dups])
     if args.missing or show_all:
         files_to_process.extend(missing)
 
