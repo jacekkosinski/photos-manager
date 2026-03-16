@@ -503,10 +503,10 @@ class TestProcessListMode:
 
     def _make_args(self, **kwargs: object) -> argparse.Namespace:
         defaults = {
-            "show_duplicates": False,
-            "show_missing": False,
-            "filter_name": False,
-            "filter_date": False,
+            "duplicates": False,
+            "missing": False,
+            "name_changed": False,
+            "date_changed": False,
             "tolerance": 0,
             "camera": None,
         }
@@ -533,7 +533,7 @@ class TestProcessListMode:
                 },
             )
         ]
-        args = self._make_args(show_duplicates=True)
+        args = self._make_args(duplicates=True)
         find.process_list_mode(args, duplicates, [])
         captured = capsys.readouterr()
         assert "[DUP]" in captured.out
@@ -550,7 +550,7 @@ class TestProcessListMode:
                 "date": "2024-06-01T08:00:00+02:00",
             }
         ]
-        args = self._make_args(show_missing=True)
+        args = self._make_args(missing=True)
         find.process_list_mode(args, [], missing)
         captured = capsys.readouterr()
         assert "[MISS]" in captured.out
@@ -693,7 +693,7 @@ class TestProcessListMode:
                 archive_entry,
             ),
         ]
-        args = self._make_args(show_duplicates=True, camera="canon-eos-5d-mark-iv")
+        args = self._make_args(duplicates=True, camera="canon-eos-5d-mark-iv")
         find.process_list_mode(args, duplicates, [])
 
         out = capsys.readouterr().out
@@ -738,8 +738,8 @@ class TestSetupParser:
                 "/scan/dir",
                 "-d",
                 "-m",
-                "--filter-name",
-                "--filter-date",
+                "--name-changed",
+                "--date-changed",
                 "--tolerance",
                 "5",
             ]
@@ -747,10 +747,10 @@ class TestSetupParser:
 
         assert args.json_file == "archive.json"
         assert args.source == ["/scan/dir"]
-        assert args.show_duplicates is True
-        assert args.show_missing is True
-        assert args.filter_name is True
-        assert args.filter_date is True
+        assert args.duplicates is True
+        assert args.missing is True
+        assert args.name_changed is True
+        assert args.date_changed is True
         assert args.tolerance == 5
 
 
@@ -768,10 +768,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=None,
@@ -812,10 +812,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=True,
             move=None,
@@ -830,7 +830,7 @@ class TestMain:
         assert "[DUP]" in captured.out
         assert "[MISS]" in captured.out
 
-    def test_run_show_duplicates(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_run_duplicates(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with -d flag filters summary to duplicates only."""
         # Create archive
         archive_dir = tmp_path / "archive"
@@ -860,10 +860,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=True,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=None,
@@ -879,7 +879,7 @@ class TestMain:
         assert "duplicates found" in captured.out
         assert "files missing" not in captured.out
 
-    def test_run_show_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_run_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test run with -m flag filters summary to missing files only."""
         # Create empty archive
         json_file = tmp_path / "archive.json"
@@ -893,10 +893,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=None,
@@ -953,10 +953,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=True,
-            filter_date=False,
+            duplicates=True,
+            missing=False,
+            name_changed=True,
+            date_changed=False,
             tolerance=1,
             list=True,
             move=None,
@@ -977,7 +977,7 @@ class TestMain:
     def test_run_with_timestamp_check(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test --list --filter-date filter: shows only duplicates with date differences."""
+        """Test --list --date-changed filter: shows only duplicates with date differences."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
 
@@ -1018,10 +1018,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(psv_file)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=False,
-            filter_date=True,
+            duplicates=True,
+            missing=False,
+            name_changed=False,
+            date_changed=True,
             tolerance=1,
             list=True,
             move=None,
@@ -1042,7 +1042,7 @@ class TestMain:
     def test_run_combined_filename_and_timestamp_filter(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test --list --filter-name --filter-date AND filter."""
+        """Test --list --name-changed --date-changed AND filter."""
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
 
@@ -1092,10 +1092,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(psv_file)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=True,
-            filter_date=True,
+            duplicates=True,
+            missing=False,
+            name_changed=True,
+            date_changed=True,
             tolerance=1,
             list=True,
             move=None,
@@ -1123,10 +1123,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file="/nonexistent.json",
             source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=True,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=None,
@@ -1146,10 +1146,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=["/nonexistent/dir"],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=True,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=None,
@@ -1189,10 +1189,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(psv_file)],
-            show_duplicates=True,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=True,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=None,
@@ -1237,10 +1237,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=True,
-            filter_name=True,
-            filter_date=True,
+            duplicates=True,
+            missing=True,
+            name_changed=True,
+            date_changed=True,
             tolerance=5,
             list=False,
             move=None,
@@ -1283,10 +1283,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=True,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=True,
             move=None,
@@ -1324,10 +1324,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=True,
             move=None,
@@ -1379,10 +1379,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=True,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=True,
             move=None,
@@ -1424,10 +1424,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=str(target_dir),
@@ -1477,10 +1477,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=True,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=None,
@@ -1510,10 +1510,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=True,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=str(target_dir),
@@ -1537,10 +1537,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=True,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=True,
             move=str(target_dir),
@@ -1564,10 +1564,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=True,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=True,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=str(target_dir),
@@ -1602,10 +1602,10 @@ class TestMain:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=str(target_dir),
@@ -1803,10 +1803,10 @@ class TestMultipleSources:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(dir_a), str(dir_b)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=None,
@@ -1843,10 +1843,10 @@ class TestMultipleSources:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir), str(psv_file)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=None,
@@ -1883,10 +1883,10 @@ class TestMultipleSources:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(dir_a), str(dir_b)],
-            show_duplicates=False,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=True,
             move=None,
@@ -1912,10 +1912,10 @@ class TestMultipleSources:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir), "/nonexistent/path"],
-            show_duplicates=False,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=1,
             list=False,
             move=None,
@@ -2288,10 +2288,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=0,
             list=False,
             move=str(target_dir),
@@ -2325,10 +2325,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=0,
             list=False,
             move=str(target_dir),
@@ -2365,10 +2365,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=0,
             list=False,
             move=str(target_dir),
@@ -2402,10 +2402,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=0,
             list=True,
             move=None,
@@ -2435,10 +2435,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=0,
             list=False,
             move=None,
@@ -2468,10 +2468,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=0,
             list=False,
             move=None,
@@ -2511,10 +2511,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=0,
             list=False,
             move=None,
@@ -2552,10 +2552,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=False,
             tolerance=0,
             list=True,
             move=None,
@@ -2581,10 +2581,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=False,
-            filter_name=False,
-            filter_date=False,
+            duplicates=False,
+            missing=False,
+            name_changed=False,
+            date_changed=False,
             tolerance=0,
             list=False,
             move=None,
@@ -2596,8 +2596,8 @@ class TestRunCameraFilter:
         # Should not raise
         find.validate_args(args)
 
-    def test_filter_name_without_show_duplicates_raises(self, tmp_path: Path) -> None:
-        """--filter-name without -d raises SystemExit."""
+    def test_name_changed_without_duplicates_raises(self, tmp_path: Path) -> None:
+        """--name-changed without -d raises SystemExit."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
         scan_dir = tmp_path / "scan"
@@ -2606,10 +2606,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=False,
-            filter_name=True,
-            filter_date=False,
+            duplicates=False,
+            missing=False,
+            name_changed=True,
+            date_changed=False,
             tolerance=0,
             list=False,
             move=None,
@@ -2618,11 +2618,11 @@ class TestRunCameraFilter:
             camera=None,
         )
 
-        with pytest.raises(SystemExit, match="--filter-name and --filter-date require"):
+        with pytest.raises(SystemExit, match="--name-changed and --date-changed require"):
             find.validate_args(args)
 
-    def test_filter_date_without_show_duplicates_raises(self, tmp_path: Path) -> None:
-        """--filter-date without -d raises SystemExit."""
+    def test_date_changed_without_duplicates_raises(self, tmp_path: Path) -> None:
+        """--date-changed without -d raises SystemExit."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
         scan_dir = tmp_path / "scan"
@@ -2631,10 +2631,10 @@ class TestRunCameraFilter:
         args = argparse.Namespace(
             json_file=str(json_file),
             source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=True,
+            duplicates=False,
+            missing=True,
+            name_changed=False,
+            date_changed=True,
             tolerance=0,
             list=False,
             move=None,
@@ -2643,5 +2643,5 @@ class TestRunCameraFilter:
             camera=None,
         )
 
-        with pytest.raises(SystemExit, match="--filter-name and --filter-date require"):
+        with pytest.raises(SystemExit, match="--name-changed and --date-changed require"):
             find.validate_args(args)

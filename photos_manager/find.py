@@ -672,25 +672,25 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "-d",
-        "--show-duplicates",
+        "--duplicates",
         action="store_true",
         help="Display files found in archive (duplicates)",
     )
     parser.add_argument(
         "-m",
-        "--show-missing",
+        "--missing",
         action="store_true",
         help="Display files NOT found in archive (missing)",
     )
     parser.add_argument(
         "-n",
-        "--filter-name",
+        "--name-changed",
         action="store_true",
         help=("Filter output to duplicates with filename differences (basename, case-insensitive)"),
     )
     parser.add_argument(
         "-D",
-        "--filter-date",
+        "--date-changed",
         action="store_true",
         help="Filter output to duplicates with date differences",
     )
@@ -753,10 +753,10 @@ def validate_args(args: argparse.Namespace) -> None:
     if (args.move or args.copy) and args.list:
         raise SystemExit("Error: --move/--copy cannot be used with --list")
 
-    # -n/--filter-name, -D/--filter-date, -T/--tolerance require -d/--show-duplicates
-    if (args.filter_name or args.filter_date) and not args.show_duplicates:
+    # -n/--name-changed, -D/--date-changed require -d/--duplicates
+    if (args.name_changed or args.date_changed) and not args.duplicates:
         raise SystemExit(
-            "Error: --filter-name and --filter-date require -d/--show-duplicates\n"
+            "Error: --name-changed and --date-changed require -d/--duplicates\n"
             "Use -h or --help for usage information"
         )
     # Validate inputs
@@ -782,11 +782,11 @@ def process_command_mode(
         duplicates: List of duplicate file pairs
         missing: List of missing files
     """
-    show_all = not args.show_duplicates and not args.show_missing
+    show_all = not args.duplicates and not args.missing
     files_to_process: list[dict[str, str | int]] = []
-    if args.show_duplicates or show_all:
+    if args.duplicates or show_all:
         files_to_process.extend([scanned for scanned, _ in duplicates])
-    if args.show_missing or show_all:
+    if args.missing or show_all:
         files_to_process.extend(missing)
 
     if not files_to_process:
@@ -841,8 +841,8 @@ def process_list_mode(
     """Process list mode (--list).
 
     Displays one line per file with tag and contextual info, sorted by
-    file modification date ascending.  ``--filter-name`` and
-    ``--filter-date`` act as filters: when set, only duplicate entries
+    file modification date ascending.  ``--name-changed`` and
+    ``--date-changed`` act as filters: when set, only duplicate entries
     that have a filename change or a date change (respectively) are shown.
     Both flags together form an AND filter.  Missing entries are always shown.
 
@@ -851,16 +851,16 @@ def process_list_mode(
         duplicates: List of duplicate file pairs
         missing: List of missing files
     """
-    show_all = not args.show_duplicates and not args.show_missing
+    show_all = not args.duplicates and not args.missing
 
     # Collect (sort_key, line) pairs so the combined output can be sorted by date.
     entries: list[tuple[float, str]] = []
 
-    if args.show_duplicates or show_all:
+    if args.duplicates or show_all:
         filtered: list[tuple[dict[str, str | int], dict[str, str | int]]] = list(duplicates)
-        if args.filter_name:
+        if args.name_changed:
             filtered = [d for d in filtered if _dup_has_name_change(d)]
-        if args.filter_date:
+        if args.date_changed:
             filtered = [d for d in filtered if _dup_has_date_change(d, args.tolerance)]
         if args.camera:
             filtered = [
@@ -874,7 +874,7 @@ def process_list_mode(
             )
             entries.append((_list_date_sort_key(str(scanned.get("date", ""))), line))
 
-    if args.show_missing or show_all:
+    if args.missing or show_all:
         for entry in missing:
             path = str(entry["path"])
             slug = read_camera_slug(path)
@@ -931,13 +931,13 @@ def run(args: argparse.Namespace) -> int:
         print(f"Total: {format_count(len(scanned_files))} files scanned.")
 
         # Apply filters to build filtered lists
-        show_all = not args.show_duplicates and not args.show_missing
-        filtered_dups = list(duplicates) if args.show_duplicates or show_all else []
-        filtered_miss = list(missing) if args.show_missing or show_all else []
+        show_all = not args.duplicates and not args.missing
+        filtered_dups = list(duplicates) if args.duplicates or show_all else []
+        filtered_miss = list(missing) if args.missing or show_all else []
 
-        if args.filter_name:
+        if args.name_changed:
             filtered_dups = [d for d in filtered_dups if _dup_has_name_change(d)]
-        if args.filter_date:
+        if args.date_changed:
             filtered_dups = [d for d in filtered_dups if _dup_has_date_change(d, args.tolerance)]
         if args.camera:
             filtered_dups = [
