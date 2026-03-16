@@ -447,16 +447,6 @@ def generate_file_operation_commands(
     return commands
 
 
-def display_commands(commands: list[str]) -> None:
-    """Print commands one per line.
-
-    Args:
-        commands: List of shell commands to print
-    """
-    for cmd in commands:
-        print(cmd)
-
-
 def _display_path(abs_path: str) -> str:
     """Return path relative to the current working directory.
 
@@ -475,6 +465,51 @@ def _display_path(abs_path: str) -> str:
         return str(Path(abs_path).relative_to(Path.cwd()))
     except ValueError:
         return abs_path
+
+
+def _file_camera_slug(entry: dict[str, str | int]) -> str:
+    """Return camera slug for a file entry, defaulting to ``"unknown"``.
+
+    Args:
+        entry: File metadata dict with at least ``"path"`` key.
+
+    Returns:
+        Camera slug string, never ``None``.
+    """
+    return read_camera_slug(str(entry["path"])) or "unknown"
+
+
+def _apply_filters(
+    args: argparse.Namespace,
+    duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
+    missing: list[dict[str, str | int]],
+) -> tuple[list[tuple[dict[str, str | int], dict[str, str | int]]], list[dict[str, str | int]]]:
+    """Apply all user-selected filters to duplicate and missing lists.
+
+    Handles ``-d``/``-m`` selection, ``-n``/``-D`` duplicate sub-filters,
+    and ``-k`` camera filter.
+
+    Args:
+        args: Parsed command-line arguments.
+        duplicates: Unfiltered duplicate pairs.
+        missing: Unfiltered missing entries.
+
+    Returns:
+        Tuple of (filtered_dups, filtered_miss).
+    """
+    show_all = not args.duplicates and not args.missing
+    filtered_dups = list(duplicates) if args.duplicates or show_all else []
+    filtered_miss = list(missing) if args.missing or show_all else []
+
+    if args.name_changed:
+        filtered_dups = [d for d in filtered_dups if _dup_has_name_change(d)]
+    if args.date_changed:
+        filtered_dups = [d for d in filtered_dups if _dup_has_date_change(d, args.tolerance)]
+    if args.camera:
+        filtered_dups = [d for d in filtered_dups if _file_camera_slug(d[0]) == args.camera]
+        filtered_miss = [m for m in filtered_miss if _file_camera_slug(m) == args.camera]
+
+    return filtered_dups, filtered_miss
 
 
 def _dup_has_name_change(dup: tuple[dict[str, str | int], dict[str, str | int]]) -> bool:
@@ -782,32 +817,11 @@ def process_command_mode(
         duplicates: List of duplicate file pairs
         missing: List of missing files
     """
-    show_all = not args.duplicates and not args.missing
-
-    # Apply duplicate sub-filters before collecting files
-    filtered_dups = list(duplicates) if args.duplicates or show_all else []
-    if args.name_changed:
-        filtered_dups = [d for d in filtered_dups if _dup_has_name_change(d)]
-    if args.date_changed:
-        filtered_dups = [d for d in filtered_dups if _dup_has_date_change(d, args.tolerance)]
-
-    files_to_process: list[dict[str, str | int]] = []
-    files_to_process.extend([scanned for scanned, _ in filtered_dups])
-    if args.missing or show_all:
-        files_to_process.extend(missing)
+    filtered_dups, filtered_miss = _apply_filters(args, duplicates, missing)
+    files_to_process = [s for s, _ in filtered_dups] + filtered_miss
 
     if not files_to_process:
         return
-
-    # Filter to a specific camera slug when --camera is given
-    if args.camera:
-        files_to_process = [
-            f
-            for f in files_to_process
-            if (read_camera_slug(str(f["path"])) or "unknown") == args.camera
-        ]
-        if not files_to_process:
-            return
 
     # Group files and assign directory numbers
     file_groups = group_files_by_directory(files_to_process)
@@ -820,9 +834,9 @@ def process_command_mode(
         files_to_process, target_dir, dir_mapping, operation
     )
 
-    # Print umask first, then commands
     print("umask 022")
-    display_commands(commands)
+    for cmd in commands:
+        print(cmd)
 
 
 def _list_date_sort_key(date_str: str) -> float:
@@ -858,37 +872,23 @@ def process_list_mode(
         duplicates: List of duplicate file pairs
         missing: List of missing files
     """
-    show_all = not args.duplicates and not args.missing
+    filtered_dups, filtered_miss = _apply_filters(args, duplicates, missing)
 
     # Collect (sort_key, line) pairs so the combined output can be sorted by date.
     entries: list[tuple[float, str]] = []
 
-    if args.duplicates or show_all:
-        filtered: list[tuple[dict[str, str | int], dict[str, str | int]]] = list(duplicates)
-        if args.name_changed:
-            filtered = [d for d in filtered if _dup_has_name_change(d)]
-        if args.date_changed:
-            filtered = [d for d in filtered if _dup_has_date_change(d, args.tolerance)]
-        if args.camera:
-            filtered = [
-                d
-                for d in filtered
-                if (read_camera_slug(str(d[0]["path"])) or "unknown") == args.camera
-            ]
-        for scanned, archive in filtered:
-            line = format_list_line(
-                _display_path(str(scanned["path"])), "[DUP]", scanned, archive, args.tolerance
-            )
-            entries.append((_list_date_sort_key(str(scanned.get("date", ""))), line))
+    for scanned, archive in filtered_dups:
+        line = format_list_line(
+            _display_path(str(scanned["path"])), "[DUP]", scanned, archive, args.tolerance
+        )
+        entries.append((_list_date_sort_key(str(scanned.get("date", ""))), line))
 
-    if args.missing or show_all:
-        for entry in missing:
-            path = str(entry["path"])
-            slug = read_camera_slug(path)
-            if args.camera and (slug or "unknown") != args.camera:
-                continue
-            line = format_list_line(_display_path(path), "[MISS]", entry, camera_slug=slug)
-            entries.append((_list_date_sort_key(str(entry.get("date", ""))), line))
+    for entry in filtered_miss:
+        slug = read_camera_slug(str(entry["path"]))
+        line = format_list_line(
+            _display_path(str(entry["path"])), "[MISS]", entry, camera_slug=slug
+        )
+        entries.append((_list_date_sort_key(str(entry.get("date", ""))), line))
 
     entries.sort(key=lambda t: t[0])
     for _, line in entries:
@@ -937,27 +937,7 @@ def run(args: argparse.Namespace) -> int:
                 print(f"Loaded {source.name}.")
         print(f"Total: {format_count(len(scanned_files))} files scanned.")
 
-        # Apply filters to build filtered lists
-        show_all = not args.duplicates and not args.missing
-        filtered_dups = list(duplicates) if args.duplicates or show_all else []
-        filtered_miss = list(missing) if args.missing or show_all else []
-
-        if args.name_changed:
-            filtered_dups = [d for d in filtered_dups if _dup_has_name_change(d)]
-        if args.date_changed:
-            filtered_dups = [d for d in filtered_dups if _dup_has_date_change(d, args.tolerance)]
-        if args.camera:
-            filtered_dups = [
-                d
-                for d in filtered_dups
-                if (read_camera_slug(str(d[0]["path"])) or "unknown") == args.camera
-            ]
-            filtered_miss = [
-                m
-                for m in filtered_miss
-                if (read_camera_slug(str(m["path"])) or "unknown") == args.camera
-            ]
-
+        filtered_dups, filtered_miss = _apply_filters(args, duplicates, missing)
         all_files: list[dict[str, str | int]] = [s for s, _ in filtered_dups] + filtered_miss
         camera_stats = compute_camera_stats(all_files) if all_files else None
         display_summary(filtered_dups, filtered_miss, camera_stats)

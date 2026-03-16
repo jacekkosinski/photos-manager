@@ -472,32 +472,6 @@ class TestGenerateCommands:
 
 
 @pytest.mark.unit
-class TestDisplayCommands:
-    """Tests for display_commands function."""
-
-    def test_display_commands(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test displaying commands."""
-        commands = [
-            "mkdir -p /target/dir00001",
-            "mv -iv /scan/file.txt /target/dir00001/file.txt",
-        ]
-
-        find.display_commands(commands)
-
-        captured = capsys.readouterr()
-        lines = captured.out.strip().split("\n")
-        assert len(lines) == 2
-        assert lines[0] == "mkdir -p /target/dir00001"
-        assert lines[1] == "mv -iv /scan/file.txt /target/dir00001/file.txt"
-
-    def test_display_commands_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test displaying empty command list."""
-        find.display_commands([])
-        captured = capsys.readouterr()
-        assert captured.out == ""
-
-
-@pytest.mark.unit
 class TestProcessListMode:
     """Tests for process_list_mode output format."""
 
