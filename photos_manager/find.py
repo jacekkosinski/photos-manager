@@ -348,10 +348,8 @@ def compute_camera_stats(
         counts[slug] = counts.get(slug, 0) + 1
         sizes[slug] = sizes.get(slug, 0) + size
         if date_val is not None:
-            if slug not in date_mins or date_val < date_mins[slug]:
-                date_mins[slug] = date_val
-            if slug not in date_maxs or date_val > date_maxs[slug]:
-                date_maxs[slug] = date_val
+            date_mins[slug] = min(date_mins.get(slug, date_val), date_val)
+            date_maxs[slug] = max(date_maxs.get(slug, date_val), date_val)
 
     return {
         slug: (counts[slug], sizes[slug], date_mins.get(slug), date_maxs.get(slug))
@@ -614,96 +612,6 @@ def format_list_line(
     return f"{prefix}  {suffix}" if suffix else prefix
 
 
-def display_duplicates(
-    duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
-    tolerance: int,
-) -> tuple[int, int]:
-    """Display duplicate files with warnings.
-
-    Args:
-        duplicates: List of (scanned_entry, archive_entry) tuples
-        tolerance: Timestamp tolerance in seconds
-
-    Returns:
-        Tuple of (filename_warnings, timestamp_warnings) counts
-    """
-    if not duplicates:
-        return 0, 0
-
-    print("\nDuplicates (files found in archive):\n")
-
-    filename_warnings = 0
-    timestamp_warnings = 0
-
-    for idx, (scanned, archive) in enumerate(duplicates, 1):
-        size = int(scanned["size"])
-
-        # Date field — show delta inline if dates differ beyond tolerance
-        scanned_date_str = str(scanned.get("date", ""))
-        archive_date_str = str(archive.get("date", ""))
-        date_display = scanned_date_str
-        try:
-            scanned_dt = datetime.fromisoformat(scanned_date_str)
-            archive_dt = datetime.fromisoformat(archive_date_str)
-            date_display = scanned_dt.isoformat(sep=" ")
-            delta_s = int((archive_dt - scanned_dt).total_seconds())
-            if abs(delta_s) > tolerance:
-                timestamp_warnings += 1
-                delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
-                date_display = (
-                    f"{date_display} -> {archive_dt.isoformat(sep=' ')} (delta: {delta_str})"
-                )
-        except ValueError:
-            pass
-
-        # Filename check — case-insensitive; only flag real name changes
-        scanned_name = Path(str(scanned["path"])).name
-        archive_name = Path(str(archive["path"])).name
-        has_name_diff = scanned_name.lower() != archive_name.lower()
-        if has_name_diff:
-            filename_warnings += 1
-
-        print(f"  [{idx}/{len(duplicates)}] {scanned['path']}")
-        print(f"        date: {date_display}")
-        print(f"        size: {size:_} bytes ({human_size(size)})".replace("_", " "))
-        print(f"        SHA1: {scanned['sha1']}")
-        print(f"        MD5:  {scanned['md5']}")
-        if has_name_diff:
-            print(f"        name: {scanned_name} -> {archive_name}")
-        print(f"        ref:  {archive['path']}")
-        print()
-
-    return filename_warnings, timestamp_warnings
-
-
-def display_missing(missing: list[dict[str, str | int]]) -> None:
-    """Display files missing from archive.
-
-    Args:
-        missing: List of scanned file entries not in archive
-    """
-    if not missing:
-        return
-
-    print("\nMissing from archive (files NOT in archive):\n")
-
-    for idx, entry in enumerate(missing, 1):
-        size = int(entry["size"])
-        try:
-            date_display = datetime.fromisoformat(str(entry.get("date", ""))).isoformat(sep=" ")
-        except ValueError:
-            date_display = str(entry.get("date", ""))
-        print(f"  [{idx}/{len(missing)}] {entry['path']}")
-        print(f"        date: {date_display}")
-        print(f"        size: {size:_} bytes ({human_size(size)})".replace("_", " "))
-        print(f"        SHA1: {entry['sha1']}")
-        print(f"        MD5:  {entry['md5']}")
-        slug = read_camera_slug(str(entry["path"]))
-        if slug:
-            print(f"        camera: {slug}")
-        print()
-
-
 def display_summary(
     duplicates: list[tuple[dict[str, str | int], dict[str, str | int]]],
     missing: list[dict[str, str | int]],
@@ -722,8 +630,10 @@ def display_summary(
     miss_size = sum(int(entry["size"]) for entry in missing)
 
     print()
-    print(f"{format_count(len(duplicates))} duplicates found ({human_size(dup_size)}).")
-    print(f"{format_count(len(missing))} files missing ({human_size(miss_size)}).")
+    if duplicates:
+        print(f"{format_count(len(duplicates))} duplicates found ({human_size(dup_size)}).")
+    if missing:
+        print(f"{format_count(len(missing))} files missing ({human_size(miss_size)}).")
 
     if not camera_stats:
         return
@@ -820,20 +730,11 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Starting number for target directory numbering (default: 1)",
     )
     parser.add_argument(
-        "-s",
-        "--stat",
-        action="store_true",
-        help="Show camera statistics (count, size, date range per camera) in summary",
-    )
-    parser.add_argument(
         "-k",
         "--camera",
         type=str,
         metavar="SLUG",
-        help=(
-            "Filter --move/--copy/--list to files matching this camera slug"
-            " (e.g. canon-eos-5d-mark-iv)"
-        ),
+        help="Filter results to files matching this camera slug (e.g. canon-eos-5d-mark-iv)",
     )
 
 
@@ -846,34 +747,18 @@ def validate_args(args: argparse.Namespace) -> None:
     Raises:
         SystemExit: On any validation error
     """
-    # --camera requires --move, --copy, or --list
-    if args.camera and not args.move and not args.copy and not args.list:
-        raise SystemExit(
-            "Error: --camera requires --move, --copy, or --list\n"
-            "Use -h or --help for usage information"
-        )
-
-    # -d/-m required for --move/--copy (need to know which files to process)
-    if (args.move or args.copy) and not args.show_duplicates and not args.show_missing:
-        raise SystemExit(
-            "Error: At least one of -d/--show-duplicates or -m/--show-missing is required "
-            "when using --move or --copy\n"
-            "Use -h or --help for usage information"
-        )
-
-    # --stat applies to summary mode only
-    if args.stat and (args.list or args.move or args.copy):
-        raise SystemExit(
-            "Error: --stat can only be used in summary mode "
-            "(incompatible with --list, --move, --copy)\n"
-            "Use -h or --help for usage information"
-        )
-
     # Validate mutually exclusive options
     if args.move and args.copy:
         raise SystemExit("Error: --move and --copy are mutually exclusive")
     if (args.move or args.copy) and args.list:
         raise SystemExit("Error: --move/--copy cannot be used with --list")
+
+    # -n/--filter-name, -D/--filter-date, -T/--tolerance require -d/--show-duplicates
+    if (args.filter_name or args.filter_date) and not args.show_duplicates:
+        raise SystemExit(
+            "Error: --filter-name and --filter-date require -d/--show-duplicates\n"
+            "Use -h or --help for usage information"
+        )
     # Validate inputs
     if not Path(args.json_file).exists():
         raise SystemExit(f"Error: JSON file not found: {args.json_file}")
@@ -897,10 +782,11 @@ def process_command_mode(
         duplicates: List of duplicate file pairs
         missing: List of missing files
     """
+    show_all = not args.show_duplicates and not args.show_missing
     files_to_process: list[dict[str, str | int]] = []
-    if args.show_duplicates:
+    if args.show_duplicates or show_all:
         files_to_process.extend([scanned for scanned, _ in duplicates])
-    if args.show_missing:
+    if args.show_missing or show_all:
         files_to_process.extend(missing)
 
     if not files_to_process:
@@ -909,7 +795,9 @@ def process_command_mode(
     # Filter to a specific camera slug when --camera is given
     if args.camera:
         files_to_process = [
-            f for f in files_to_process if read_camera_slug(str(f["path"])) == args.camera
+            f
+            for f in files_to_process
+            if (read_camera_slug(str(f["path"])) or "unknown") == args.camera
         ]
         if not files_to_process:
             return
@@ -975,7 +863,11 @@ def process_list_mode(
         if args.filter_date:
             filtered = [d for d in filtered if _dup_has_date_change(d, args.tolerance)]
         if args.camera:
-            filtered = [d for d in filtered if read_camera_slug(str(d[0]["path"])) == args.camera]
+            filtered = [
+                d
+                for d in filtered
+                if (read_camera_slug(str(d[0]["path"])) or "unknown") == args.camera
+            ]
         for scanned, archive in filtered:
             line = format_list_line(
                 _display_path(str(scanned["path"])), "[DUP]", scanned, archive, args.tolerance
@@ -986,7 +878,7 @@ def process_list_mode(
         for entry in missing:
             path = str(entry["path"])
             slug = read_camera_slug(path)
-            if args.camera and slug != args.camera:
+            if args.camera and (slug or "unknown") != args.camera:
                 continue
             line = format_list_line(_display_path(path), "[MISS]", entry, camera_slug=slug)
             entries.append((_list_date_sort_key(str(entry.get("date", ""))), line))
@@ -1038,15 +930,29 @@ def run(args: argparse.Namespace) -> int:
                 print(f"Loaded {source.name}.")
         print(f"Total: {format_count(len(scanned_files))} files scanned.")
 
-        if args.show_duplicates:
-            display_duplicates(duplicates, args.tolerance)
-        if args.show_missing:
-            display_missing(missing)
+        # Apply filters to build filtered lists
+        show_all = not args.show_duplicates and not args.show_missing
+        filtered_dups = list(duplicates) if args.show_duplicates or show_all else []
+        filtered_miss = list(missing) if args.show_missing or show_all else []
 
-        camera_stats: dict[str, tuple[int, int, str | None, str | None]] | None = None
-        if args.stat:
-            all_files: list[dict[str, str | int]] = [s for s, _ in duplicates] + missing
-            camera_stats = compute_camera_stats(all_files)
-        display_summary(duplicates, missing, camera_stats)
+        if args.filter_name:
+            filtered_dups = [d for d in filtered_dups if _dup_has_name_change(d)]
+        if args.filter_date:
+            filtered_dups = [d for d in filtered_dups if _dup_has_date_change(d, args.tolerance)]
+        if args.camera:
+            filtered_dups = [
+                d
+                for d in filtered_dups
+                if (read_camera_slug(str(d[0]["path"])) or "unknown") == args.camera
+            ]
+            filtered_miss = [
+                m
+                for m in filtered_miss
+                if (read_camera_slug(str(m["path"])) or "unknown") == args.camera
+            ]
+
+        all_files: list[dict[str, str | int]] = [s for s, _ in filtered_dups] + filtered_miss
+        camera_stats = compute_camera_stats(all_files) if all_files else None
+        display_summary(filtered_dups, filtered_miss, camera_stats)
 
     return os.EX_OK

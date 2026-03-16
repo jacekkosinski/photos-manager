@@ -280,54 +280,6 @@ class TestFindDuplicates:
 
 
 @pytest.mark.unit
-class TestSizeDisplay:
-    """Tests for size display format (space as thousands separator)."""
-
-    def test_display_missing_uses_space_thousands_separator(
-        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Test that display_missing uses space as thousands separator."""
-        monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
-        missing = [
-            {
-                "path": "/scan/file.txt",
-                "size": 1234567,
-                "sha1": "abc",
-                "md5": "def",
-                "date": "2024-01-01T12:00:00+01:00",
-            }
-        ]
-        find.display_missing(missing)
-        captured = capsys.readouterr()
-        assert "1 234 567 bytes" in captured.out
-
-    def test_display_duplicates_uses_space_thousands_separator(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test that display_duplicates uses space as thousands separator."""
-        duplicates = [
-            (
-                {
-                    "path": "/scan/file.txt",
-                    "size": 3217638,
-                    "sha1": "abc",
-                    "md5": "def",
-                    "date": "2024-01-01T12:00:00+01:00",
-                },
-                {
-                    "path": "/archive/file.txt",
-                    "size": 3217638,
-                    "sha1": "abc",
-                    "md5": "def",
-                    "date": "2024-01-01T12:00:00+01:00",
-                },
-            )
-        ]
-        find.display_duplicates(duplicates, 1)
-        captured = capsys.readouterr()
-        assert "3 217 638 bytes" in captured.out
-
-
 @pytest.mark.unit
 class TestGroupFiles:
     """Tests for group_files_by_directory function."""
@@ -556,7 +508,6 @@ class TestProcessListMode:
             "filter_name": False,
             "filter_date": False,
             "tolerance": 0,
-            "stat": False,
             "camera": None,
         }
         defaults.update(kwargs)
@@ -754,175 +705,6 @@ class TestProcessListMode:
 class TestDisplayFunctions:
     """Tests for display functions."""
 
-    def test_display_duplicates_basic(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test displaying duplicates without warnings."""
-        duplicates = [
-            (
-                {
-                    "path": "/scan/file.txt",
-                    "size": 100,
-                    "sha1": "abc",
-                    "md5": "def",
-                    "date": "2024-01-01T12:00:00",
-                },
-                {
-                    "path": "/archive/file.txt",
-                    "size": 100,
-                    "sha1": "abc",
-                    "md5": "def",
-                    "date": "2024-01-01T12:00:00",
-                },
-            )
-        ]
-
-        fw, tw = find.display_duplicates(duplicates, 1)
-
-        captured = capsys.readouterr()
-        assert "Duplicates" in captured.out
-        assert "/scan/file.txt" in captured.out
-        assert "/archive/file.txt" in captured.out
-        assert fw == 0
-        assert tw == 0
-
-    def test_display_duplicates_with_filename_warnings(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test displaying duplicates with real filename change (case-insensitive diff)."""
-        duplicates = [
-            (
-                {
-                    "path": "/scan/file1.txt",
-                    "size": 100,
-                    "sha1": "abc",
-                    "md5": "def",
-                    "date": "2024-01-01T12:00:00",
-                },
-                {
-                    "path": "/archive/file2.txt",
-                    "size": 100,
-                    "sha1": "abc",
-                    "md5": "def",
-                    "date": "2024-01-01T12:00:00",
-                },
-            )
-        ]
-
-        fw, tw = find.display_duplicates(duplicates, 1)
-
-        captured = capsys.readouterr()
-        assert "name: file1.txt -> file2.txt" in captured.out
-        assert captured.err == ""
-        assert fw == 1
-        assert tw == 0
-
-    def test_display_duplicates_case_only_filename_ignored(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test that case-only filename differences are not flagged."""
-        duplicates = [
-            (
-                {
-                    "path": "/scan/FILE.TXT",
-                    "size": 100,
-                    "sha1": "abc",
-                    "md5": "def",
-                    "date": "2024-01-01T12:00:00",
-                },
-                {
-                    "path": "/archive/file.txt",
-                    "size": 100,
-                    "sha1": "abc",
-                    "md5": "def",
-                    "date": "2024-01-01T12:00:00",
-                },
-            )
-        ]
-
-        fw, tw = find.display_duplicates(duplicates, 1)
-
-        captured = capsys.readouterr()
-        assert "name:" not in captured.out
-        assert captured.err == ""
-        assert fw == 0
-        assert tw == 0
-
-    def test_display_duplicates_with_timestamp_warnings(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test displaying duplicates with date change shown inline."""
-        dt1 = datetime.now(UTC)
-        dt2 = dt1 + timedelta(seconds=100)
-        duplicates = [
-            (
-                {
-                    "path": "/scan/file.txt",
-                    "size": 100,
-                    "sha1": "abc",
-                    "md5": "def",
-                    "date": dt1.isoformat(),
-                },
-                {
-                    "path": "/archive/file.txt",
-                    "size": 100,
-                    "sha1": "abc",
-                    "md5": "def",
-                    "date": dt2.isoformat(),
-                },
-            )
-        ]
-
-        fw, tw = find.display_duplicates(duplicates, 1)
-
-        captured = capsys.readouterr()
-        assert "-> " in captured.out
-        assert "delta: +100s" in captured.out
-        assert captured.err == ""
-        assert fw == 0
-        assert tw == 1
-
-    def test_display_duplicates_empty(self) -> None:
-        """Test displaying empty duplicates list."""
-        fw, tw = find.display_duplicates([], 1)
-        assert fw == 0
-        assert tw == 0
-
-    def test_display_missing_basic(
-        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Test displaying missing files."""
-        monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
-        missing = [{"path": "/scan/new.txt", "size": 100, "sha1": "xyz", "md5": "uvw"}]
-
-        find.display_missing(missing)
-
-        captured = capsys.readouterr()
-        assert "Missing from archive" in captured.out
-        assert "/scan/new.txt" in captured.out
-
-    def test_display_missing_empty(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test displaying empty missing list."""
-        find.display_missing([])
-        captured = capsys.readouterr()
-        assert captured.out == ""
-
-    def test_display_missing_shows_camera_slug(
-        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Camera slug is shown when EXIF is readable."""
-        monkeypatch.setattr(find, "read_camera_slug", lambda _: "canon-eos-5d-mark-iv")
-        missing = [{"path": "/scan/img.jpg", "size": 100, "sha1": "abc", "md5": "def"}]
-        find.display_missing(missing)
-        assert "camera: canon-eos-5d-mark-iv" in capsys.readouterr().out
-
-    def test_display_missing_omits_camera_when_no_exif(
-        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Camera field is omitted when EXIF returns None."""
-        monkeypatch.setattr(find, "read_camera_slug", lambda _: None)
-        missing = [{"path": "/scan/img.jpg", "size": 100, "sha1": "abc", "md5": "def"}]
-        find.display_missing(missing)
-        assert "camera" not in capsys.readouterr().out
-
     def test_display_summary(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Test displaying summary."""
         duplicates = [
@@ -996,7 +778,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1041,7 +822,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1051,7 +831,7 @@ class TestMain:
         assert "[MISS]" in captured.out
 
     def test_run_show_duplicates(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test run with -d flag showing duplicates."""
+        """Test run with -d flag filters summary to duplicates only."""
         # Create archive
         archive_dir = tmp_path / "archive"
         archive_dir.mkdir()
@@ -1090,18 +870,17 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
-        assert "Duplicates" in captured.out
         assert "duplicates found" in captured.out
+        assert "files missing" not in captured.out
 
     def test_run_show_missing(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test run with -m flag showing missing files."""
+        """Test run with -m flag filters summary to missing files only."""
         # Create empty archive
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
@@ -1124,14 +903,14 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
-        assert "Missing from archive" in captured.out
+        assert "files missing" in captured.out
+        assert "duplicates found" not in captured.out
 
     def test_run_with_filename_check(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
@@ -1184,7 +963,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1250,7 +1028,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1325,7 +1102,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1357,7 +1133,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         with pytest.raises(SystemExit, match="not found"):
@@ -1381,7 +1156,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         with pytest.raises(SystemExit, match="not found"):
@@ -1425,17 +1199,14 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
         assert result == os.EX_OK
 
         captured = capsys.readouterr()
-        assert "Duplicates" in captured.out
-        assert "/scan/photo.jpg" in captured.out
-        assert "Missing from archive" in captured.out
-        assert "/scan/new.jpg" in captured.out
+        assert "duplicates found" in captured.out
+        assert "files missing" in captured.out
 
     def test_run_all_flags(self, tmp_path: Path) -> None:
         """Test run with all flags enabled."""
@@ -1476,7 +1247,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1523,7 +1293,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1565,7 +1334,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1621,7 +1389,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1667,7 +1434,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1721,7 +1487,6 @@ class TestMain:
             copy=str(target_dir),
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1755,7 +1520,6 @@ class TestMain:
             copy=str(target_dir),
             start=1,
             camera=None,
-            stat=False,
         )
 
         with pytest.raises(SystemExit, match="mutually exclusive"):
@@ -1783,7 +1547,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         with pytest.raises(SystemExit, match="cannot be used with --list"):
@@ -1811,7 +1574,6 @@ class TestMain:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -1850,7 +1612,6 @@ class TestMain:
             copy=None,
             start=100,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -2052,7 +1813,6 @@ class TestMultipleSources:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -2093,7 +1853,6 @@ class TestMultipleSources:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -2134,7 +1893,6 @@ class TestMultipleSources:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -2164,7 +1922,6 @@ class TestMultipleSources:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         with pytest.raises(SystemExit, match="Source not found"):
@@ -2541,7 +2298,6 @@ class TestRunCameraFilter:
             copy=None,
             start=1,
             camera="canon-eos-5d-mark-iv",
-            stat=False,
         )
 
         result = find.run(args)
@@ -2579,7 +2335,6 @@ class TestRunCameraFilter:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
@@ -2589,12 +2344,23 @@ class TestRunCameraFilter:
         assert "file1.jpg" in out
         assert "file2.jpg" in out
 
-    def test_camera_without_move_or_copy_raises(self, tmp_path: Path) -> None:
-        """--camera without --move/--copy raises SystemExit."""
-        json_file = tmp_path / "archive.json"
-        json_file.write_text("[]")
+    def test_camera_unknown_selects_files_without_exif(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--camera unknown selects files whose EXIF cannot be read."""
+        json_file = self._make_archive_json(tmp_path, [])
         scan_dir = tmp_path / "scan"
         scan_dir.mkdir()
+        known_file = scan_dir / "canon.jpg"
+        known_file.write_text("canon content")
+        unknown_file = scan_dir / "noexif.jpg"
+        unknown_file.write_text("no exif content")
+
+        slugs = {str(known_file.resolve()): "canon-eos-5d-mark-iv"}
+        monkeypatch.setattr(find, "read_camera_slug", lambda p: slugs.get(p))
+
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
 
         args = argparse.Namespace(
             json_file=str(json_file),
@@ -2605,20 +2371,60 @@ class TestRunCameraFilter:
             filter_date=False,
             tolerance=0,
             list=False,
+            move=str(target_dir),
+            copy=None,
+            start=1,
+            camera="unknown",
+        )
+
+        result = find.run(args)
+        assert result == os.EX_OK
+
+        out = capsys.readouterr().out
+        assert "noexif.jpg" in out
+        assert "canon.jpg" not in out
+
+    def test_camera_unknown_in_list_mode(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--camera unknown with --list shows only files without EXIF."""
+        json_file = self._make_archive_json(tmp_path, [])
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+        known_file = scan_dir / "sony.jpg"
+        known_file.write_text("sony content")
+        unknown_file = scan_dir / "noexif.jpg"
+        unknown_file.write_text("no exif content")
+
+        slugs = {str(known_file.resolve()): "sony-dsc-w170"}
+        monkeypatch.setattr(find, "read_camera_slug", lambda p: slugs.get(p))
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=True,
+            filter_name=False,
+            filter_date=False,
+            tolerance=0,
+            list=True,
             move=None,
             copy=None,
             start=1,
-            camera="canon-eos-5d-mark-iv",
-            stat=False,
+            camera="unknown",
         )
 
-        with pytest.raises(SystemExit, match="--camera requires --move, --copy, or --list"):
-            find.validate_args(args)
+        result = find.run(args)
+        assert result == os.EX_OK
 
-    def test_stats_mode_shows_camera_counts(
+        out = capsys.readouterr().out
+        assert "noexif.jpg" in out
+        assert "sony.jpg" not in out
+
+    def test_summary_always_shows_camera_counts(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """--stat flag includes camera stats table in summary."""
+        """Camera stats table always appears in summary mode."""
         json_file = self._make_archive_json(tmp_path, [])
         scan_dir = tmp_path / "scan"
         scan_dir.mkdir()
@@ -2639,7 +2445,6 @@ class TestRunCameraFilter:
             copy=None,
             start=1,
             camera=None,
-            stat=True,
         )
 
         result = find.run(args)
@@ -2649,10 +2454,10 @@ class TestRunCameraFilter:
         assert "Cameras detected:" in out
         assert "sony-dsc-w170" in out
 
-    def test_show_missing_mode_no_camera_counts(
+    def test_summary_with_missing_filter_shows_camera_counts(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """With -m flag camera counts are NOT shown in summary."""
+        """With -m flag camera counts are shown for missing files."""
         json_file = self._make_archive_json(tmp_path, [])
         scan_dir = tmp_path / "scan"
         scan_dir.mkdir()
@@ -2673,14 +2478,14 @@ class TestRunCameraFilter:
             copy=None,
             start=1,
             camera=None,
-            stat=False,
         )
 
         result = find.run(args)
         assert result == os.EX_OK
 
         out = capsys.readouterr().out
-        assert "Cameras detected:" not in out
+        assert "Cameras detected:" in out
+        assert "sony-dsc-w170" in out
 
     def test_camera_filter_with_copy(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
@@ -2716,7 +2521,6 @@ class TestRunCameraFilter:
             copy=str(target_dir),
             start=1,
             camera="apple-iphone-14-pro",
-            stat=False,
         )
 
         result = find.run(args)
@@ -2758,7 +2562,6 @@ class TestRunCameraFilter:
             copy=None,
             start=1,
             camera="canon-eos-5d-mark-iv",
-            stat=False,
         )
 
         result = find.run(args)
@@ -2768,34 +2571,8 @@ class TestRunCameraFilter:
         assert "canon.jpg" in out
         assert "apple.jpg" not in out
 
-    def test_camera_filter_list_no_move_copy_is_valid(self, tmp_path: Path) -> None:
-        """--camera with --list does not raise (no --move/--copy required)."""
-        json_file = tmp_path / "archive.json"
-        json_file.write_text("[]")
-        scan_dir = tmp_path / "scan"
-        scan_dir.mkdir()
-
-        args = argparse.Namespace(
-            json_file=str(json_file),
-            source=[str(scan_dir)],
-            show_duplicates=False,
-            show_missing=True,
-            filter_name=False,
-            filter_date=False,
-            tolerance=0,
-            list=True,
-            move=None,
-            copy=None,
-            start=1,
-            camera="sony-dsc-w170",
-            stat=False,
-        )
-
-        # Should not raise
-        find.validate_args(args)
-
-    def test_stat_with_list_raises(self, tmp_path: Path) -> None:
-        """--stat combined with --list raises SystemExit."""
+    def test_camera_in_summary_mode_is_valid(self, tmp_path: Path) -> None:
+        """--camera works in summary mode without --list/--move/--copy."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
         scan_dir = tmp_path / "scan"
@@ -2809,19 +2586,43 @@ class TestRunCameraFilter:
             filter_name=False,
             filter_date=False,
             tolerance=0,
-            list=True,
+            list=False,
+            move=None,
+            copy=None,
+            start=1,
+            camera="sony-dsc-w170",
+        )
+
+        # Should not raise
+        find.validate_args(args)
+
+    def test_filter_name_without_show_duplicates_raises(self, tmp_path: Path) -> None:
+        """--filter-name without -d raises SystemExit."""
+        json_file = tmp_path / "archive.json"
+        json_file.write_text("[]")
+        scan_dir = tmp_path / "scan"
+        scan_dir.mkdir()
+
+        args = argparse.Namespace(
+            json_file=str(json_file),
+            source=[str(scan_dir)],
+            show_duplicates=False,
+            show_missing=False,
+            filter_name=True,
+            filter_date=False,
+            tolerance=0,
+            list=False,
             move=None,
             copy=None,
             start=1,
             camera=None,
-            stat=True,
         )
 
-        with pytest.raises(SystemExit, match="--stat can only be used in summary mode"):
+        with pytest.raises(SystemExit, match="--filter-name and --filter-date require"):
             find.validate_args(args)
 
-    def test_stat_with_move_raises(self, tmp_path: Path) -> None:
-        """--stat combined with --move raises SystemExit."""
+    def test_filter_date_without_show_duplicates_raises(self, tmp_path: Path) -> None:
+        """--filter-date without -d raises SystemExit."""
         json_file = tmp_path / "archive.json"
         json_file.write_text("[]")
         scan_dir = tmp_path / "scan"
@@ -2833,15 +2634,14 @@ class TestRunCameraFilter:
             show_duplicates=False,
             show_missing=True,
             filter_name=False,
-            filter_date=False,
+            filter_date=True,
             tolerance=0,
             list=False,
-            move=str(tmp_path / "target"),
+            move=None,
             copy=None,
             start=1,
             camera=None,
-            stat=True,
         )
 
-        with pytest.raises(SystemExit, match="--stat can only be used in summary mode"):
+        with pytest.raises(SystemExit, match="--filter-name and --filter-date require"):
             find.validate_args(args)
