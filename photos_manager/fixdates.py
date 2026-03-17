@@ -21,7 +21,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from photos_manager.common import TIME_FMT, TS_FMT, load_json
+from photos_manager.common import format_timestamp_change, load_json
 
 _TAG_WIDTH = 6  # max(len("[FILE]"), len("[JSON]")) — "[DIR]" is 5, padded to 6
 _TAG_FILE = "[FILE]"
@@ -63,19 +63,16 @@ def format_change_line(
         >>> "->" in line and "delta:" in line
         True
     """
-    old_dt = datetime.fromtimestamp(old_ts)
-    new_dt = datetime.fromtimestamp(new_ts)
-    if old_dt.date() != new_dt.date():
-        old_str = old_dt.strftime(TS_FMT)
-        new_str = new_dt.strftime(TS_FMT)
-    else:
-        old_str = old_dt.strftime(TIME_FMT)
-        new_str = new_dt.strftime(TIME_FMT)
-    delta_s = int(new_ts - old_ts)
-    delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
-    suffix = f"delta: {delta_str}, src: {src}" if src is not None else f"delta: {delta_str}"
-    name_col = f"{name:<{name_width}}" if name_width else name
-    return f"{name_col}  {tag:<{_TAG_WIDTH}}  {old_str} → {new_str} ({suffix})"
+    extra = f", src: {src}" if src is not None else ""
+    return format_timestamp_change(
+        name,
+        tag,
+        datetime.fromtimestamp(old_ts),
+        datetime.fromtimestamp(new_ts),
+        name_width=name_width,
+        tag_width=_TAG_WIDTH,
+        extra=extra,
+    )
 
 
 def get_newest_files(

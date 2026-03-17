@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from photos_manager.common import TIME_FMT, TS_FMT, load_json
+from photos_manager.common import TIME_FMT, format_timestamp_change, load_json
 
 # Optional EXIF support
 try:
@@ -133,15 +133,7 @@ def format_report_line(
         >>> "(delta: +3600s)" in line
         True
     """
-    delta_s = int((new_dt - old_dt).total_seconds())
-    delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
-    if old_dt.date() != new_dt.date():
-        old_str = old_dt.strftime(TS_FMT)
-        new_str = new_dt.strftime(TS_FMT)
-    else:
-        old_str = old_dt.strftime(TIME_FMT)
-        new_str = new_dt.strftime(TIME_FMT)
-    core = f"{filename}  {tag:<{_TAG_WIDTH}}  {old_str} → {new_str} (delta: {delta_str})"
+    core = format_timestamp_change(filename, tag, old_dt, new_dt, tag_width=_TAG_WIDTH)
 
     if tag == "[GPS]":
         return core  # GPS-only fallback — no EXIF available

@@ -10,6 +10,7 @@ import json
 import os
 import pwd
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # Constants
@@ -18,6 +19,54 @@ CHUNK_SIZE = 65536  # 64KB chunks for file operations
 # Timestamp display formats
 TS_FMT = "%Y-%m-%d %H:%M:%S"
 TIME_FMT = "%H:%M:%S"
+
+
+def format_timestamp_change(
+    name: str,
+    tag: str,
+    old_dt: datetime,
+    new_dt: datetime,
+    *,
+    name_width: int = 0,
+    tag_width: int = 6,
+    extra: str = "",
+) -> str:
+    """Format one output line describing a timestamp change.
+
+    Produces an aligned line with full date when the calendar date differs,
+    time-only otherwise:
+    ``name  [TAG]  HH:MM:SS → HH:MM:SS (delta: +Xs[extra])``
+
+    Args:
+        name: Display name (file path, directory with trailing ``/``, etc.).
+        tag: Type tag, e.g. ``[FILE]``, ``[DIR]``, ``[EXIF+GPS]``.
+        old_dt: Original datetime.
+        new_dt: Target datetime.
+        name_width: Left-justify name column to this width (0 = no padding).
+        tag_width: Left-justify tag column to this width.
+        extra: Additional text appended inside the trailing parentheses
+            after the delta, e.g. ``", src: path"``.
+
+    Returns:
+        Formatted change line string.
+
+    Examples:
+        >>> from datetime import datetime
+        >>> old = datetime(2023, 5, 14, 10, 0, 0)
+        >>> new = datetime(2023, 5, 14, 11, 0, 0)
+        >>> "delta: +3600s" in format_timestamp_change("f.jpg", "[FILE]", old, new)
+        True
+    """
+    if old_dt.date() != new_dt.date():
+        old_str = old_dt.strftime(TS_FMT)
+        new_str = new_dt.strftime(TS_FMT)
+    else:
+        old_str = old_dt.strftime(TIME_FMT)
+        new_str = new_dt.strftime(TIME_FMT)
+    delta_s = int((new_dt - old_dt).total_seconds())
+    delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
+    name_col = f"{name:<{name_width}}" if name_width else name
+    return f"{name_col}  {tag:<{tag_width}}  {old_str} → {new_str} (delta: {delta_str}{extra})"
 
 
 def load_json(file_path: str) -> list[dict[str, str | int]]:
