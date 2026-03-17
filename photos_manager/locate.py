@@ -1,17 +1,17 @@
-"""locate - Find archive directories for new photos based on timestamps.
+"""locate - Find archive directories for new photos using series-based gap-fitting.
 
-Scans a directory of new photos and searches archive JSON metadata to find
-where each file belongs based on modification timestamp proximity. Can display
-proposed target directories, interleaved file listings, or generate shell
-scripts with move commands.
+Groups new photos by filename prefix into series, then finds gaps in
+archive numbering where each series fits. Validates matches with temporal
+ordering at series boundaries. Splits series when archive already contains
+files within the series range.
 
 Usage:
     photos locate /path/to/new/photos archive.json
     photos locate /path/to/new/photos archive.json --list
     photos locate /path/to/new/photos archive.json -f canon-eos -f apple-ipad
     photos locate /path/to/new/photos archive.json --output move.sh
-    photos locate /path/to/new/photos archive.json --seq
-    photos locate /path/to/new/photos archive.json --seq --prefix
+    photos locate /path/to/new/photos archive.json --no-prefix
+    photos locate /path/to/new/photos archive.json --exif
 """
 
 import argparse
@@ -20,10 +20,401 @@ import os
 import re
 import stat
 import sys
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
 from photos_manager.common import load_json, validate_directory
+
+# Optional EXIF support
+try:
+    import piexif
+
+    _PIEXIF_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _PIEXIF_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
+# Data structures
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class NewFile:
+    """A new file to be placed into the archive."""
+
+    path: str
+    prefix: str | None  # e.g. "IMG_", None if no seq number
+    seq: int | None
+    date: datetime
+
+
+@dataclass
+class Series:
+    """A group of new files sharing the same filename prefix."""
+
+    prefix: str | None
+    files: list[NewFile]
+    seq_range: tuple[int, int] | None  # (min_seq, max_seq), None if no seq
+
+
+@dataclass
+class Collision:
+    """A new file whose prefix+seq already exists in the archive."""
+
+    new_file: NewFile
+    archive_path: str  # full path in archive
+
+
+@dataclass
+class GapMatch:
+    """A matched gap in an archive directory for a series."""
+
+    directory: str
+    gap: tuple[int | None, int | None]  # (before_seq, after_seq)
+    time_ok: bool
+    time_detail: str  # e.g. "ok", "FAIL", description
+
+
+@dataclass
+class SeriesResult:
+    """Result of matching a series to archive directories."""
+
+    series: Series
+    matches: list[GapMatch] = field(default_factory=list)
+    best_directory: str | None = None
+    ambiguous: bool = False
+
+
+# ---------------------------------------------------------------------------
+# EXIF date reading
+# ---------------------------------------------------------------------------
+
+
+def _read_exif_date(path: str) -> datetime | None:
+    """Try reading EXIF DateTimeOriginal. Returns None on any failure."""
+    try:
+        exif_dict = piexif.load(path)
+        exif_ifd = exif_dict.get("Exif", {})
+        dt_bytes = exif_ifd.get(piexif.ExifIFD.DateTimeOriginal)
+        if dt_bytes:
+            dt_str = dt_bytes.decode("ascii", errors="replace").strip("\x00 ")
+            dt = datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S")
+            return dt.replace(tzinfo=UTC).astimezone()
+    except Exception:
+        return None
+    return None
+
+
+def read_file_date(path: str, *, use_exif: bool = False) -> datetime:
+    """Read file date from EXIF (optional) or mtime.
+
+    Args:
+        path: Path to the file.
+        use_exif: If True, try EXIF DateTimeOriginal first.
+
+    Returns:
+        Timezone-aware datetime.
+    """
+    if use_exif and _PIEXIF_AVAILABLE:
+        exif_dt = _read_exif_date(path)
+        if exif_dt is not None:
+            return exif_dt
+    mtime = Path(path).stat().st_mtime
+    return datetime.fromtimestamp(mtime, tz=UTC).astimezone()
+
+
+# ---------------------------------------------------------------------------
+# Series grouping
+# ---------------------------------------------------------------------------
+
+_PREFIX_SEQ_RE = re.compile(r"^(.*?)(\d+)\.[^.]+$")
+
+
+def group_into_series(
+    files: list[tuple[str, datetime]],
+) -> list[Series]:
+    """Group new files by filename prefix into series.
+
+    Files with the same prefix form one series. Files without a sequence
+    number become single-element series with prefix=None.
+
+    Args:
+        files: List of (path, date) tuples for new files.
+
+    Returns:
+        List of Series objects, sorted by prefix (None-prefix series last).
+    """
+    by_prefix: dict[str | None, list[NewFile]] = {}
+    for path, date in files:
+        name = Path(path).name
+        m = _PREFIX_SEQ_RE.match(name)
+        if m:
+            prefix = m.group(1)
+            seq = int(m.group(2))
+        else:
+            prefix = None
+            seq = None
+        nf = NewFile(path=path, prefix=prefix, seq=seq, date=date)
+        by_prefix.setdefault(prefix, []).append(nf)
+
+    result: list[Series] = []
+    for prefix, nf_list in by_prefix.items():
+        if prefix is None:
+            # Each file without seq is its own single-element series
+            for nf in nf_list:
+                result.append(Series(prefix=None, files=[nf], seq_range=None))
+        else:
+            nf_list.sort(key=lambda f: f.seq or 0)
+            seqs = [f.seq for f in nf_list if f.seq is not None]
+            seq_range = (min(seqs), max(seqs)) if seqs else None
+            result.append(Series(prefix=prefix, files=nf_list, seq_range=seq_range))
+
+    # Sort: prefixed series first (alphabetically), then None-prefix
+    result.sort(key=lambda s: (s.prefix is None, s.prefix or ""))
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Series splitting against archive
+# ---------------------------------------------------------------------------
+
+
+def _find_archive_entry_date(
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    directory: str,
+    prefix: str,
+    target_seq: int,
+    *,
+    match_prefix: bool = True,
+) -> datetime | None:
+    """Find datetime of an archive entry by prefix and sequence number.
+
+    Args:
+        dir_entries: Mapping of directory to sorted entry lists.
+        directory: Archive directory to search.
+        prefix: Filename prefix to match.
+        target_seq: Sequence number to find.
+        match_prefix: If True, require prefix match.
+
+    Returns:
+        Datetime of the matching entry, or None.
+    """
+    for dt, entry in dir_entries.get(directory, []):
+        name = Path(str(entry["path"])).name
+        m = _PREFIX_SEQ_RE.match(name)
+        if m:
+            p, s = m.group(1), int(m.group(2))
+            if s == target_seq and (not match_prefix or p == prefix):
+                return dt
+    return None
+
+
+def _make_sub_series(prefix: str, files: list[NewFile]) -> Series:
+    """Create a Series from a group of files sharing a prefix."""
+    seqs = [f.seq for f in files if f.seq is not None]
+    return Series(prefix=prefix, files=files, seq_range=(min(seqs), max(seqs)))
+
+
+def _split_at_barriers(remaining: list[NewFile], barriers: list[int], prefix: str) -> list[Series]:
+    """Split files into sub-series at barrier positions."""
+    remaining.sort(key=lambda f: f.seq or 0)
+    sub_series: list[Series] = []
+    current_files: list[NewFile] = []
+
+    for f in remaining:
+        cur_seq = f.seq or 0
+        if current_files:
+            last_seq = current_files[-1].seq or 0
+            if any(b for b in barriers if last_seq < b < cur_seq):
+                sub_series.append(_make_sub_series(prefix, current_files))
+                current_files = []
+        current_files.append(f)
+
+    if current_files:
+        sub_series.append(_make_sub_series(prefix, current_files))
+    return sub_series
+
+
+def split_series_against_archive(
+    series: Series,
+    dir_seqs: dict[str, list[tuple[str | None, int]]],
+    *,
+    match_prefix: bool = True,
+) -> tuple[list[Series], list[Collision]]:
+    """Split a series at collision points with archive entries.
+
+    Checks if any sequence numbers in the series range exist in the archive
+    (with matching prefix). Colliding new files are removed, and the remaining
+    files are split into sub-series at collision boundaries.
+
+    Args:
+        series: The series to split.
+        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
+        match_prefix: If True, only check entries with matching prefix.
+
+    Returns:
+        Tuple of (sub_series_list, collision_list).
+    """
+    if series.prefix is None or series.seq_range is None:
+        return [series], []
+
+    prefix = series.prefix
+    min_seq, max_seq = series.seq_range
+
+    # Collect all archive seqs with this prefix across all directories
+    archive_seqs_in_range: set[int] = set()
+    archive_seq_dirs: dict[int, str] = {}  # seq -> first directory found
+    for d, pairs in dir_seqs.items():
+        for p, s in pairs:
+            if match_prefix and p != prefix:
+                continue
+            if min_seq <= s <= max_seq:
+                archive_seqs_in_range.add(s)
+                if s not in archive_seq_dirs:
+                    archive_seq_dirs[s] = d
+
+    if not archive_seqs_in_range:
+        return [series], []
+
+    # Separate collisions from remaining files
+    new_seqs = {f.seq for f in series.files if f.seq is not None}
+    collision_seqs = new_seqs & archive_seqs_in_range
+    collisions: list[Collision] = []
+    remaining: list[NewFile] = []
+    for f in series.files:
+        if f.seq in collision_seqs:
+            # Find archive path for collision reporting
+            d = archive_seq_dirs.get(f.seq, "")
+            # Build approximate archive path
+            archive_path = f"{d}/{prefix}{f.seq:04d}" if d else f"{prefix}{f.seq}"
+            collisions.append(Collision(new_file=f, archive_path=archive_path))
+        else:
+            remaining.append(f)
+
+    if not remaining:
+        return [], collisions
+
+    barriers = sorted(archive_seqs_in_range)
+    sub_series = _split_at_barriers(remaining, barriers, prefix)
+    return sub_series, collisions
+
+
+# ---------------------------------------------------------------------------
+# Gap-fitting
+# ---------------------------------------------------------------------------
+
+
+def find_gap_match(
+    series: Series,
+    dir_seqs: dict[str, list[tuple[str | None, int]]],
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    *,
+    match_prefix: bool = True,
+) -> list[GapMatch]:
+    """Find archive directories with a matching gap for a series.
+
+    For each directory containing files with the same prefix, checks whether
+    the series range fits in a gap in the archive numbering. Validates
+    temporal ordering at gap boundaries.
+
+    Args:
+        series: The series to match.
+        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
+        dir_entries: Mapping of directory to sorted entry lists.
+        match_prefix: If True, only match entries with the same prefix.
+
+    Returns:
+        List of GapMatch objects, sorted by gap tightness (tightest first).
+    """
+    if series.prefix is None or series.seq_range is None:
+        return []
+
+    prefix = series.prefix
+    min_seq, max_seq = series.seq_range
+    first_file = min(series.files, key=lambda f: f.seq or 0)
+    last_file = max(series.files, key=lambda f: f.seq or 0)
+    matches: list[GapMatch] = []
+
+    for d, pairs in dir_seqs.items():
+        # Filter seqs by prefix (pairs are already sorted by seq)
+        seqs = [s for p, s in pairs if p == prefix] if match_prefix else [s for _, s in pairs]
+        if not seqs:
+            continue
+
+        # Check for clean gap: no archive entries in [min_seq, max_seq]
+        pos_lo = bisect.bisect_left(seqs, min_seq)
+        pos_hi = bisect.bisect_right(seqs, max_seq)
+        if pos_lo != pos_hi:
+            continue
+
+        before_seq: int | None = seqs[pos_lo - 1] if pos_lo > 0 else None
+        after_seq: int | None = seqs[pos_lo] if pos_lo < len(seqs) else None
+        if before_seq is None and after_seq is None:
+            continue
+
+        # Temporal validation at both gap boundaries
+        time_ok = True
+        time_detail = "ok"
+        for boundary_seq, edge_file, is_before in [
+            (before_seq, first_file, True),
+            (after_seq, last_file, False),
+        ]:
+            if not time_ok or boundary_seq is None:
+                continue
+            boundary_dt = _find_archive_entry_date(
+                dir_entries, d, prefix, boundary_seq, match_prefix=match_prefix
+            )
+            if boundary_dt is None:
+                continue
+            bad = edge_file.date <= boundary_dt if is_before else edge_file.date >= boundary_dt
+            if bad:
+                time_ok = False
+                label = "before" if is_before else "after"
+                time_detail = (
+                    f"{Path(edge_file.path).name}"
+                    f" ({edge_file.date.strftime('%Y-%m-%d')})"
+                    f" {label} archive seq {boundary_seq}"
+                    f" ({boundary_dt.strftime('%Y-%m-%d')})"
+                )
+
+        matches.append(GapMatch(d, (before_seq, after_seq), time_ok, time_detail))
+
+    # Sort by gap tightness (tightest first)
+    def gap_size(m: GapMatch) -> int:
+        lo, hi = m.gap
+        if lo is not None and hi is not None:
+            return hi - lo
+        return 999_999_999
+
+    matches.sort(key=gap_size)
+    return matches
+
+
+def match_single_file(
+    nf: NewFile,
+    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
+    context: int,
+) -> str | None:
+    """Match a single file without sequence number by timestamp proximity.
+
+    Args:
+        nf: The new file to match.
+        sorted_entries: Archive entries sorted by date.
+        context: Number of neighbors to consider.
+
+    Returns:
+        Best matching directory path, or None.
+    """
+    pos = bisect.bisect_left([dt for dt, _ in sorted_entries], nf.date)
+    start = max(0, pos - context)
+    end = min(len(sorted_entries), pos + context)
+    neighbors = sorted_entries[start:end]
+    if not neighbors:
+        return None
+    _, closest = min(neighbors, key=lambda x: abs((nf.date - x[0]).total_seconds()))
+    return str(Path(str(closest["path"])).parent)
 
 
 def load_archive_entries(
@@ -55,14 +446,15 @@ def load_archive_entries(
     return entries
 
 
-def scan_new_files(directory: str) -> list[tuple[str, datetime]]:
-    """Scan directory recursively for files and return paths with modification datetimes.
+def scan_new_files(directory: str, *, use_exif: bool = False) -> list[tuple[str, datetime]]:
+    """Scan directory recursively for files and return paths with datetimes.
 
     Args:
         directory: Path to directory with new photos.
+        use_exif: If True, read dates from EXIF metadata (fallback to mtime).
 
     Returns:
-        List of (file_path, mtime_datetime) tuples sorted by mtime.
+        List of (file_path, datetime) tuples sorted by date.
     """
     results: list[tuple[str, datetime]] = []
     dir_path = Path(directory)
@@ -70,39 +462,13 @@ def scan_new_files(directory: str) -> list[tuple[str, datetime]]:
         if not file_path.is_file():
             continue
         try:
-            mtime = file_path.stat().st_mtime
+            dt = read_file_date(str(file_path), use_exif=use_exif)
         except OSError as e:
             print(f"Warning: Cannot stat {file_path}: {e}", file=sys.stderr)
             continue
-        dt = datetime.fromtimestamp(mtime, tz=UTC).astimezone()
         results.append((str(file_path), dt))
     results.sort(key=lambda x: x[1])
     return results
-
-
-def find_neighbors(
-    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
-    target_dt: datetime,
-    count: int,
-) -> list[tuple[datetime, dict[str, str | int]]]:
-    """Find archive entries closest in time to the target datetime.
-
-    Uses binary search on the sorted entries to find N entries before and
-    N entries after the target timestamp.
-
-    Args:
-        sorted_entries: Archive entries sorted by date.
-        target_dt: Target datetime to search around.
-        count: Number of entries to return before and after the target.
-
-    Returns:
-        List of (datetime, entry) tuples from the neighborhood.
-    """
-    dates = [dt for dt, _ in sorted_entries]
-    pos = bisect.bisect_left(dates, target_dt)
-    start = max(0, pos - count)
-    end = min(len(sorted_entries), pos + count)
-    return sorted_entries[start:end]
 
 
 def build_directory_entries(
@@ -123,31 +489,13 @@ def build_directory_entries(
     return by_dir
 
 
-def build_directory_ranges(
-    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
-) -> dict[str, tuple[datetime, datetime]]:
-    """Build date ranges for each archive directory.
-
-    Args:
-        dir_entries: Mapping of directory path to sorted (datetime, entry) lists.
-
-    Returns:
-        Mapping of directory path to (min_date, max_date) tuple.
-    """
-    return {d: (entries[0][0], entries[-1][0]) for d, entries in dir_entries.items()}
-
-
-_PREFIX_SEQ_RE = re.compile(r"^(.*?)(\d+)\.[^.]+$")
-
-
 def build_directory_seqs(
     dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
 ) -> dict[str, list[tuple[str | None, int]]]:
     """Pre-compute sorted (prefix, sequence_number) pairs per directory.
 
     Extracts filename prefix and sequence number from every archive entry
-    once, so that ``find_seq_matches`` can do fast lookups without repeated
-    regex calls.
+    once, so that gap-fitting can do fast lookups without repeated regex calls.
 
     Args:
         dir_entries: Mapping of directory path to sorted (datetime, entry) lists.
@@ -155,389 +503,17 @@ def build_directory_seqs(
     Returns:
         Mapping of directory path to sorted list of (prefix, seq) tuples.
     """
-    pat = _PREFIX_SEQ_RE
     result: dict[str, list[tuple[str | None, int]]] = {}
     for d, entries in dir_entries.items():
         pairs: list[tuple[str | None, int]] = []
         for _, e in entries:
-            path_str = str(e["path"])
-            # Extract filename without Path object overhead
-            slash = path_str.rfind("/")
-            name = path_str[slash + 1 :] if slash >= 0 else path_str
-            m = pat.match(name)
+            m = _PREFIX_SEQ_RE.match(Path(str(e["path"])).name)
             if m:
                 pairs.append((m.group(1), int(m.group(2))))
         if pairs:
             pairs.sort(key=lambda x: x[1])
             result[d] = pairs
     return result
-
-
-def propose_directories(
-    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
-    dir_ranges: dict[str, tuple[datetime, datetime]],
-    target_dt: datetime,
-    context: int,
-) -> list[str]:
-    """Find candidate directories using hybrid range + neighbor matching.
-
-    A directory is a candidate only if both conditions are met:
-    1. The file's timestamp falls within the directory's [min, max] date range.
-    2. The directory has at least one entry among the N nearest neighbors.
-
-    Args:
-        sorted_entries: Archive entries sorted by date.
-        dir_ranges: Mapping of directory path to (min_date, max_date).
-        target_dt: Timestamp of the new file.
-        context: Number of neighbors to consider before and after.
-
-    Returns:
-        Sorted list of candidate directory paths.
-    """
-    range_matches = {d for d, (lo, hi) in dir_ranges.items() if lo <= target_dt <= hi}
-    neighbors = find_neighbors(sorted_entries, target_dt, context)
-    neighbor_dirs = {str(Path(str(e["path"])).parent) for _, e in neighbors}
-    return sorted(range_matches & neighbor_dirs)
-
-
-def extract_sequence_number(filename: str) -> int | None:
-    """Extract a numeric sequence number from a filename.
-
-    Returns the last run of digits found in the file stem.
-
-    Args:
-        filename: Filename (not full path).
-
-    Returns:
-        Integer sequence number, or None if no digits found.
-    """
-    stem = Path(filename).stem
-    matches = re.findall(r"\d+", stem)
-    if not matches:
-        return None
-    return int(matches[-1])
-
-
-def extract_filename_prefix(filename: str) -> str | None:
-    """Extract the prefix before the last digit run in a filename.
-
-    For example, "img_6767.jpg" returns "img_", "DSC05242.jpg" returns "DSC".
-
-    Args:
-        filename: Filename (not full path).
-
-    Returns:
-        Prefix string, or None if no digits found.
-    """
-    stem = Path(filename).stem
-    match = re.match(r"^(.*?)\d+$", stem)
-    if not match:
-        return None
-    return match.group(1)
-
-
-def find_seq_matches(
-    directories: list[str],
-    dir_seqs: dict[str, list[tuple[str | None, int]]],
-    target_name: str,
-    *,
-    match_prefix: bool = False,
-) -> list[str]:
-    """Find directories where the target file's sequence number fits.
-
-    Uses pre-computed sequence data from ``build_directory_seqs`` for fast
-    lookup. For each directory, uses binary search to find the entries
-    immediately before and after the target sequence number.
-
-    When ``match_prefix`` is True, only entries whose filename prefix matches
-    the target file are considered (e.g. "img_" entries for "img_6767.jpg").
-
-    When multiple directories match, only those with the tightest gap
-    (smallest difference between adjacent sequence numbers) are returned.
-
-    Args:
-        directories: Directory paths to check.
-        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
-        target_name: Filename of the new file.
-        match_prefix: If True, only compare entries with the same filename prefix.
-
-    Returns:
-        Sorted list of directories where sequence number fits.
-    """
-    target_seq = extract_sequence_number(target_name)
-    if target_seq is None:
-        return []
-    target_prefix = extract_filename_prefix(target_name) if match_prefix else None
-
-    strong: list[tuple[str, int]] = []  # (dir, gap) — both boundaries present
-    weak: list[str] = []  # one boundary missing
-    for d in directories:
-        pairs = dir_seqs.get(d, [])
-        if not pairs:
-            continue
-        if target_prefix is not None:
-            seqs = [s for p, s in pairs if p == target_prefix]
-        else:
-            seqs = [s for _, s in pairs]
-        if not seqs:
-            continue
-        # seqs already sorted (from build_directory_seqs)
-        pos = bisect.bisect_left(seqs, target_seq)
-        before_seq: int | None = seqs[pos - 1] if pos > 0 else None
-        after_seq: int | None = seqs[pos] if pos < len(seqs) else None
-        if before_seq is not None and after_seq is not None:
-            if before_seq <= target_seq <= after_seq:
-                strong.append((d, after_seq - before_seq))
-        elif (before_seq is not None and before_seq <= target_seq) or (
-            after_seq is not None and target_seq <= after_seq
-        ):
-            weak.append(d)
-
-    if strong:
-        min_gap = min(gap for _, gap in strong)
-        return sorted(d for d, gap in strong if gap == min_gap)
-    return sorted(weak)
-
-
-def _resolve_candidates(
-    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
-    dir_ranges: dict[str, tuple[datetime, datetime]],
-    dir_seqs: dict[str, list[tuple[str | None, int]]],
-    target_dt: datetime,
-    context: int,
-    *,
-    use_seq: bool = False,
-    match_prefix: bool = False,
-    filename: str = "",
-) -> list[str]:
-    """Find candidate directories for a single file.
-
-    Without --seq: uses hybrid range + neighbor matching.
-    With --seq: checks all range-matched directories for sequence fit;
-    if found, uses those. Otherwise falls back to hybrid. If hybrid also
-    returns nothing, tries sequence match against all directories.
-
-    Args:
-        sorted_entries: Archive entries sorted by date.
-        dir_ranges: Mapping of directory path to (min_date, max_date).
-        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
-        target_dt: Timestamp of the new file.
-        context: Number of neighbors to consider.
-        use_seq: If True, use sequence number matching.
-        match_prefix: If True, only compare entries with the same filename prefix.
-        filename: Filename of the new file (used with use_seq).
-
-    Returns:
-        Sorted list of candidate directory paths.
-    """
-    candidates = propose_directories(sorted_entries, dir_ranges, target_dt, context)
-    if not use_seq:
-        return candidates
-
-    # Check all range-matched dirs for sequence fit (broader than hybrid)
-    range_matches = sorted(d for d, (lo, hi) in dir_ranges.items() if lo <= target_dt <= hi)
-    seq_candidates = find_seq_matches(
-        range_matches,
-        dir_seqs,
-        filename,
-        match_prefix=match_prefix,
-    )
-    if seq_candidates:
-        return seq_candidates
-
-    # No seq match in range — keep hybrid candidates if available
-    if candidates:
-        return candidates
-
-    # File outside all ranges — try all dirs by sequence
-    return find_seq_matches(
-        sorted(dir_seqs.keys()),
-        dir_seqs,
-        filename,
-        match_prefix=match_prefix,
-    )
-
-
-def _build_placements(
-    new_files: list[tuple[str, datetime]],
-    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
-    dir_ranges: dict[str, tuple[datetime, datetime]],
-    dir_seqs: dict[str, list[tuple[str | None, int]]],
-    context: int,
-    *,
-    use_seq: bool = False,
-    match_prefix: bool = False,
-) -> list[tuple[str, list[str]]]:
-    """Build (file_path, candidate_dirs) pairs without printing.
-
-    Args:
-        new_files: List of (path, datetime) for new files.
-        sorted_entries: Archive entries sorted by date.
-        dir_ranges: Mapping of directory path to (min_date, max_date).
-        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
-        context: Number of neighbors to consider.
-        use_seq: If True, filter candidates by sequence number continuity.
-        match_prefix: If True, only compare entries with the same filename prefix.
-
-    Returns:
-        List of (file_path, candidate_directories) tuples.
-    """
-    placements: list[tuple[str, list[str]]] = []
-    for file_path, dt in new_files:
-        candidates = _resolve_candidates(
-            sorted_entries,
-            dir_ranges,
-            dir_seqs,
-            dt,
-            context,
-            use_seq=use_seq,
-            match_prefix=match_prefix,
-            filename=Path(file_path).name,
-        )
-        if candidates:
-            placements.append((file_path, candidates))
-    return placements
-
-
-def _print_default(
-    new_files: list[tuple[str, datetime]],
-    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
-    dir_ranges: dict[str, tuple[datetime, datetime]],
-    dir_seqs: dict[str, list[tuple[str | None, int]]],
-    context: int,
-    *,
-    use_seq: bool = False,
-    match_prefix: bool = False,
-) -> list[tuple[str, list[str]]]:
-    """Print default mode output and return (file_path, candidate_dirs) pairs.
-
-    Args:
-        new_files: List of (path, datetime) for new files.
-        sorted_entries: Archive entries sorted by date.
-        dir_ranges: Mapping of directory path to (min_date, max_date).
-        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
-        context: Number of neighbors to consider.
-        use_seq: If True, filter candidates by sequence number continuity.
-        match_prefix: If True, only compare entries with the same filename prefix.
-
-    Returns:
-        List of (file_path, candidate_directories) tuples.
-    """
-    placements = _build_placements(
-        new_files,
-        sorted_entries,
-        dir_ranges,
-        dir_seqs,
-        context,
-        use_seq=use_seq,
-        match_prefix=match_prefix,
-    )
-    placed = dict(placements)
-    for file_path, _ in new_files:
-        name = Path(file_path).name
-        candidates = placed.get(file_path)
-        if candidates:
-            print(f"{name}  \u2192  {', '.join(candidates)}")
-        else:
-            print(f"{name}  \u2192  (no match found)")
-    return placements
-
-
-def _print_list(
-    new_files: list[tuple[str, datetime]],
-    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
-    dir_ranges: dict[str, tuple[datetime, datetime]],
-    dir_seqs: dict[str, list[tuple[str | None, int]]],
-    context: int,
-    *,
-    use_seq: bool = False,
-    match_prefix: bool = False,
-    base_dir: str = "",
-) -> list[tuple[str, list[str]]]:
-    """Print merged listing of archive and new files with context.
-
-    Merges all new files into the sorted archive timeline, then shows
-    N archive entries before and after each new file, with "---"
-    separators between non-contiguous groups. New files are marked
-    with ">" and " <" suffix.
-
-    Args:
-        new_files: List of (path, datetime) for new files.
-        sorted_entries: Sorted archive entries.
-        dir_ranges: Mapping of directory path to (min_date, max_date).
-        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
-        context: Number of archive entries to show before and after the new files.
-        use_seq: If True, filter candidates by sequence number continuity.
-        match_prefix: If True, only compare entries with the same filename prefix.
-        base_dir: Base directory for displaying relative paths of new files.
-
-    Returns:
-        List of (file_path, candidate_directories) tuples.
-    """
-    # Build merged timeline: (datetime, path, is_new)
-    merged: list[tuple[datetime, str, bool]] = []
-    for dt, entry in sorted_entries:
-        merged.append((dt, str(entry["path"]), False))
-    base = Path(base_dir).parent if base_dir else None
-    for file_path, dt in new_files:
-        display = str(Path(file_path).relative_to(base)) if base else Path(file_path).name
-        merged.append((dt, display, True))
-    merged.sort(key=lambda x: x[0])
-
-    # Find indices of new files in the merged list
-    new_indices = [i for i, (_, _, is_new) in enumerate(merged) if is_new]
-    if not new_indices:
-        return []
-
-    # For each new file, mark N archive entries before and after as visible
-    visible: set[int] = set()
-    for ni in new_indices:
-        visible.add(ni)
-        count = 0
-        j = ni - 1
-        while j >= 0 and count < context:
-            visible.add(j)
-            if not merged[j][2]:
-                count += 1
-            j -= 1
-        count = 0
-        j = ni + 1
-        while j < len(merged) and count < context:
-            visible.add(j)
-            if not merged[j][2]:
-                count += 1
-            j += 1
-
-    # Print visible entries with separator between non-contiguous groups
-    prev_idx: int | None = None
-    for idx in sorted(visible):
-        if prev_idx is not None and idx > prev_idx + 1:
-            print("  (...)")
-        item_dt, item_path, is_new = merged[idx]
-        marker = ">" if is_new else " "
-        suffix = " <" if is_new else ""
-        print(f"{marker} {item_dt.strftime('%Y-%m-%d %H:%M:%S')}  {item_path}{suffix}")
-        prev_idx = idx
-
-    # Aggregate candidates across all new files
-    per_file = _build_placements(
-        new_files,
-        sorted_entries,
-        dir_ranges,
-        dir_seqs,
-        context,
-        use_seq=use_seq,
-        match_prefix=match_prefix,
-    )
-    candidates = sorted({d for _, dirs in per_file for d in dirs})
-    placements: list[tuple[str, list[str]]] = []
-    if candidates:
-        print(f"\nProposed directory: {', '.join(candidates)}\n")
-        for file_path, _ in new_files:
-            placements.append((file_path, candidates))
-    else:
-        print("\nNo matching directory found\n")
-    return placements
 
 
 def _write_script(placements: list[tuple[str, str]], output_path: str) -> None:
@@ -571,8 +547,6 @@ def _write_script(placements: list[tuple[str, str]], output_path: str) -> None:
 def setup_parser(parser: argparse.ArgumentParser) -> None:
     """Configure argument parser for locate command.
 
-    Adds all command-line arguments for the locate tool to the provided parser.
-
     Args:
         parser: ArgumentParser instance to configure with locate arguments.
     """
@@ -590,14 +564,14 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "-l",
         "--list",
         action="store_true",
-        help="Show interleaved file listing sorted by date",
+        help="Show detailed listing with archive context per series",
     )
     parser.add_argument(
         "-N",
         "--context",
         type=int,
         default=5,
-        help="Number of archive files to show before/after each new file (default: 5)",
+        help="Number of archive entries to show before/after each gap (default: 5)",
     )
     parser.add_argument(
         "-f",
@@ -617,16 +591,14 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         help="Write mkdir and mv commands to shell script",
     )
     parser.add_argument(
-        "-s",
-        "--seq",
+        "--no-prefix",
         action="store_true",
-        help="Filter candidates by filename sequence number continuity",
+        help="Disable prefix matching (match by sequence number only)",
     )
     parser.add_argument(
-        "-p",
-        "--prefix",
+        "--exif",
         action="store_true",
-        help="Only compare files with same naming pattern (requires --seq)",
+        help="Read dates from EXIF metadata instead of file modification time",
     )
 
 
@@ -643,27 +615,307 @@ def validate_args(args: argparse.Namespace) -> None:
     for json_file in args.json_files:
         if not Path(json_file).is_file():
             raise SystemExit(f"Error: JSON file not found: {json_file}")
-    if args.prefix and not args.seq:
-        raise SystemExit("Error: --prefix requires --seq")
+    if args.exif and not _PIEXIF_AVAILABLE:  # pragma: no cover
+        raise SystemExit("Error: --exif requires piexif (pip install photos-manager-cli[exif])")
+
+
+# ---------------------------------------------------------------------------
+# Series-based matching orchestration
+# ---------------------------------------------------------------------------
+
+
+def _match_all_series(
+    series_list: list[Series],
+    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
+    dir_seqs: dict[str, list[tuple[str | None, int]]],
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    context: int,
+    *,
+    match_prefix: bool = True,
+) -> list[SeriesResult]:
+    """Match all series to archive directories.
+
+    Args:
+        series_list: List of (sub-)series to match.
+        sorted_entries: Archive entries sorted by date.
+        dir_seqs: Pre-built mapping of directory to sorted (prefix, seq) lists.
+        dir_entries: Mapping of directory to sorted entry lists.
+        context: Number of neighbors for single-file fallback.
+        match_prefix: If True, require prefix match in gap-fitting.
+
+    Returns:
+        List of SeriesResult objects.
+    """
+    results: list[SeriesResult] = []
+    for s in series_list:
+        sr = SeriesResult(series=s)
+        if s.prefix is not None and s.seq_range is not None:
+            gap_matches = find_gap_match(s, dir_seqs, dir_entries, match_prefix=match_prefix)
+            sr.matches = gap_matches
+            # Filter to time_ok matches first
+            ok_matches = [m for m in gap_matches if m.time_ok]
+            if len(ok_matches) == 1:
+                sr.best_directory = ok_matches[0].directory
+            elif len(ok_matches) > 1:
+                sr.best_directory = ok_matches[0].directory  # tightest gap
+                sr.ambiguous = True
+            elif len(gap_matches) == 1:
+                # Single match but time failed — still report it
+                sr.best_directory = gap_matches[0].directory
+            elif len(gap_matches) > 1:
+                sr.ambiguous = True
+        else:
+            # Single file without seq — timestamp fallback
+            nf = s.files[0]
+            best_dir = match_single_file(nf, sorted_entries, context)
+            if best_dir:
+                sr.best_directory = best_dir
+        results.append(sr)
+    return results
+
+
+def _format_series_label(s: Series) -> str:
+    """Format a series label for output.
+
+    Args:
+        s: Series to format.
+
+    Returns:
+        Formatted string like "IMG_ [42..44]" or "notes.txt".
+    """
+    if s.prefix is not None and s.seq_range is not None:
+        lo, hi = s.seq_range
+        if lo == hi:
+            return f"{s.prefix}[{lo}]"
+        return f"{s.prefix}[{lo}..{hi}]"
+    return Path(s.files[0].path).name
+
+
+def _print_series_default(
+    results: list[SeriesResult],
+    collisions: list[Collision],
+) -> None:
+    """Print default mode output: series -> directory mapping.
+
+    Args:
+        results: List of SeriesResult objects.
+        collisions: List of collisions.
+    """
+    labels = [_format_series_label(r.series) for r in results]
+    label_w = max((len(lb) for lb in labels), default=0)
+    counts = [
+        f"{len(r.series.files)} file{'s' if len(r.series.files) != 1 else ''}" for r in results
+    ]
+    count_w = max((len(c) for c in counts), default=0)
+
+    for r, label, count in zip(results, labels, counts, strict=True):
+        if r.series.prefix is not None and r.series.seq_range is not None:
+            count_str = f"{count:>{count_w}}"
+        else:
+            count_str = " " * count_w
+        if r.ambiguous:
+            dirs = ", ".join(m.directory for m in r.matches)
+            print(f"  {label:<{label_w}}  {count_str}  ->  {dirs}  (ambiguous)")
+        elif r.best_directory:
+            suffix = ""
+            if r.series.prefix is None:
+                suffix = "  (timestamp)"
+            print(f"  {label:<{label_w}}  {count_str}  ->  {r.best_directory}{suffix}")
+        else:
+            print(f"  {label:<{label_w}}  {count_str}  ->  (no match found)")
+
+    if collisions:
+        print(f"\nCollisions ({len(collisions)}):")
+        for c in collisions:
+            name = Path(c.new_file.path).name
+            print(f"  {name:<{label_w}}  ->  {c.archive_path}")
+
+
+def _print_series_list(
+    results: list[SeriesResult],
+    collisions: list[Collision],
+    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
+    dir_entries: dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    context: int,
+) -> None:
+    """Print list mode output: per-series context with archive entries.
+
+    Args:
+        results: List of SeriesResult objects.
+        collisions: List of collisions.
+        sorted_entries: Archive entries sorted by date.
+        dir_entries: Mapping of directory to sorted entry lists.
+        context: Number of archive entries to show before/after gap.
+    """
+    collision_seqs: dict[str, set[int]] = {}
+    for c in collisions:
+        prefix = c.new_file.prefix or ""
+        collision_seqs.setdefault(prefix, set()).add(c.new_file.seq or 0)
+
+    for r in results:
+        label = _format_series_label(r.series)
+
+        if r.ambiguous:
+            print(f"\n--- {label} -- ambiguous ---\n")
+            for i, m in enumerate(r.matches, 1):
+                print(
+                    f"  Candidate {i}: {m.directory}"
+                    f"  gap {_format_gap(m.gap)}  time {m.time_detail}"
+                )
+            print("  Use -f to narrow results.")
+            continue
+
+        if r.best_directory and r.matches:
+            best_match = next((m for m in r.matches if m.directory == r.best_directory), None)
+            if best_match:
+                print(
+                    f"\n--- {label} -> {r.best_directory}"
+                    f" (gap {_format_gap(best_match.gap)},"
+                    f" time {best_match.time_detail}) ---\n"
+                )
+                _print_gap_context(
+                    dir_entries.get(r.best_directory, []),
+                    r.series,
+                    collision_seqs.get(r.series.prefix or "", set()),
+                    context,
+                )
+                continue
+
+        if r.best_directory and r.series.prefix is None:
+            nf = r.series.files[0]
+            # Compute nearest delta inline
+            pos = bisect.bisect_left([dt for dt, _ in sorted_entries], nf.date)
+            deltas = []
+            if pos > 0:
+                deltas.append(abs((nf.date - sorted_entries[pos - 1][0]).total_seconds()))
+            if pos < len(sorted_entries):
+                deltas.append(abs((nf.date - sorted_entries[pos][0]).total_seconds()))
+            secs = min(deltas) if deltas else 0
+            if secs < 60:
+                delta = f"{int(secs)}s"
+            elif secs < 3600:
+                delta = f"{int(secs // 60)}min"
+            else:
+                delta = f"{secs / 3600:.1f}h"
+            print(f"\n--- {label} -> {r.best_directory} (timestamp, nearest ~{delta}) ---\n")
+            _print_timestamp_context(nf, sorted_entries, context)
+            continue
+
+        print(f"\n--- {label} -> (no match found) ---\n")
+
+
+def _format_gap(gap: tuple[int | None, int | None]) -> str:
+    """Format gap boundary as 'lo..hi' string."""
+    lo, hi = gap
+    if lo is not None and hi is not None:
+        return f"{lo}..{hi}"
+    return str(gap)
+
+
+def _print_gap_context(
+    entries: list[tuple[datetime, dict[str, str | int]]],
+    series: Series,
+    collision_seqs: set[int],
+    context: int,
+) -> None:
+    """Print archive entries around a gap with new files interleaved.
+
+    Args:
+        entries: Archive entries for the matched directory, sorted by date.
+        series: The series being matched.
+        collision_seqs: Sequence numbers that caused collisions.
+        context: Number of archive entries to show before/after.
+    """
+    pat = _PREFIX_SEQ_RE
+
+    # Build timeline items: (datetime, display_text, is_new, seq)
+    timeline: list[tuple[datetime, str, bool, int | None]] = []
+
+    for dt, entry in entries:
+        path_str = str(entry["path"])
+        name = Path(path_str).name
+        m = pat.match(name)
+        seq = int(m.group(2)) if m else None
+        collision_mark = ""
+        if seq is not None and seq in collision_seqs:
+            collision_mark = f"  [collision: {series.prefix}{seq:04d}]"
+        timeline.append((dt, f"{path_str}{collision_mark}", False, seq))
+
+    for nf in series.files:
+        timeline.append((nf.date, Path(nf.path).name, True, nf.seq))
+
+    timeline.sort(key=lambda x: x[0])
+
+    # Find indices of new files
+    new_indices = [i for i, (_, _, is_new, _) in enumerate(timeline) if is_new]
+    if not new_indices:
+        return
+
+    # Mark N archive entries before first and after last new file as visible
+    visible: set[int] = set()
+    for ni in new_indices:
+        visible.add(ni)
+
+    first_new = min(new_indices)
+    last_new = max(new_indices)
+
+    count = 0
+    j = first_new - 1
+    while j >= 0 and count < context:
+        visible.add(j)
+        if not timeline[j][2]:
+            count += 1
+        j -= 1
+
+    count = 0
+    j = last_new + 1
+    while j < len(timeline) and count < context:
+        visible.add(j)
+        if not timeline[j][2]:
+            count += 1
+        j += 1
+
+    for idx in sorted(visible):
+        dt, text, is_new, _seq = timeline[idx]
+        marker = ">" if is_new else " "
+        suffix = " <" if is_new else ""
+        print(f"{marker} {dt.strftime('%Y-%m-%d %H:%M')}  {text}{suffix}")
+
+
+def _print_timestamp_context(
+    nf: NewFile,
+    sorted_entries: list[tuple[datetime, dict[str, str | int]]],
+    context: int,
+) -> None:
+    """Print archive context around a timestamp-matched file."""
+    pos = bisect.bisect_left([dt for dt, _ in sorted_entries], nf.date)
+    start = max(0, pos - context)
+    end = min(len(sorted_entries), pos + context)
+    for i in range(start, pos):
+        dt, entry = sorted_entries[i]
+        print(f"  {dt.strftime('%Y-%m-%d %H:%M')}  {entry['path']}")
+    print(f"> {nf.date.strftime('%Y-%m-%d %H:%M')}  {Path(nf.path).name} <")
+    for i in range(pos, end):
+        dt, entry = sorted_entries[i]
+        print(f"  {dt.strftime('%Y-%m-%d %H:%M')}  {entry['path']}")
 
 
 def run(args: argparse.Namespace) -> int:
     """Execute locate command with parsed arguments.
 
-    Scans the directory for new files, loads archive metadata from JSON,
-    and finds the best matching archive directories based on timestamp
-    proximity.
+    Groups new files into series by filename prefix, finds gaps in archive
+    numbering where each series fits, and validates with temporal ordering.
 
     Args:
         args: Parsed command-line arguments with fields:
             - directory: Path to directory with new photos
             - json_files: Paths to archive JSON metadata files
-            - list: Whether to show interleaved listing
-            - context: Number of neighbor files to consider
+            - list: Whether to show detailed per-series listing
+            - context: Number of archive entries around each gap
             - filter: Optional list of path substring filters (OR logic)
             - output: Optional path to output shell script
-            - seq: Whether to filter by filename sequence continuity
-            - prefix: Whether to restrict seq matching to same filename prefix
+            - no_prefix: Whether to disable prefix matching
+            - exif: Whether to use EXIF dates
 
     Returns:
         int: os.EX_OK on success.
@@ -677,57 +929,68 @@ def run(args: argparse.Namespace) -> int:
     if not sorted_entries:
         raise SystemExit("Error: No archive entries found (check JSON files and filter)")
 
-    new_files = scan_new_files(args.directory)
+    new_files = scan_new_files(args.directory, use_exif=getattr(args, "exif", False))
     if not new_files:
         raise SystemExit(f"Error: No files found in {args.directory}")
 
     dir_entries = build_directory_entries(sorted_entries)
-    dir_ranges = build_directory_ranges(dir_entries)
     dir_seqs = build_directory_seqs(dir_entries)
 
-    print(f"Found {len(new_files)} new file(s), {len(sorted_entries)} archive entries")
+    print(f"Loaded {len(sorted_entries)} archive entries.")
+    print(f"Scanned {len(new_files)} new files in {args.directory}.")
+    print()
 
-    use_seq: bool = args.seq
-    match_prefix: bool = args.prefix
+    match_prefix = not getattr(args, "no_prefix", False)
+
+    # Group into series
+    series_list = group_into_series(new_files)
+
+    # Split against archive and collect collisions
+    all_sub_series: list[Series] = []
+    all_collisions: list[Collision] = []
+    for s in series_list:
+        sub, colls = split_series_against_archive(s, dir_seqs, match_prefix=match_prefix)
+        all_sub_series.extend(sub)
+        all_collisions.extend(colls)
+
+    # Match all series
+    results = _match_all_series(
+        all_sub_series,
+        sorted_entries,
+        dir_seqs,
+        dir_entries,
+        args.context,
+        match_prefix=match_prefix,
+    )
 
     if args.output:
-        placements = _build_placements(
-            new_files,
-            sorted_entries,
-            dir_ranges,
-            dir_seqs,
-            args.context,
-            use_seq=use_seq,
-            match_prefix=match_prefix,
-        )
-        ambiguous = [(fp, dirs) for fp, dirs in placements if len(dirs) > 1]
+        # Check for ambiguous placements
+        ambiguous = [r for r in results if r.ambiguous]
         if ambiguous:
             print("Error: Ambiguous placement for:", file=sys.stderr)
-            for fp, dirs in ambiguous:
-                print(f"  {Path(fp).name}: {', '.join(dirs)}", file=sys.stderr)
+            for r in ambiguous:
+                label = _format_series_label(r.series)
+                dirs = ", ".join(m.directory for m in r.matches)
+                print(f"  {label}: {dirs}", file=sys.stderr)
             raise SystemExit("Use -f to narrow results")
+        # Build placements (exclude unmatched and collisions)
+        placements: list[tuple[str, str]] = []
+        for r in results:
+            if r.best_directory:
+                for nf in r.series.files:
+                    placements.append((nf.path, r.best_directory))
         if placements:
-            _write_script([(fp, dirs[0]) for fp, dirs in placements], args.output)
+            _print_series_default(results, all_collisions)
+            _write_script(placements, args.output)
     elif args.list:
-        _print_list(
-            new_files,
+        _print_series_list(
+            results,
+            all_collisions,
             sorted_entries,
-            dir_ranges,
-            dir_seqs,
+            dir_entries,
             args.context,
-            use_seq=use_seq,
-            match_prefix=match_prefix,
-            base_dir=args.directory,
         )
     else:
-        _print_default(
-            new_files,
-            sorted_entries,
-            dir_ranges,
-            dir_seqs,
-            args.context,
-            use_seq=use_seq,
-            match_prefix=match_prefix,
-        )
+        _print_series_default(results, all_collisions)
 
     return os.EX_OK

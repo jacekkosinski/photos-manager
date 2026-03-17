@@ -50,344 +50,6 @@ def _build_sorted_entries(
 
 
 @pytest.mark.unit
-class TestFindNeighbors:
-    """Tests for find_neighbors function."""
-
-    def test_finds_neighbors_in_middle(self) -> None:
-        """Test finding neighbors around a timestamp in the middle of entries."""
-        sorted_entries = _build_sorted_entries(SAMPLE_ENTRIES)
-        target = datetime(2025, 7, 7, 10, 7, 0, tzinfo=timezone(timedelta(hours=2)))
-        result = locate.find_neighbors(sorted_entries, target, 2)
-        assert len(result) >= 2
-        paths = [str(e["path"]) for _, e in result]
-        assert "camera/100/img_002.jpg" in paths
-        assert "camera/100/img_003.jpg" in paths
-
-    def test_finds_neighbors_at_start(self) -> None:
-        """Test finding neighbors near the beginning of entries."""
-        sorted_entries = _build_sorted_entries(SAMPLE_ENTRIES)
-        target = datetime(2025, 7, 7, 9, 0, 0, tzinfo=timezone(timedelta(hours=2)))
-        result = locate.find_neighbors(sorted_entries, target, 3)
-        assert len(result) >= 1
-        paths = [str(e["path"]) for _, e in result]
-        assert "camera/100/img_001.jpg" in paths
-
-    def test_finds_neighbors_at_end(self) -> None:
-        """Test finding neighbors near the end of entries."""
-        sorted_entries = _build_sorted_entries(SAMPLE_ENTRIES)
-        target = datetime(2025, 7, 7, 15, 0, 0, tzinfo=timezone(timedelta(hours=2)))
-        result = locate.find_neighbors(sorted_entries, target, 2)
-        paths = [str(e["path"]) for _, e in result]
-        assert "phone/202507/img_101.jpg" in paths
-
-    def test_empty_entries(self) -> None:
-        """Test with empty entries list."""
-        result = locate.find_neighbors([], datetime.now(tz=UTC), 5)
-        assert result == []
-
-
-@pytest.mark.unit
-class TestBuildDirectoryRanges:
-    """Tests for build_directory_ranges function."""
-
-    def test_single_directory(self) -> None:
-        """Test range for entries in a single directory."""
-        sorted_entries = _build_sorted_entries(SAMPLE_ENTRIES[:3])
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        result = locate.build_directory_ranges(dir_entries)
-        assert "camera/100" in result
-        lo, hi = result["camera/100"]
-        assert lo == datetime.fromisoformat("2025-07-07T10:00:00+02:00")
-        assert hi == datetime.fromisoformat("2025-07-07T10:10:00+02:00")
-
-    def test_multiple_directories(self) -> None:
-        """Test ranges for entries in multiple directories."""
-        sorted_entries = _build_sorted_entries(SAMPLE_ENTRIES)
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        result = locate.build_directory_ranges(dir_entries)
-        assert len(result) == 3
-        assert "camera/100" in result
-        assert "camera/101" in result
-        assert "phone/202507" in result
-
-    def test_empty_entries(self) -> None:
-        """Test with empty entries list."""
-        dir_entries = locate.build_directory_entries([])
-        result = locate.build_directory_ranges(dir_entries)
-        assert result == {}
-
-
-@pytest.mark.unit
-class TestProposeDirectories:
-    """Tests for propose_directories hybrid function."""
-
-    def test_unambiguous_single_match(self) -> None:
-        """Test that a directory matching both range and neighbor passes."""
-        entries = [
-            _make_entry("dir_a/f1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/f2.jpg", "2025-07-07T12:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_ranges = locate.build_directory_ranges(locate.build_directory_entries(sorted_entries))
-        target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
-        assert locate.propose_directories(sorted_entries, dir_ranges, target, 5) == ["dir_a"]
-
-    def test_ambiguous_overlapping_ranges_and_neighbors(self) -> None:
-        """Test that two dirs passing both checks are both returned."""
-        entries = [
-            _make_entry("dir_a/f1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/f2.jpg", "2025-07-07T14:00:00+02:00"),
-            _make_entry("dir_b/f1.jpg", "2025-07-07T11:00:00+02:00"),
-            _make_entry("dir_b/f2.jpg", "2025-07-07T15:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_ranges = locate.build_directory_ranges(locate.build_directory_entries(sorted_entries))
-        target = datetime.fromisoformat("2025-07-07T12:00:00+02:00")
-        result = locate.propose_directories(sorted_entries, dir_ranges, target, 5)
-        assert result == ["dir_a", "dir_b"]
-
-    def test_filtered_by_neighbor(self) -> None:
-        """Test that a dir in range but not in neighbors is excluded."""
-        entries = [
-            _make_entry("dir_a/f1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/f2.jpg", "2025-07-07T10:05:00+02:00"),
-            _make_entry("dir_b/f1.jpg", "2025-07-07T09:00:00+02:00"),
-            _make_entry("dir_b/f2.jpg", "2025-07-07T12:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_ranges = locate.build_directory_ranges(locate.build_directory_entries(sorted_entries))
-        # target inside both ranges, but N=1 only catches dir_a neighbors
-        target = datetime.fromisoformat("2025-07-07T10:03:00+02:00")
-        result = locate.propose_directories(sorted_entries, dir_ranges, target, 1)
-        assert result == ["dir_a"]
-
-    def test_filtered_by_range(self) -> None:
-        """Test that a dir in neighbors but not in range is excluded."""
-        entries = [
-            _make_entry("dir_a/f1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/f2.jpg", "2025-07-07T10:10:00+02:00"),
-            _make_entry("dir_b/f1.jpg", "2025-07-07T10:03:00+02:00"),
-            _make_entry("dir_b/f2.jpg", "2025-07-07T10:04:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_ranges = locate.build_directory_ranges(locate.build_directory_entries(sorted_entries))
-        # target inside dir_a range (10:00-10:10) but outside dir_b (10:03-10:04)
-        target = datetime.fromisoformat("2025-07-07T10:06:00+02:00")
-        result = locate.propose_directories(sorted_entries, dir_ranges, target, 5)
-        assert "dir_b" not in result
-        assert result == ["dir_a"]
-
-    def test_empty_no_matches(self) -> None:
-        """Test no matches when timestamp is outside all ranges."""
-        entries = [
-            _make_entry("dir_a/f1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/f2.jpg", "2025-07-07T10:05:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_ranges = locate.build_directory_ranges(locate.build_directory_entries(sorted_entries))
-        target = datetime.fromisoformat("2025-07-07T09:00:00+02:00")
-        result = locate.propose_directories(sorted_entries, dir_ranges, target, 5)
-        assert result == []
-
-
-@pytest.mark.unit
-class TestExtractSequenceNumber:
-    """Tests for extract_sequence_number function."""
-
-    def test_standard_photo_name(self) -> None:
-        """Test extraction from standard photo filename."""
-        assert locate.extract_sequence_number("img_6767.jpg") == 6767
-
-    def test_multiple_digit_groups(self) -> None:
-        """Test that last digit group is used."""
-        assert locate.extract_sequence_number("DSC_20250707_001.jpg") == 1
-
-    def test_no_digits(self) -> None:
-        """Test that None is returned for filename without digits."""
-        assert locate.extract_sequence_number("readme.txt") is None
-
-    def test_digits_only(self) -> None:
-        """Test filename that is just digits."""
-        assert locate.extract_sequence_number("12345.jpg") == 12345
-
-
-@pytest.mark.unit
-class TestFindSeqMatches:
-    """Tests for find_seq_matches function."""
-
-    def test_matches_between_entries(self) -> None:
-        """Test seq match when file number is between adjacent entries."""
-        entries = [
-            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
-        result = locate.find_seq_matches(["dir_a"], dir_seqs, "img_105.jpg")
-        assert result == ["dir_a"]
-
-    def test_matches_before_first_entry(self) -> None:
-        """Test weak match when file number is before the first archive entry."""
-        entries = [
-            _make_entry("dir_a/img_200.jpg", "2025-07-07T12:00:00+02:00"),
-            _make_entry("dir_a/img_210.jpg", "2025-07-07T14:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
-        result = locate.find_seq_matches(["dir_a"], dir_seqs, "img_190.jpg")
-        assert result == ["dir_a"]
-
-    def test_no_match_returns_empty(self) -> None:
-        """Test no match when target seq is outside all directory ranges."""
-        entries = [
-            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
-        result = locate.find_seq_matches(["dir_b"], dir_seqs, "img_105.jpg")
-        assert result == []
-
-    def test_prefix_filters_different_naming(self) -> None:
-        """Test that match_prefix=True excludes entries with different prefix."""
-        entries = [
-            _make_entry("dir_a/dsc_100.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/dsc_110.jpg", "2025-07-07T12:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
-        # Without prefix matching: seq 105 fits between 100 and 110
-        assert locate.find_seq_matches(["dir_a"], dir_seqs, "img_105.jpg") == ["dir_a"]
-        # With prefix matching: img_ != dsc_, no match
-        assert locate.find_seq_matches(["dir_a"], dir_seqs, "img_105.jpg", match_prefix=True) == []
-
-    def test_tightest_gap_wins(self) -> None:
-        """Test that directory with tightest seq gap is preferred."""
-        entries = [
-            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
-            _make_entry("dir_b/img_050.jpg", "2025-07-07T09:00:00+02:00"),
-            _make_entry("dir_b/img_500.jpg", "2025-07-07T15:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
-        # img_105 fits in both dirs, but dir_a has tighter gap (10 vs 450)
-        result = locate.find_seq_matches(["dir_a", "dir_b"], dir_seqs, "img_105.jpg")
-        assert result == ["dir_a"]
-
-    def test_no_digits_returns_empty(self) -> None:
-        """Test that file without digits returns empty list."""
-        entries = [
-            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_seqs = locate.build_directory_seqs(locate.build_directory_entries(sorted_entries))
-        result = locate.find_seq_matches(["dir_a"], dir_seqs, "readme.txt")
-        assert result == []
-
-
-@pytest.mark.unit
-class TestResolveCandiates:
-    """Tests for _resolve_candidates function."""
-
-    def test_seq_finds_dir_not_in_neighbors(self) -> None:
-        """Test that --seq finds a directory via range+seq even without neighbor match."""
-        # dir_a has a wide gap between entries — neighbors won't include it
-        # dir_b is close in time — neighbors will include it
-        entries = [
-            _make_entry("dir_a/img_100.jpg", "2025-07-07T08:00:00+02:00"),
-            _make_entry("dir_a/img_120.jpg", "2025-07-07T16:00:00+02:00"),
-            _make_entry("dir_b/img_500.jpg", "2025-07-07T11:58:00+02:00"),
-            _make_entry("dir_b/img_510.jpg", "2025-07-07T12:02:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        dir_ranges = locate.build_directory_ranges(dir_entries)
-        dir_seqs = locate.build_directory_seqs(dir_entries)
-        # target at 12:00 — neighbors (N=1) are dir_b, but seq 105 fits dir_a
-        target = datetime.fromisoformat("2025-07-07T12:00:00+02:00")
-        result = locate._resolve_candidates(
-            sorted_entries,
-            dir_ranges,
-            dir_seqs,
-            target,
-            1,
-            use_seq=True,
-            filename="img_105.jpg",
-        )
-        assert result == ["dir_a"]
-
-    def test_seq_fallback_outside_range(self) -> None:
-        """Test that --seq matches files before archive date range."""
-        entries = [
-            _make_entry("dir_a/img_200.jpg", "2025-07-07T12:00:00+02:00"),
-            _make_entry("dir_a/img_210.jpg", "2025-07-07T14:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        dir_ranges = locate.build_directory_ranges(dir_entries)
-        dir_seqs = locate.build_directory_seqs(dir_entries)
-        # File before range, seq 190 < 200
-        target = datetime.fromisoformat("2025-07-07T08:00:00+02:00")
-        result = locate._resolve_candidates(
-            sorted_entries,
-            dir_ranges,
-            dir_seqs,
-            target,
-            5,
-            use_seq=True,
-            filename="img_190.jpg",
-        )
-        assert result == ["dir_a"]
-
-    def test_without_seq_uses_hybrid(self) -> None:
-        """Test that without --seq, standard hybrid matching is used."""
-        entries = [
-            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        dir_ranges = locate.build_directory_ranges(dir_entries)
-        dir_seqs = locate.build_directory_seqs(dir_entries)
-        target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
-        result = locate._resolve_candidates(
-            sorted_entries,
-            dir_ranges,
-            dir_seqs,
-            target,
-            5,
-            use_seq=False,
-            filename="img_105.jpg",
-        )
-        assert result == ["dir_a"]
-
-    def test_seq_no_match_falls_back_to_hybrid(self) -> None:
-        """Test that when seq doesn't match, hybrid candidates are kept."""
-        entries = [
-            _make_entry("dir_a/dsc_100.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/dsc_110.jpg", "2025-07-07T12:00:00+02:00"),
-        ]
-        sorted_entries = _build_sorted_entries(entries)
-        dir_entries = locate.build_directory_entries(sorted_entries)
-        dir_ranges = locate.build_directory_ranges(dir_entries)
-        dir_seqs = locate.build_directory_seqs(dir_entries)
-        target = datetime.fromisoformat("2025-07-07T11:00:00+02:00")
-        # With match_prefix: img_ != dsc_, seq fails, falls back to hybrid
-        result = locate._resolve_candidates(
-            sorted_entries,
-            dir_ranges,
-            dir_seqs,
-            target,
-            5,
-            use_seq=True,
-            match_prefix=True,
-            filename="img_105.jpg",
-        )
-        assert result == ["dir_a"]
-
-
-@pytest.mark.unit
 class TestLoadArchiveEntries:
     """Tests for load_archive_entries function."""
 
@@ -486,7 +148,404 @@ class TestWriteScript:
         assert mode & 0o111
 
 
+# --- New series-based algorithm unit tests ---
+
+
+def _dt(time_str: str) -> datetime:
+    """Create a timezone-aware datetime for 2025-07-07 at given HH:MM."""
+    h, m = time_str.split(":")
+    return datetime(2025, 7, 7, int(h), int(m), 0, tzinfo=timezone(timedelta(hours=2)))
+
+
+def _nf(
+    name: str,
+    time_str: str,
+    prefix: str | None = None,
+    seq: int | None = None,
+) -> locate.NewFile:
+    """Create a NewFile for testing."""
+    return locate.NewFile(path=f"/new/{name}", prefix=prefix, seq=seq, date=_dt(time_str))
+
+
+@pytest.mark.unit
+class TestGroupIntoSeries:
+    """Tests for group_into_series function."""
+
+    def test_single_prefix(self) -> None:
+        """Test grouping files with the same prefix."""
+        files = [
+            ("/new/img_004.jpg", _dt("10:00")),
+            ("/new/img_005.jpg", _dt("10:05")),
+            ("/new/img_007.jpg", _dt("10:10")),
+        ]
+        result = locate.group_into_series(files)
+        assert len(result) == 1
+        assert result[0].prefix == "img_"
+        assert result[0].seq_range == (4, 7)
+        assert len(result[0].files) == 3
+
+    def test_multiple_prefixes(self) -> None:
+        """Test grouping files with different prefixes."""
+        files = [
+            ("/new/img_004.jpg", _dt("10:00")),
+            ("/new/dsc_101.jpg", _dt("14:00")),
+            ("/new/img_005.jpg", _dt("10:05")),
+            ("/new/dsc_102.jpg", _dt("14:05")),
+        ]
+        result = locate.group_into_series(files)
+        assert len(result) == 2
+        prefixes = [s.prefix for s in result]
+        assert "dsc_" in prefixes
+        assert "img_" in prefixes
+
+    def test_files_without_seq(self) -> None:
+        """Test that files without sequence numbers become individual series."""
+        files = [
+            ("/new/notes.txt", _dt("09:00")),
+            ("/new/readme.md", _dt("09:30")),
+        ]
+        result = locate.group_into_series(files)
+        assert len(result) == 2
+        for s in result:
+            assert s.prefix is None
+            assert s.seq_range is None
+            assert len(s.files) == 1
+
+    def test_mixed_seq_and_no_seq(self) -> None:
+        """Test mix of files with and without sequence numbers."""
+        files = [
+            ("/new/img_004.jpg", _dt("10:00")),
+            ("/new/notes.txt", _dt("09:00")),
+            ("/new/img_005.jpg", _dt("10:05")),
+        ]
+        result = locate.group_into_series(files)
+        assert len(result) == 2
+        # Prefixed series first, then None
+        assert result[0].prefix == "img_"
+        assert result[1].prefix is None
+
+    def test_gaps_in_series(self) -> None:
+        """Test that gaps in numbering are allowed within a series."""
+        files = [
+            ("/new/img_004.jpg", _dt("10:00")),
+            ("/new/img_005.jpg", _dt("10:05")),
+            ("/new/img_009.jpg", _dt("10:30")),
+            ("/new/img_010.jpg", _dt("10:35")),
+        ]
+        result = locate.group_into_series(files)
+        assert len(result) == 1
+        assert result[0].seq_range == (4, 10)
+        assert len(result[0].files) == 4
+
+    def test_empty_input(self) -> None:
+        """Test empty input returns empty list."""
+        assert locate.group_into_series([]) == []
+
+
+@pytest.mark.unit
+class TestSplitSeriesAgainstArchive:
+    """Tests for split_series_against_archive function."""
+
+    def _make_dir_seqs(
+        self, entries: list[dict[str, str | int]]
+    ) -> dict[str, list[tuple[str | None, int]]]:
+        """Build dir_seqs from entries."""
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        return locate.build_directory_seqs(dir_entries)
+
+    def test_no_collisions(self) -> None:
+        """Test series with no collisions passes through unchanged."""
+        entries = [
+            _make_entry("dir_a/img_001.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        dir_seqs = self._make_dir_seqs(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[_nf("img_004.jpg", "10:15", "img_", 4), _nf("img_005.jpg", "10:20", "img_", 5)],
+            seq_range=(4, 5),
+        )
+        sub, collisions = locate.split_series_against_archive(series, dir_seqs)
+        assert len(sub) == 1
+        assert len(collisions) == 0
+        assert sub[0].seq_range == (4, 5)
+
+    def test_collision_splits_series(self) -> None:
+        """Test that archive entries within range split the series."""
+        entries = [
+            _make_entry("dir_a/img_001.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_006.jpg", "2025-07-07T11:00:00+02:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        dir_seqs = self._make_dir_seqs(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[
+                _nf("img_004.jpg", "10:15", "img_", 4),
+                _nf("img_005.jpg", "10:20", "img_", 5),
+                _nf("img_007.jpg", "10:30", "img_", 7),
+                _nf("img_009.jpg", "10:40", "img_", 9),
+            ],
+            seq_range=(4, 9),
+        )
+        sub, collisions = locate.split_series_against_archive(series, dir_seqs)
+        assert len(collisions) == 0  # no new files with seq 6
+        assert len(sub) == 2
+        assert sub[0].seq_range == (4, 5)
+        assert sub[1].seq_range == (7, 9)
+
+    def test_collision_with_new_file(self) -> None:
+        """Test collision when new file has same seq as archive entry."""
+        entries = [
+            _make_entry("dir_a/img_001.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_007.jpg", "2025-07-07T11:00:00+02:00"),
+            _make_entry("dir_a/img_008.jpg", "2025-07-07T11:30:00+02:00"),
+            _make_entry("dir_a/img_020.jpg", "2025-07-07T14:00:00+02:00"),
+        ]
+        dir_seqs = self._make_dir_seqs(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[
+                _nf("img_004.jpg", "10:15", "img_", 4),
+                _nf("img_005.jpg", "10:20", "img_", 5),
+                _nf("img_007.jpg", "10:30", "img_", 7),
+                _nf("img_009.jpg", "10:40", "img_", 9),
+                _nf("img_010.jpg", "10:45", "img_", 10),
+            ],
+            seq_range=(4, 10),
+        )
+        sub, collisions = locate.split_series_against_archive(series, dir_seqs)
+        assert len(collisions) == 1
+        assert collisions[0].new_file.seq == 7
+        assert len(sub) == 2
+        assert sub[0].seq_range == (4, 5)
+        assert sub[1].seq_range == (9, 10)
+
+    def test_all_collisions(self) -> None:
+        """Test when all new files collide with archive."""
+        entries = [
+            _make_entry("dir_a/img_004.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_005.jpg", "2025-07-07T10:05:00+02:00"),
+        ]
+        dir_seqs = self._make_dir_seqs(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[_nf("img_004.jpg", "10:15", "img_", 4), _nf("img_005.jpg", "10:20", "img_", 5)],
+            seq_range=(4, 5),
+        )
+        sub, collisions = locate.split_series_against_archive(series, dir_seqs)
+        assert len(sub) == 0
+        assert len(collisions) == 2
+
+    def test_single_file_series_passthrough(self) -> None:
+        """Test that single-element series (no seq) passes through."""
+        entries = [_make_entry("dir_a/img_001.jpg", "2025-07-07T10:00:00+02:00")]
+        dir_seqs = self._make_dir_seqs(entries)
+        series = locate.Series(prefix=None, files=[_nf("notes.txt", "09:00")], seq_range=None)
+        sub, collisions = locate.split_series_against_archive(series, dir_seqs)
+        assert len(sub) == 1
+        assert len(collisions) == 0
+
+
+@pytest.mark.unit
+class TestFindGapMatch:
+    """Tests for find_gap_match function."""
+
+    def _build_indexes(
+        self, entries: list[dict[str, str | int]]
+    ) -> tuple[
+        dict[str, list[tuple[str | None, int]]],
+        dict[str, list[tuple[datetime, dict[str, str | int]]]],
+    ]:
+        sorted_entries = _build_sorted_entries(entries)
+        dir_entries = locate.build_directory_entries(sorted_entries)
+        dir_seqs = locate.build_directory_seqs(dir_entries)
+        return dir_seqs, dir_entries
+
+    def test_finds_gap_in_single_directory(self) -> None:
+        """Test finding a gap in one directory."""
+        entries = [
+            _make_entry("dir_a/img_001.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_a/img_003.jpg", "2025-07-07T09:10:00+02:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        dir_seqs, dir_entries = self._build_indexes(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[_nf("img_004.jpg", "09:15", "img_", 4), _nf("img_005.jpg", "09:20", "img_", 5)],
+            seq_range=(4, 5),
+        )
+        result = locate.find_gap_match(series, dir_seqs, dir_entries)
+        assert len(result) == 1
+        assert result[0].directory == "dir_a"
+        assert result[0].gap == (3, 10)
+        assert result[0].time_ok is True
+
+    def test_tightest_gap_wins(self) -> None:
+        """Test that the directory with tightest gap is first."""
+        entries = [
+            # dir_a: gap 3..10 (size 7)
+            _make_entry("dir_a/img_003.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+            # dir_b: gap 4..6 (size 2)
+            _make_entry("dir_b/img_004.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_b/img_006.jpg", "2025-07-07T10:00:00+02:00"),
+        ]
+        dir_seqs, dir_entries = self._build_indexes(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[_nf("img_005.jpg", "09:30", "img_", 5)],
+            seq_range=(5, 5),
+        )
+        result = locate.find_gap_match(series, dir_seqs, dir_entries)
+        assert len(result) == 2
+        assert result[0].directory == "dir_b"  # tighter gap
+
+    def test_time_validation_failure(self) -> None:
+        """Test that time validation detects wrong ordering."""
+        entries = [
+            _make_entry("dir_a/img_003.jpg", "2025-08-01T14:00:00+02:00"),  # AFTER new files
+            _make_entry("dir_a/img_010.jpg", "2025-08-01T15:00:00+02:00"),
+        ]
+        dir_seqs, dir_entries = self._build_indexes(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[_nf("img_004.jpg", "09:15", "img_", 4)],
+            seq_range=(4, 4),
+        )
+        result = locate.find_gap_match(series, dir_seqs, dir_entries)
+        assert len(result) == 1
+        assert result[0].time_ok is False
+
+    def test_no_gap_found(self) -> None:
+        """Test when archive has entries in the series range."""
+        entries = [
+            _make_entry("dir_a/img_003.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_a/img_005.jpg", "2025-07-07T09:30:00+02:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        dir_seqs, dir_entries = self._build_indexes(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[_nf("img_004.jpg", "09:15", "img_", 4), _nf("img_006.jpg", "09:45", "img_", 6)],
+            seq_range=(4, 6),
+        )
+        result = locate.find_gap_match(series, dir_seqs, dir_entries)
+        assert len(result) == 0  # img_005 blocks the gap
+
+    def test_prefix_mismatch_ignored(self) -> None:
+        """Test that entries with different prefix are ignored."""
+        entries = [
+            _make_entry("dir_a/dsc_003.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_a/dsc_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        dir_seqs, dir_entries = self._build_indexes(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[_nf("img_004.jpg", "09:15", "img_", 4)],
+            seq_range=(4, 4),
+        )
+        result = locate.find_gap_match(series, dir_seqs, dir_entries)
+        assert len(result) == 0  # no img_ entries in any directory
+
+    def test_no_prefix_mode(self) -> None:
+        """Test that match_prefix=False ignores prefix when finding gaps."""
+        entries = [
+            _make_entry("dir_a/dsc_003.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_a/dsc_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        dir_seqs, dir_entries = self._build_indexes(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[_nf("img_004.jpg", "09:15", "img_", 4)],
+            seq_range=(4, 4),
+        )
+        result = locate.find_gap_match(series, dir_seqs, dir_entries, match_prefix=False)
+        assert len(result) == 1
+        assert result[0].directory == "dir_a"
+
+    def test_one_sided_gap_start(self) -> None:
+        """Test gap at start of archive (no before_seq)."""
+        entries = [
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+            _make_entry("dir_a/img_020.jpg", "2025-07-07T14:00:00+02:00"),
+        ]
+        dir_seqs, dir_entries = self._build_indexes(entries)
+        series = locate.Series(
+            prefix="img_",
+            files=[_nf("img_004.jpg", "09:15", "img_", 4)],
+            seq_range=(4, 4),
+        )
+        result = locate.find_gap_match(series, dir_seqs, dir_entries)
+        assert len(result) == 1
+        assert result[0].gap == (None, 10)
+        assert result[0].time_ok is True
+
+    def test_single_element_series_returns_empty(self) -> None:
+        """Test that series without seq returns no gap matches."""
+        entries = [_make_entry("dir_a/img_001.jpg", "2025-07-07T10:00:00+02:00")]
+        dir_seqs, dir_entries = self._build_indexes(entries)
+        series = locate.Series(prefix=None, files=[_nf("notes.txt", "09:00")], seq_range=None)
+        result = locate.find_gap_match(series, dir_seqs, dir_entries)
+        assert result == []
+
+
+@pytest.mark.unit
+class TestMatchSingleFile:
+    """Tests for match_single_file function."""
+
+    def test_finds_closest_directory(self) -> None:
+        """Test matching by timestamp proximity."""
+        sorted_entries = _build_sorted_entries(SAMPLE_ENTRIES)
+        nf = _nf("notes.txt", "10:07")
+        result = locate.match_single_file(nf, sorted_entries, 5)
+        assert result == "camera/100"
+
+    def test_no_entries(self) -> None:
+        """Test with empty archive."""
+        nf = _nf("notes.txt", "10:07")
+        result = locate.match_single_file(nf, [], 5)
+        assert result is None
+
+
+@pytest.mark.unit
+class TestReadFileDate:
+    """Tests for read_file_date function."""
+
+    def test_reads_mtime(self, tmp_path: Path) -> None:
+        """Test reading file date from mtime."""
+        f = tmp_path / "test.jpg"
+        f.write_text("data")
+        result = locate.read_file_date(str(f))
+        assert isinstance(result, datetime)
+        assert result.tzinfo is not None
+
+    def test_exif_fallback_to_mtime(self, tmp_path: Path) -> None:
+        """Test that --exif falls back to mtime for non-image files."""
+        f = tmp_path / "test.txt"
+        f.write_text("data")
+        result = locate.read_file_date(str(f), use_exif=True)
+        assert isinstance(result, datetime)
+
+
 # --- Integration tests ---
+
+
+def _make_args(**kwargs: object) -> argparse.Namespace:
+    """Create a Namespace with default locate args, overridden by kwargs."""
+    defaults: dict[str, object] = {
+        "directory": "",
+        "json_files": [],
+        "list": False,
+        "context": 5,
+        "filter": None,
+        "output": None,
+        "no_prefix": False,
+        "exif": False,
+    }
+    defaults.update(kwargs)
+    return argparse.Namespace(**defaults)
 
 
 @pytest.mark.integration
@@ -499,72 +558,79 @@ class TestRun:
         json_file.write_text(json.dumps(SAMPLE_ENTRIES), encoding="utf-8")
         return json_file
 
-    def _setup_new_files(self, tmp_path: Path) -> Path:
+    def _setup_new_files(
+        self, tmp_path: Path, files: list[tuple[str, float]] | None = None
+    ) -> Path:
         """Create a directory with new files having specific mtimes."""
         new_dir = tmp_path / "new"
         new_dir.mkdir()
-        f = new_dir / "new_photo.jpg"
-        f.write_text("photo data")
-        # Set mtime to 2025-07-07 10:07:00 UTC (between img_002 and img_003)
-        target_ts = datetime(2025, 7, 7, 8, 7, 0, tzinfo=UTC).timestamp()
-        os.utime(f, (target_ts, target_ts))
+        if files is None:
+            # Default: img_002 at 10:07 UTC — fits in camera/100 gap
+            f = new_dir / "img_002.jpg"
+            f.write_text("photo data")
+            target_ts = datetime(2025, 7, 7, 8, 7, 0, tzinfo=UTC).timestamp()
+            os.utime(f, (target_ts, target_ts))
+        else:
+            for name, ts in files:
+                f = new_dir / name
+                f.write_text("data")
+                os.utime(f, (ts, ts))
         return new_dir
 
-    def test_default_mode(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test default mode prints proposed directories."""
-        json_file = self._setup_archive(tmp_path)
-        new_dir = self._setup_new_files(tmp_path)
-        args = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=False,
-            context=10,
-            filter=None,
-            output=None,
-            seq=False,
-            prefix=False,
-        )
+    def test_default_mode_gap_match(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test default mode finds gap match for a series."""
+        # Archive: img_001..003 in camera/100, img_004..006 in camera/101
+        # New file: img_002 — BUT seq 2 already in archive → collision
+        # Use distinct numbers instead
+        entries = [
+            _make_entry("dir_a/img_001.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        ts = datetime(2025, 7, 7, 9, 30, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(tmp_path, [("img_005.jpg", ts)])
+        args = _make_args(directory=str(new_dir), json_files=[str(json_file)])
         result = locate.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
-        assert "camera/100" in captured.out
+        assert "dir_a" in captured.out
 
-    def test_list_mode(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test list mode shows interleaved listing."""
-        json_file = self._setup_archive(tmp_path)
-        new_dir = self._setup_new_files(tmp_path)
-        args = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=True,
-            context=3,
-            filter=None,
-            output=None,
-            seq=False,
-            prefix=False,
-        )
+    def test_list_mode_shows_context(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test list mode shows archive context around gap."""
+        entries = [
+            _make_entry("dir_a/img_001.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        ts = datetime(2025, 7, 7, 9, 30, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(tmp_path, [("img_005.jpg", ts)])
+        args = _make_args(directory=str(new_dir), json_files=[str(json_file)], list=True)
         result = locate.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert ">" in captured.out
         assert " <" in captured.out
-        assert "Proposed directory:" in captured.out
+        assert "dir_a" in captured.out
+        assert "gap" in captured.out
 
-    def test_output_mode(self, tmp_path: Path) -> None:
+    def test_output_mode_generates_script(self, tmp_path: Path) -> None:
         """Test output mode generates shell script."""
-        json_file = self._setup_archive(tmp_path)
-        new_dir = self._setup_new_files(tmp_path)
+        entries = [
+            _make_entry("dir_a/img_001.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        ts = datetime(2025, 7, 7, 9, 30, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(tmp_path, [("img_005.jpg", ts)])
         script_path = str(tmp_path / "move.sh")
-        args = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=False,
-            context=3,
-            filter=None,
-            output=script_path,
-            seq=False,
-            prefix=False,
-        )
+        args = _make_args(directory=str(new_dir), json_files=[str(json_file)], output=script_path)
         result = locate.run(args)
         assert result == os.EX_OK
         content = Path(script_path).read_text(encoding="utf-8")
@@ -575,95 +641,73 @@ class TestRun:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test -o mode refuses to write script when placement is ambiguous."""
-        # Two directories with overlapping date ranges
         entries = [
-            _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/file2.jpg", "2025-07-07T14:00:00+02:00"),
-            _make_entry("dir_b/file1.jpg", "2025-07-07T11:00:00+02:00"),
-            _make_entry("dir_b/file2.jpg", "2025-07-07T15:00:00+02:00"),
+            _make_entry("dir_a/img_001.jpg", "2025-07-07T09:00:00+00:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+00:00"),
+            _make_entry("dir_b/img_001.jpg", "2025-07-07T09:30:00+00:00"),
+            _make_entry("dir_b/img_010.jpg", "2025-07-07T11:30:00+00:00"),
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
-        new_dir = tmp_path / "new"
-        new_dir.mkdir()
-        f = new_dir / "photo.jpg"
-        f.write_text("data")
-        # 12:00+02:00 falls within both dir_a (10:00-14:00) and dir_b (11:00-15:00)
-        target_ts = datetime(2025, 7, 7, 10, 0, 0, tzinfo=UTC).timestamp()
-        os.utime(f, (target_ts, target_ts))
+        ts = datetime(2025, 7, 7, 10, 0, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(tmp_path, [("img_005.jpg", ts)])
         script_path = str(tmp_path / "move.sh")
-        args = argparse.Namespace(
+        args = _make_args(
             directory=str(new_dir),
             json_files=[str(json_file)],
-            list=False,
-            context=5,
-            filter=None,
             output=script_path,
-            seq=False,
-            prefix=False,
+            no_prefix=True,
         )
         with pytest.raises(SystemExit, match="Use -f to narrow results"):
             locate.run(args)
         captured = capsys.readouterr()
-        assert "Ambiguous placement" in captured.err
-        assert "photo.jpg" in captured.err
-        assert not Path(script_path).exists()
+        assert "Ambiguous" in captured.err
 
-    def test_default_mode_ambiguous(
+    def test_gap_match_narrows_to_correct_dir(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test default mode shows all candidates when date ranges overlap."""
+        """Test gap-fitting narrows to the directory with matching seq gap."""
         entries = [
-            _make_entry("dir_a/file1.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/file2.jpg", "2025-07-07T14:00:00+02:00"),
-            _make_entry("dir_b/file1.jpg", "2025-07-07T11:00:00+02:00"),
-            _make_entry("dir_b/file2.jpg", "2025-07-07T15:00:00+02:00"),
+            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+00:00"),
+            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+00:00"),
+            _make_entry("dir_b/img_200.jpg", "2025-07-07T10:30:00+00:00"),
+            _make_entry("dir_b/img_210.jpg", "2025-07-07T11:30:00+00:00"),
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
-        new_dir = tmp_path / "new"
-        new_dir.mkdir()
-        f = new_dir / "photo.jpg"
-        f.write_text("data")
-        # 12:00+02:00 falls within both dir_a and dir_b ranges
-        target_ts = datetime(2025, 7, 7, 10, 0, 0, tzinfo=UTC).timestamp()
-        os.utime(f, (target_ts, target_ts))
-        args = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=False,
-            context=5,
-            filter=None,
-            output=None,
-            seq=False,
-            prefix=False,
-        )
+        ts = datetime(2025, 7, 7, 11, 0, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(tmp_path, [("img_105.jpg", ts)])
+        args = _make_args(directory=str(new_dir), json_files=[str(json_file)])
         result = locate.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
         assert "dir_a" in captured.out
-        assert "dir_b" in captured.out
+        assert "dir_b" not in captured.out
+
+    def test_outside_range_one_sided_gap(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test matching files before archive range via one-sided gap."""
+        entries = [
+            _make_entry("dir_a/img_200.jpg", "2025-07-07T12:00:00+02:00"),
+            _make_entry("dir_a/img_210.jpg", "2025-07-07T14:00:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        ts = datetime(2025, 7, 7, 8, 0, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(tmp_path, [("img_190.jpg", ts)])
+        args = _make_args(directory=str(new_dir), json_files=[str(json_file)])
+        result = locate.run(args)
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "dir_a" in captured.out
 
     def test_filter_option(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         """Test filter restricts archive entries by path."""
         json_file = self._setup_archive(tmp_path)
-        new_dir = tmp_path / "new"
-        new_dir.mkdir()
-        f = new_dir / "photo.jpg"
-        f.write_text("data")
-        # Set mtime near phone entries
-        target_ts = datetime(2025, 7, 7, 12, 2, 0, tzinfo=UTC).timestamp()
-        os.utime(f, (target_ts, target_ts))
-        args = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=False,
-            context=10,
-            filter=["phone"],
-            output=None,
-            seq=False,
-            prefix=False,
-        )
+        ts = datetime(2025, 7, 7, 12, 2, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(tmp_path, [("img_100.jpg", ts)])
+        args = _make_args(directory=str(new_dir), json_files=[str(json_file)], filter=["phone"])
         result = locate.run(args)
         assert result == os.EX_OK
         captured = capsys.readouterr()
@@ -671,16 +715,7 @@ class TestRun:
 
     def test_invalid_directory(self) -> None:
         """Test that invalid directory raises SystemExit."""
-        args = argparse.Namespace(
-            directory="/nonexistent",
-            json_files=["a.json"],
-            list=False,
-            context=10,
-            filter=None,
-            output=None,
-            seq=False,
-            prefix=False,
-        )
+        args = _make_args(directory="/nonexistent", json_files=["a.json"])
         with pytest.raises(SystemExit, match="does not exist"):
             locate.run(args)
 
@@ -689,233 +724,103 @@ class TestRun:
         json_file = self._setup_archive(tmp_path)
         empty_dir = tmp_path / "empty"
         empty_dir.mkdir()
-        args = argparse.Namespace(
-            directory=str(empty_dir),
-            json_files=[str(json_file)],
-            list=False,
-            context=10,
-            filter=None,
-            output=None,
-            seq=False,
-            prefix=False,
-        )
+        args = _make_args(directory=str(empty_dir), json_files=[str(json_file)])
         with pytest.raises(SystemExit, match="No files found"):
             locate.run(args)
 
-    def test_seq_filter_narrows_ambiguous(
+    def test_no_prefix_matches_across_prefixes(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """Test --seq narrows ambiguous placement to matching directory."""
+        """Test --no-prefix matches img_ series against dsc_ gap."""
         entries = [
-            _make_entry("dir_a/img_100.jpg", "2025-07-07T10:00:00+02:00"),
-            _make_entry("dir_a/img_110.jpg", "2025-07-07T12:00:00+02:00"),
-            _make_entry("dir_b/img_200.jpg", "2025-07-07T10:30:00+02:00"),
-            _make_entry("dir_b/img_210.jpg", "2025-07-07T11:30:00+02:00"),
-        ]
-        json_file = tmp_path / "archive.json"
-        json_file.write_text(json.dumps(entries), encoding="utf-8")
-        new_dir = tmp_path / "new"
-        new_dir.mkdir()
-        f = new_dir / "img_105.jpg"
-        f.write_text("data")
-        # 11:00+02:00 = within both dir_a (10:00-12:00) and dir_b (10:30-11:30)
-        target_ts = datetime(2025, 7, 7, 9, 0, 0, tzinfo=UTC).timestamp()
-        os.utime(f, (target_ts, target_ts))
-        args = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=False,
-            context=5,
-            filter=None,
-            output=None,
-            seq=True,
-            prefix=False,
-        )
-        result = locate.run(args)
-        assert result == os.EX_OK
-        captured = capsys.readouterr()
-        assert "dir_a" in captured.out
-        assert "dir_b" not in captured.out
-
-    def test_seq_fallback_matches_outside_range(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test --seq matches files before archive date range by sequence number."""
-        # Archive starts at img_200, new file img_190 is before the range
-        entries = [
-            _make_entry("dir_a/img_200.jpg", "2025-07-07T12:00:00+02:00"),
-            _make_entry("dir_a/img_210.jpg", "2025-07-07T14:00:00+02:00"),
-        ]
-        json_file = tmp_path / "archive.json"
-        json_file.write_text(json.dumps(entries), encoding="utf-8")
-        new_dir = tmp_path / "new"
-        new_dir.mkdir()
-        f = new_dir / "img_190.jpg"
-        f.write_text("data")
-        # Timestamp before archive range
-        target_ts = datetime(2025, 7, 7, 8, 0, 0, tzinfo=UTC).timestamp()
-        os.utime(f, (target_ts, target_ts))
-        args = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=False,
-            context=5,
-            filter=None,
-            output=None,
-            seq=True,
-            prefix=False,
-        )
-        result = locate.run(args)
-        assert result == os.EX_OK
-        captured = capsys.readouterr()
-        assert "dir_a" in captured.out
-
-    def test_list_mode_aggregates_across_files(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test -l mode finds match even when first file is outside range."""
-        entries = [
-            _make_entry("dir_a/img_200.jpg", "2025-07-07T12:00:00+02:00"),
-            _make_entry("dir_a/img_210.jpg", "2025-07-07T14:00:00+02:00"),
-        ]
-        json_file = tmp_path / "archive.json"
-        json_file.write_text(json.dumps(entries), encoding="utf-8")
-        new_dir = tmp_path / "new"
-        new_dir.mkdir()
-        # First file: before archive range (no hybrid match)
-        f1 = new_dir / "img_190.jpg"
-        f1.write_text("data")
-        ts1 = datetime(2025, 7, 7, 8, 0, 0, tzinfo=UTC).timestamp()
-        os.utime(f1, (ts1, ts1))
-        # Second file: within archive range (hybrid match)
-        f2 = new_dir / "img_205.jpg"
-        f2.write_text("data")
-        ts2 = datetime(2025, 7, 7, 11, 0, 0, tzinfo=UTC).timestamp()
-        os.utime(f2, (ts2, ts2))
-        args = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=True,
-            context=5,
-            filter=None,
-            output=None,
-            seq=False,
-            prefix=False,
-        )
-        result = locate.run(args)
-        assert result == os.EX_OK
-        captured = capsys.readouterr()
-        assert "Proposed directory:" in captured.out
-        assert "dir_a" in captured.out
-
-    def test_list_mode_per_file_context(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test -l mode shows only N context entries around each new file."""
-        # 20 archive entries spanning a wide range, 2 new files far apart
-        entries = [
-            _make_entry(f"dir_a/img_{i:03d}.jpg", f"2025-07-{i:02d}T12:00:00+02:00")
-            for i in range(1, 21)
-        ]
-        json_file = tmp_path / "archive.json"
-        json_file.write_text(json.dumps(entries), encoding="utf-8")
-        new_dir = tmp_path / "new"
-        new_dir.mkdir()
-        # First new file: between entry 3 and 4
-        f1 = new_dir / "photo_a.jpg"
-        f1.write_text("data")
-        ts1 = datetime(2025, 7, 3, 18, 0, 0, tzinfo=UTC).timestamp()
-        os.utime(f1, (ts1, ts1))
-        # Second new file: between entry 17 and 18
-        f2 = new_dir / "photo_b.jpg"
-        f2.write_text("data")
-        ts2 = datetime(2025, 7, 17, 18, 0, 0, tzinfo=UTC).timestamp()
-        os.utime(f2, (ts2, ts2))
-        args = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=True,
-            context=2,
-            filter=None,
-            output=None,
-            seq=False,
-            prefix=False,
-        )
-        result = locate.run(args)
-        assert result == os.EX_OK
-        captured = capsys.readouterr()
-        lines = [ln for ln in captured.out.splitlines() if ln.strip()]
-        # Should have separator between the two groups
-        assert "  (...)" in captured.out
-        # Should NOT show all 20 archive entries — only context around each new file
-        archive_lines = [ln for ln in lines if ln.startswith("  2025-") and "---" not in ln]
-        # 2 context before + 2 after for each of 2 new files = at most 8 archive lines
-        assert len(archive_lines) <= 8
-
-    def test_prefix_requires_seq(self, tmp_path: Path) -> None:
-        """Test that --prefix without --seq raises SystemExit."""
-        json_file = self._setup_archive(tmp_path)
-        new_dir = self._setup_new_files(tmp_path)
-        args = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=False,
-            context=5,
-            filter=None,
-            output=None,
-            seq=False,
-            prefix=True,
-        )
-        with pytest.raises(SystemExit, match="--prefix requires --seq"):
-            locate.run(args)
-
-    def test_prefix_narrows_seq_results(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test --prefix with --seq only matches entries with same naming pattern."""
-        entries = [
-            # dir_a has dsc_ entries: seq 100-110
             _make_entry("dir_a/dsc_100.jpg", "2025-07-07T10:00:00+02:00"),
             _make_entry("dir_a/dsc_110.jpg", "2025-07-07T12:00:00+02:00"),
-            # dir_b has img_ entries: seq 100-110
-            _make_entry("dir_b/img_100.jpg", "2025-07-07T10:30:00+02:00"),
-            _make_entry("dir_b/img_110.jpg", "2025-07-07T11:30:00+02:00"),
         ]
         json_file = tmp_path / "archive.json"
         json_file.write_text(json.dumps(entries), encoding="utf-8")
-        new_dir = tmp_path / "new"
-        new_dir.mkdir()
-        f = new_dir / "img_105.jpg"
-        f.write_text("data")
-        target_ts = datetime(2025, 7, 7, 9, 0, 0, tzinfo=UTC).timestamp()
-        os.utime(f, (target_ts, target_ts))
-        # With --seq only: both dirs match (same seq range)
-        args_seq = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=False,
-            context=5,
-            filter=None,
-            output=None,
-            seq=True,
-            prefix=False,
+        ts = datetime(2025, 7, 7, 10, 30, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(tmp_path, [("img_105.jpg", ts)])
+        # Default (prefix matching on): no match because img_ != dsc_
+        args_default = _make_args(directory=str(new_dir), json_files=[str(json_file)])
+        locate.run(args_default)
+        captured = capsys.readouterr()
+        assert "no match found" in captured.out
+        # With --no-prefix: matches
+        args_no_prefix = _make_args(
+            directory=str(new_dir), json_files=[str(json_file)], no_prefix=True
         )
-        locate.run(args_seq)
+        locate.run(args_no_prefix)
         captured = capsys.readouterr()
         assert "dir_a" in captured.out
-        assert "dir_b" in captured.out
-        # With --seq --prefix: only dir_b matches (img_ prefix)
-        args_prefix = argparse.Namespace(
-            directory=str(new_dir),
-            json_files=[str(json_file)],
-            list=False,
-            context=5,
-            filter=None,
-            output=None,
-            seq=True,
-            prefix=True,
+
+    def test_collision_detection(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """Test that collisions are detected and reported."""
+        entries = [
+            _make_entry("dir_a/img_001.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_a/img_005.jpg", "2025-07-07T10:00:00+02:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        ts1 = datetime(2025, 7, 7, 9, 15, 0, tzinfo=UTC).timestamp()
+        ts2 = datetime(2025, 7, 7, 9, 30, 0, tzinfo=UTC).timestamp()
+        ts3 = datetime(2025, 7, 7, 10, 30, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(
+            tmp_path,
+            [
+                ("img_003.jpg", ts1),
+                ("img_005.jpg", ts2),  # collision!
+                ("img_007.jpg", ts3),
+            ],
         )
-        locate.run(args_prefix)
+        args = _make_args(directory=str(new_dir), json_files=[str(json_file)])
+        result = locate.run(args)
+        assert result == os.EX_OK
         captured = capsys.readouterr()
-        assert "dir_b" in captured.out
-        assert "dir_a" not in captured.out
+        assert "Collision" in captured.out
+        assert "img_005.jpg" in captured.out
+        # Sub-series should still match
+        assert "dir_a" in captured.out
+
+    def test_single_file_timestamp_fallback(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test file without seq number uses timestamp fallback."""
+        json_file = self._setup_archive(tmp_path)
+        ts = datetime(2025, 7, 7, 8, 7, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(tmp_path, [("notes.txt", ts)])
+        args = _make_args(directory=str(new_dir), json_files=[str(json_file)])
+        result = locate.run(args)
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "camera/100" in captured.out
+        assert "timestamp" in captured.out
+
+    def test_series_grouping_in_default_mode(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Test that multiple files with same prefix are grouped into one series."""
+        entries = [
+            _make_entry("dir_a/img_001.jpg", "2025-07-07T09:00:00+02:00"),
+            _make_entry("dir_a/img_010.jpg", "2025-07-07T12:00:00+02:00"),
+        ]
+        json_file = tmp_path / "archive.json"
+        json_file.write_text(json.dumps(entries), encoding="utf-8")
+        ts1 = datetime(2025, 7, 7, 9, 15, 0, tzinfo=UTC).timestamp()
+        ts2 = datetime(2025, 7, 7, 9, 30, 0, tzinfo=UTC).timestamp()
+        ts3 = datetime(2025, 7, 7, 9, 45, 0, tzinfo=UTC).timestamp()
+        new_dir = self._setup_new_files(
+            tmp_path,
+            [
+                ("img_004.jpg", ts1),
+                ("img_005.jpg", ts2),
+                ("img_007.jpg", ts3),
+            ],
+        )
+        args = _make_args(directory=str(new_dir), json_files=[str(json_file)])
+        result = locate.run(args)
+        assert result == os.EX_OK
+        captured = capsys.readouterr()
+        assert "img_[4..7]" in captured.out
+        assert "3 files" in captured.out
+        assert "dir_a" in captured.out
