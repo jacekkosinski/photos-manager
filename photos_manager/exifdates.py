@@ -284,6 +284,39 @@ def compute_corrections(
     corrections: list[CorrectionResult] = []
     effective_offsets: list[tuple[int, int]] = []  # (index, delta_from_json) for INT
 
+    def _exif_correction(
+        exif_dt: datetime,
+        json_dt: datetime,
+        center: int,
+    ) -> tuple[CorrectionResult, tuple[int, int]]:
+        """Compute EXIF-based correction with optional GPS drift calibration."""
+        rolling = compute_rolling_stats(gps_drift_series, center=center, radius=gps_radius)
+        if rolling is not None:
+            mean_drift, std = rolling
+            corrected_naive = exif_dt + timedelta(seconds=round(mean_drift))
+            new_dt = corrected_naive.replace(tzinfo=tz)
+        else:
+            new_dt = exif_dt.replace(tzinfo=tz)
+            std = 0.0
+            mean_drift = 0.0
+
+        offset_from_json = int((new_dt - json_dt).total_seconds())
+        if abs(offset_from_json) < 1:
+            return None, (center, 0)
+
+        if rolling is not None:
+            tag = "[EXIF+GPS]" if std <= _GPS_STD_THRESHOLD else "[EXIF+GPS~]"
+            info: dict[str, Any] = {
+                "exif_dt": exif_dt,
+                "offset": round(mean_drift),
+                "std": std,
+            }
+        else:
+            tag = "[EXIF]"
+            info = {}
+
+        return (tag, new_dt.isoformat(), info), (center, offset_from_json)
+
     for i, ((exif_dt, gps_dt), entry) in enumerate(zip(exif_data, entries, strict=False)):
         json_dt = datetime.fromisoformat(str(entry["date"])).astimezone(tz)
 
@@ -292,32 +325,9 @@ def compute_corrections(
                 # GPS + EXIF: calibrate via rolling GPS-EXIF drift, not raw GPS time.
                 # Raw GPS is unreliable for burst shots (frozen between frames); the
                 # rolling average built from non-frozen frames is more robust.
-                rolling = compute_rolling_stats(gps_drift_series, center=i, radius=gps_radius)
-                if rolling is not None:
-                    mean_drift, std = rolling
-                    corrected_naive = exif_dt + timedelta(seconds=round(mean_drift))
-                    new_dt = corrected_naive.replace(tzinfo=tz)
-                else:
-                    new_dt = exif_dt.replace(tzinfo=tz)
-                    std = 0.0
-                    mean_drift = 0.0
-
-                offset_from_json = int((new_dt - json_dt).total_seconds())
-                if abs(offset_from_json) < 1:
-                    corrections.append(None)
-                    effective_offsets.append((i, 0))
-                elif rolling is not None:
-                    tag = "[EXIF+GPS]" if std <= _GPS_STD_THRESHOLD else "[EXIF+GPS~]"
-                    info: dict[str, Any] = {
-                        "exif_dt": exif_dt,
-                        "offset": round(mean_drift),
-                        "std": std,
-                    }
-                    corrections.append((tag, new_dt.isoformat(), info))
-                    effective_offsets.append((i, offset_from_json))
-                else:
-                    corrections.append(("[EXIF]", new_dt.isoformat(), {}))
-                    effective_offsets.append((i, offset_from_json))
+                corr, eff = _exif_correction(exif_dt, json_dt, i)
+                corrections.append(corr)
+                effective_offsets.append(eff)
             else:
                 # GPS without EXIF: use GPS time directly as last resort
                 gps_local = gps_dt.astimezone(tz)
@@ -331,31 +341,9 @@ def compute_corrections(
             continue
 
         if exif_dt is not None:
-            rolling = compute_rolling_stats(gps_drift_series, center=i, radius=gps_radius)
-            if rolling is not None:
-                mean_drift, std = rolling
-                corrected_naive = exif_dt + timedelta(seconds=round(mean_drift))
-                new_dt = corrected_naive.replace(tzinfo=tz)
-            else:
-                new_dt = exif_dt.replace(tzinfo=tz)
-                std = 0.0
-                mean_drift = 0.0
-
-            offset_from_json = int((new_dt - json_dt).total_seconds())
-            if abs(offset_from_json) < 1:
-                corrections.append(None)
-                effective_offsets.append((i, 0))
-                continue
-
-            if rolling is not None:
-                tag = "[EXIF+GPS]" if std <= _GPS_STD_THRESHOLD else "[EXIF+GPS~]"
-                info = {"exif_dt": exif_dt, "offset": round(mean_drift), "std": std}
-            else:
-                tag = "[EXIF]"
-                info = {}
-
-            corrections.append((tag, new_dt.isoformat(), info))
-            effective_offsets.append((i, offset_from_json))
+            corr, eff = _exif_correction(exif_dt, json_dt, i)
+            corrections.append(corr)
+            effective_offsets.append(eff)
             continue
 
         # No EXIF — placeholder; INT pass will fill in
