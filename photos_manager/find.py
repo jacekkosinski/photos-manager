@@ -555,7 +555,7 @@ def _dup_has_date_change(
         s_dt = datetime.fromisoformat(str(dup[0].get("date", "")))
         a_dt = datetime.fromisoformat(str(dup[1].get("date", "")))
         return abs((a_dt - s_dt).total_seconds()) > tolerance
-    except ValueError:
+    except (ValueError, TypeError):
         return False
 
 
@@ -629,7 +629,7 @@ def format_list_line(
                         old_str = scanned_dt.strftime(TIME_FMT)
                         new_str = archive_dt.strftime(TIME_FMT)
                     parts.append(f"{old_str} -> {new_str} (delta: {delta_str})")
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
 
         # Filename comparison (case-insensitive)
