@@ -310,7 +310,7 @@ class TestApplyCorrections:
             ("[EXIF]", "2023-05-14T11:00:00+02:00", {}),
             None,
         ]
-        exifdates.apply_corrections(str(json_file), corrections)
+        exifdates.apply_corrections(str(json_file), data, corrections)
 
         result = json.loads(json_file.read_text())
         assert result[0]["date"] == "2023-05-14T11:00:00+02:00"
@@ -335,7 +335,7 @@ class TestApplyCorrections:
         json_file.write_text(json.dumps(data, indent=2))
 
         corrections = [None] * 5
-        exifdates.apply_corrections(str(json_file), corrections)
+        exifdates.apply_corrections(str(json_file), data, corrections)
 
         result = json.loads(json_file.read_text())
         assert [e["path"] for e in result] == [f"{i}.jpg" for i in range(5)]

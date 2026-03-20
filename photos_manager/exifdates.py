@@ -377,26 +377,30 @@ def compute_corrections(
 # ---------------------------------------------------------------------------
 
 
-def apply_corrections(json_file: str, corrections: list[CorrectionResult]) -> None:
+def apply_corrections(
+    json_file: str,
+    entries: list[dict[str, Any]],
+    corrections: list[CorrectionResult],
+) -> None:
     """Write corrected dates back to a JSON file, preserving all other data.
 
     Field order within each entry and entry order in the file are preserved.
 
     Args:
         json_file: Path to the JSON metadata file to update.
+        entries: Already-loaded JSON entries (mutated in place with new dates).
         corrections: List of CorrectionResult (one per entry).
             None entries are skipped; non-None entries provide the new date.
 
     Examples:
-        >>> apply_corrections("archive.json", [None])  # no changes
+        >>> apply_corrections("archive.json", [{"date": "2025-01-01"}], [None])
     """
-    path = Path(json_file)
-    data = json.loads(path.read_text(encoding="utf-8"))
-    for entry, correction in zip(data, corrections, strict=False):
+    for entry, correction in zip(entries, corrections, strict=False):
         if correction is not None:
             _, new_date, _ = correction
             entry["date"] = new_date
-    path.write_text(json.dumps(data, indent=4, ensure_ascii=False) + "\n", encoding="utf-8")
+    path = Path(json_file)
+    path.write_text(json.dumps(entries, indent=4, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -514,7 +518,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"\n{changed} change(s) {verb} in {len(entries)} entries.")
 
     if args.fix and changed:
-        apply_corrections(args.json_file, corrections)
+        apply_corrections(args.json_file, entries, corrections)
         print("JSON updated. Run 'photos fixdates' to propagate to filesystem.")
     elif not args.fix and changed:
         print("Dry-run: use --fix to apply changes.")
