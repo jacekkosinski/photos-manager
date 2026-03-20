@@ -67,27 +67,22 @@ def load_files(
     return results
 
 
-def detect_sequences(
+def _detect_sequences_for_prefix(
     files: list[tuple[str, str, int, datetime]],
 ) -> list[list[tuple[str, str, int, datetime]]]:
-    """Partition files into minimum monotonic increasing subsequences.
-
-    Files must be pre-sorted by date. A sequence is coherent when both
-    sequence numbers and dates increase (dates already sorted, so only
-    sequence number monotonicity needs checking).
+    """Partition files with a single prefix into monotonic subsequences.
 
     Uses greedy assignment: each file joins the sequence whose last
     sequence number is the largest value still <= the file's number
     (tightest fit), minimizing the total number of sequences.
 
     Args:
-        files: List of (path, prefix, seq, date) tuples sorted by date.
+        files: List of (path, prefix, seq, date) tuples sorted by date,
+            all sharing the same prefix.
 
     Returns:
-        List of sequences, each a list of (path, prefix, seq, date) tuples.
-        Sorted by sequence length descending (longest first).
+        List of sequences (unsorted).
     """
-    # Track last seq number per active sequence for binary search
     last_seqs: list[int] = []
     sequences: list[list[tuple[str, str, int, datetime]]] = []
 
@@ -111,9 +106,42 @@ def detect_sequences(
             last_seqs.insert(new_pos, seq)
             sequences.insert(new_pos, [item])
 
-    # Sort by length descending (longest = main sequence first)
-    sequences.sort(key=len, reverse=True)
     return sequences
+
+
+def detect_sequences(
+    files: list[tuple[str, str, int, datetime]],
+) -> list[list[tuple[str, str, int, datetime]]]:
+    """Partition files into minimum monotonic increasing subsequences.
+
+    Files must be pre-sorted by date. A sequence is coherent when both
+    sequence numbers and dates increase (dates already sorted, so only
+    sequence number monotonicity needs checking).
+
+    Files are first partitioned by prefix (camera identifier) so that
+    different cameras with overlapping sequence number ranges are never
+    mixed into the same sequence.
+
+    Args:
+        files: List of (path, prefix, seq, date) tuples sorted by date.
+
+    Returns:
+        List of sequences, each a list of (path, prefix, seq, date) tuples.
+        Sorted by sequence length descending (longest first).
+    """
+    # Partition by prefix to keep different cameras separate
+    by_prefix: dict[str, list[tuple[str, str, int, datetime]]] = {}
+    for item in files:
+        by_prefix.setdefault(item[1], []).append(item)
+
+    # Run sequence detection per prefix, merge results
+    all_sequences: list[list[tuple[str, str, int, datetime]]] = []
+    for prefix_files in by_prefix.values():
+        all_sequences.extend(_detect_sequences_for_prefix(prefix_files))
+
+    # Sort by length descending (longest = main sequence first)
+    all_sequences.sort(key=len, reverse=True)
+    return all_sequences
 
 
 def _seq_directories(seq: list[tuple[str, str, int, datetime]]) -> list[str]:
