@@ -16,11 +16,11 @@ a unified interface to all photo management commands:
 - sync: Synchronize source and destination archives
 
 Usage:
-    photos find archive.json /path/to/scan -d -m
+    photos find archive.json /path/to/scan
     photos prepare /path/to/directory
     photos locate /path/to/new/photos archive.json
     photos index /path/to/directory
-    photos series /path/to/directory
+    photos series archive.json
     photos exifdates archive.json
     photos fixdates archive.json
     photos manifest /path/to/archive
