@@ -122,16 +122,19 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
             sha1_hex = calculate_checksums(file_path)[0]
             data = load_json(file_path)
 
-            if not all(isinstance(item, dict) for item in data):
-                raise SystemExit(f"Error: JSON file {file_path} must contain an array of objects")
-
-            if not all(required_json_fields <= item.keys() for item in data):
-                raise SystemExit(
-                    f"Error: JSON file {file_path} is missing required fields "
-                    f"(md5, path, sha1, size, date)"
-                )
-
-            total_bytes += sum(int(item["size"]) for item in data)
+            local_bytes = 0
+            for item in data:
+                if not isinstance(item, dict):
+                    raise SystemExit(
+                        f"Error: JSON file {file_path} must contain an array of objects"
+                    )
+                if not required_json_fields <= item.keys():
+                    raise SystemExit(
+                        f"Error: JSON file {file_path} is missing required fields "
+                        f"(md5, path, sha1, size, date)"
+                    )
+                local_bytes += int(item["size"])
+            total_bytes += local_bytes
             files_count += len(data)
             file_hashes[filename] = sha1_hex
 
