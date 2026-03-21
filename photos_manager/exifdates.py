@@ -17,7 +17,6 @@ Usage:
 """
 
 import argparse
-import json
 import os
 import statistics
 import sys
@@ -26,7 +25,12 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from photos_manager.common import TIME_FMT, format_timestamp_change, load_metadata_json
+from photos_manager.common import (
+    TIME_FMT,
+    format_timestamp_change,
+    load_metadata_json,
+    write_metadata_json,
+)
 
 # Optional EXIF support
 try:
@@ -407,8 +411,7 @@ def apply_corrections(
         if correction is not None:
             _, new_date, _ = correction
             entry["date"] = new_date
-    path = Path(json_file)
-    path.write_text(json.dumps(entries, indent=4, ensure_ascii=False) + "\n", encoding="utf-8")
+    write_metadata_json(json_file, entries)
 
 
 # ---------------------------------------------------------------------------

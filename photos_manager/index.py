@@ -16,13 +16,17 @@ Usage:
 """
 
 import argparse
-import json
 import os
 import re
 from collections import Counter
 from pathlib import Path
 
-from photos_manager.common import load_metadata_json, scan_files, validate_directory
+from photos_manager.common import (
+    load_metadata_json,
+    scan_files,
+    validate_directory,
+    write_metadata_json,
+)
 
 
 def extract_numbers(path: str) -> tuple[int, int, str]:
@@ -156,26 +160,11 @@ def run(args: argparse.Namespace) -> int:
     else:
         file_info_list.sort(key=lambda x: (x["date"], str(Path(str(x["path"])).name)))
 
-    # Reorder keys for consistent JSON output
-    key_order = ["path", "sha1", "md5", "date", "size"]
-    sorted_file_info = [
-        {key: item[key] for key in key_order if key in item} for item in file_info_list
-    ]
-
     dir_path = Path(args.directory)
     dir_name = dir_path.name if dir_path.name else dir_path.resolve().name
     output_json = f"{dir_name}.json"
 
-    try:
-        output_path = Path(output_json)
-        with output_path.open("w", encoding="utf-8") as json_file:
-            json.dump(sorted_file_info, json_file, ensure_ascii=False, indent=4)
-            json_file.write("\n")
-        output_path.chmod(0o644)
-        print(f"File information written to {output_json} ({len(sorted_file_info)} files)")
-    except OSError as exception:
-        raise SystemExit(
-            f"Error: Could not write to output file '{output_json}': {exception}"
-        ) from exception
+    write_metadata_json(output_json, file_info_list)
+    print(f"File information written to {output_json} ({len(file_info_list)} files)")
 
     return os.EX_OK

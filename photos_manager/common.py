@@ -103,7 +103,8 @@ def format_timestamp_change(
     return f"{name_col}  {tag:<{tag_width}}  {old_str} → {new_str} (delta: {delta_str}{extra})"
 
 
-_METADATA_KEYS = {"path", "sha1", "md5", "date", "size"}
+_METADATA_KEY_ORDER = ["path", "sha1", "md5", "date", "size"]
+_METADATA_KEYS = set(_METADATA_KEY_ORDER)
 
 
 def load_metadata_json(file_path: str) -> list[dict[str, str | int]]:
@@ -152,6 +153,31 @@ def load_metadata_json(file_path: str) -> list[dict[str, str | int]]:
             raise SystemExit(f"Error: Entry in '{file_path}' is missing required keys: {keys_str}")
 
     return data
+
+
+def write_metadata_json(file_path: str, data: list[dict[str, str | int]]) -> None:
+    """Write metadata entries to a JSON file.
+
+    Normalises key order to (path, sha1, md5, date, size), formats with
+    indent=4 and ensure_ascii=False, appends a trailing newline, and sets
+    file permissions to 0o644.
+
+    Args:
+        file_path: Destination path for the JSON file.
+        data: List of file metadata dictionaries.
+
+    Raises:
+        SystemExit: If the file cannot be written.
+    """
+    ordered = [{key: item[key] for key in _METADATA_KEY_ORDER if key in item} for item in data]
+    try:
+        output_path = Path(file_path)
+        with output_path.open("w", encoding="utf-8") as f:
+            json.dump(ordered, f, ensure_ascii=False, indent=4)
+            f.write("\n")
+        output_path.chmod(0o644)
+    except OSError as e:
+        raise SystemExit(f"Error: Could not write to '{file_path}': {e}") from e
 
 
 def _hash_file(file_path: str) -> tuple[str, str]:

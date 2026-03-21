@@ -19,9 +19,10 @@ from photos_manager.common import (
     resolve_group_name,
     resolve_owner_name,
     validate_directory,
+    write_metadata_json,
 )
 
-_ENTRY = {
+_ENTRY: dict[str, str | int] = {
     "path": "/test/file.jpg",
     "sha1": "aabbcc",
     "md5": "ddeeff",
@@ -111,6 +112,62 @@ class TestLoadMetadataJson:
             load_metadata_json(str(json_file))
 
         assert "missing required keys" in str(exc_info.value)
+
+
+@pytest.mark.unit
+class TestWriteMetadataJson:
+    """Tests for write_metadata_json function."""
+
+    def test_writes_json_file(self, tmp_path: Path) -> None:
+        """Test that JSON file is written with correct content."""
+        output = tmp_path / "out.json"
+        data = [_ENTRY]
+
+        write_metadata_json(str(output), data)
+
+        result = json.loads(output.read_text())
+        assert result == [_ENTRY]
+
+    def test_normalises_key_order(self, tmp_path: Path) -> None:
+        """Test that keys are written in canonical order."""
+        output = tmp_path / "out.json"
+        shuffled: dict[str, str | int] = {
+            "size": 100,
+            "md5": "dd",
+            "path": "/f",
+            "sha1": "aa",
+            "date": "2024-01-01T00:00:00+00:00",
+        }
+
+        write_metadata_json(str(output), [shuffled])
+
+        text = output.read_text()
+        keys = [line.strip().split(":")[0].strip('"') for line in text.splitlines() if ":" in line]
+        assert keys == ["path", "sha1", "md5", "date", "size"]
+
+    def test_sets_644_permissions(self, tmp_path: Path) -> None:
+        """Test that output file has 644 permissions."""
+        output = tmp_path / "out.json"
+
+        write_metadata_json(str(output), [_ENTRY])
+
+        mode = output.stat().st_mode & 0o777
+        assert mode == 0o644
+
+    def test_trailing_newline(self, tmp_path: Path) -> None:
+        """Test that file ends with a newline."""
+        output = tmp_path / "out.json"
+
+        write_metadata_json(str(output), [_ENTRY])
+
+        assert output.read_text().endswith("\n")
+
+    def test_raises_systemexit_on_write_error(self) -> None:
+        """Test that SystemExit is raised when file cannot be written."""
+        with pytest.raises(SystemExit) as exc_info:
+            write_metadata_json("/nonexistent/dir/out.json", [_ENTRY])
+
+        assert "Could not write to" in str(exc_info.value)
 
 
 @pytest.mark.unit
