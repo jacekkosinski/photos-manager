@@ -130,20 +130,32 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
 def run(args: argparse.Namespace) -> int:
     """Execute index command with parsed arguments.
 
-    Scans the directory, optionally merges with existing JSON, validates
-    for duplicates, sorts results, and writes output JSON file.
+    Scans the source directory recursively, collects file metadata, optionally
+    merges with an existing JSON file, validates for duplicates, sorts results,
+    and writes the output JSON file to the current working directory.
 
-    The output JSON file is named after the source directory (e.g., scanning
-    '/path/to/photos' creates 'photos.json') and contains an array of objects
-    with file metadata (path, sha1, md5, date, size).
+    Workflow:
+        1. Validates that the source directory exists and is a directory
+        2. Recursively scans all files and computes SHA1, MD5, size, and
+           modification timestamp for each
+        3. If ``--merge`` is given, loads and validates the existing JSON file
+           and appends its entries to the scanned results
+        4. Checks the combined list for duplicate paths, SHA1 hashes, and
+           MD5 hashes — aborts if any are found
+        5. Sorts the entries according to the selected sort mode
+        6. Writes the result to ``<dirname>.json`` in the current directory
+           with 644 permissions
 
     Args:
         args: Parsed command-line arguments with fields:
-            - directory: Path to source directory
-            - merge: Optional path to JSON file to merge with
-            - time_zone: Timezone for timestamps
-            - sort_by_number: Sort by numeric patterns
-            - sort_by_dir: Sort by directory name then timestamp
+            - directory: Path to source directory to scan
+            - merge: Optional path to an existing JSON metadata file to merge
+            - time_zone: IANA timezone name for modification timestamps
+              (default: ``'Europe/Warsaw'``)
+            - sort_by_number: If True, sort numerically by number embedded in
+              the parent directory name, then by number in the filename
+            - sort_by_dir: If True, sort by parent directory path, then by
+              modification timestamp, then by filename
 
     Returns:
         int: Exit code indicating success or failure
@@ -152,15 +164,26 @@ def run(args: argparse.Namespace) -> int:
     Raises:
         SystemExit: If any of the following errors occur:
             - Source directory does not exist or is not a directory
-            - Merge file cannot be read or contains invalid JSON
-            - Duplicate paths, SHA1, or MD5 hashes detected
+            - Merge file does not exist, cannot be read, or contains invalid JSON
+            - Duplicate path, SHA1, or MD5 found in the combined entry list
             - Output file cannot be written
 
+    Output:
+        Writes a JSON array to ``<dirname>.json`` in the current directory,
+        where each element has the structure::
+
+            {
+                "path": "/archive/photos/IMG_0001.jpg",
+                "sha1": "a1b2c3d4e5f6...",
+                "md5":  "f6e5d4c3b2a1...",
+                "date": "2024-06-15T14:32:10+02:00",
+                "size": 4823041
+            }
+
     Examples:
-        >>> # Scan directory and create JSON
         >>> args = parser.parse_args(['/path/to/photos'])
         >>> exit_code = run(args)
-        File information written to photos.json
+        File information written to photos.json (42 files)
     """
     validate_directory(args.directory)
 
