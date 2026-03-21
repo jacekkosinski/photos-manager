@@ -83,9 +83,8 @@ class TestFormatChangeLine:
 class TestGetNewestFiles:
     """Tests for get_newest_files function."""
 
-    def test_finds_newest_file_per_directory(self, tmp_path: Path) -> None:
+    def test_finds_newest_file_per_directory(self) -> None:
         """Test that newest file is found for each directory."""
-        json_file = tmp_path / "test.json"
         data = [
             {
                 "path": "/photos/2024/img1.jpg",
@@ -103,9 +102,7 @@ class TestGetNewestFiles:
                 "size": 300,
             },
         ]
-        json_file.write_text(json.dumps(data))
-
-        newest_files, newest_entry = get_newest_files(str(json_file))
+        newest_files, newest_entry = get_newest_files(data)
 
         # Should have entries for both directories
         assert len(newest_files) == 2
@@ -118,40 +115,31 @@ class TestGetNewestFiles:
         # Overall newest should be img3
         assert newest_entry["path"] == "/photos/2025/img3.jpg"
 
-    def test_raises_on_empty_json(self, tmp_path: Path) -> None:
+    def test_raises_on_empty_json(self) -> None:
         """Test that SystemExit is raised for empty JSON."""
-        json_file = tmp_path / "empty.json"
-        json_file.write_text("[]")
-
         with pytest.raises(SystemExit, match="empty"):
-            get_newest_files(str(json_file))
+            get_newest_files([])
 
-    def test_raises_on_missing_path_field(self, tmp_path: Path) -> None:
+    def test_raises_on_missing_path_field(self) -> None:
         """Test that SystemExit is raised when path field is missing."""
-        json_file = tmp_path / "test.json"
         data = [{"date": "2024-01-01T12:00:00+0000", "size": 100}]
-        json_file.write_text(json.dumps(data))
 
         with pytest.raises(SystemExit, match="Missing 'path'"):
-            get_newest_files(str(json_file))
+            get_newest_files(data)
 
-    def test_raises_on_missing_date_field(self, tmp_path: Path) -> None:
+    def test_raises_on_missing_date_field(self) -> None:
         """Test that SystemExit is raised when date field is missing."""
-        json_file = tmp_path / "test.json"
         data = [{"path": "/test.jpg", "size": 100}]
-        json_file.write_text(json.dumps(data))
 
         with pytest.raises(SystemExit, match="Missing 'date'"):
-            get_newest_files(str(json_file))
+            get_newest_files(data)
 
-    def test_raises_on_invalid_date_format(self, tmp_path: Path) -> None:
+    def test_raises_on_invalid_date_format(self) -> None:
         """Test that SystemExit is raised for invalid date format."""
-        json_file = tmp_path / "test.json"
         data = [{"path": "/test.jpg", "date": "invalid-date", "size": 100}]
-        json_file.write_text(json.dumps(data))
 
         with pytest.raises(SystemExit, match="Invalid date format"):
-            get_newest_files(str(json_file))
+            get_newest_files(data)
 
 
 @pytest.mark.unit

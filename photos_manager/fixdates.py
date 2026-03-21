@@ -76,15 +76,15 @@ def format_change_line(
 
 
 def get_newest_files(
-    json_file: str,
+    data: list[dict[str, str | int]],
 ) -> tuple[dict[str, dict[str, str | int]], dict[str, str | int]]:
-    """Retrieve the newest files from a JSON file grouped by directory.
+    """Retrieve the newest files from loaded JSON data grouped by directory.
 
     Analyzes JSON metadata to find the newest file in each directory based on
     the 'date' field. Also determines the overall newest file across all entries.
 
     Args:
-        json_file: Path to the JSON file containing file metadata.
+        data: Already-loaded JSON metadata entries.
 
     Returns:
         A tuple containing two elements:
@@ -93,19 +93,15 @@ def get_newest_files(
             - dict: The overall newest file entry across all directories
 
     Raises:
-        SystemExit: If the JSON file is empty, missing required fields (path, date),
+        SystemExit: If the data is empty, missing required fields (path, date),
             or contains invalid date formats.
 
     Examples:
-        >>> newest_per_dir, newest_overall = get_newest_files("archive.json")
-        >>> newest_per_dir['/photos/2024']
-        {'path': '/photos/2024/img_999.jpg', 'date': '2024-12-31T23:59:59+01:00', ...}
-        >>> newest_overall['path']
-        '/photos/2024/img_999.jpg'
+        >>> data = [{"path": "dir/a.jpg", "date": "2024-12-31T23:59:59+01:00"}]
+        >>> newest_per_dir, newest_overall = get_newest_files(data)
     """
-    data = load_json(json_file)
     if not data:
-        raise SystemExit(f"Error: JSON file '{json_file}' is empty")
+        raise SystemExit("Error: JSON data is empty")
 
     grouped_files: dict[str, list[dict[str, str | int]]] = {}
     for entry in data:
@@ -126,31 +122,23 @@ def get_newest_files(
         except ValueError as exception:
             raise SystemExit(f"Error: Invalid date format in entry: {files[0]}") from exception
 
-    try:
-        newest_entry = max(data, key=lambda x: datetime.fromisoformat(str(x["date"])))
-    except (KeyError, ValueError) as exception:
-        raise SystemExit("Error: Invalid or missing 'date' field in JSON data") from exception
+    newest_entry = max(newest_files.values(), key=lambda x: datetime.fromisoformat(str(x["date"])))
 
     return newest_files, newest_entry
 
 
-def _collect_file_changes(json_file: str, dry_run: bool = False) -> list[_PendingChange]:
+def _collect_file_changes(
+    json_data: list[dict[str, str | int]], dry_run: bool = False
+) -> list[_PendingChange]:
     """Collect file timestamp changes without printing or applying.
 
     Args:
-        json_file: Path to the JSON file containing file metadata.
+        json_data: Already-loaded JSON metadata entries.
         dry_run: If True, checks for read access instead of write access.
 
     Returns:
         List of pending changes as ``(name, tag, old_ts, new_ts, path)`` tuples.
-
-    Raises:
-        SystemExit: If the JSON file is empty or cannot be loaded.
     """
-    json_data = load_json(json_file)
-    if not json_data:
-        raise SystemExit(f"Error: JSON file '{json_file}' is empty")
-
     pending: list[_PendingChange] = []
     for entry in json_data:
         file_path = entry.get("path")
@@ -351,7 +339,10 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> int:
         Set timestamp for file '/photos/img.jpg' to match '1704376496' time
         >>> set_files_timestamps("archive.json")  # Actually updates files
     """
-    pending = _collect_file_changes(json_file, dry_run)
+    json_data = load_json(json_file)
+    if not json_data:
+        raise SystemExit(f"Error: JSON file '{json_file}' is empty")
+    pending = _collect_file_changes(json_data, dry_run)
     name_width = _name_col_width(pending)
     return _apply_changes(pending, name_width, dry_run)
 
@@ -520,10 +511,14 @@ def run(args: argparse.Namespace) -> int:
             dry_run = not args.fix
             all_pending: list[_PendingChange] = []
 
-            if args.all:
-                all_pending.extend(_collect_file_changes(json_file, dry_run))
+            json_data = load_json(json_file)
+            if not json_data:
+                raise SystemExit(f"Error: JSON file '{json_file}' is empty")
 
-            newest_files, newest_entry = get_newest_files(json_file)
+            if args.all:
+                all_pending.extend(_collect_file_changes(json_data, dry_run))
+
+            newest_files, newest_entry = get_newest_files(json_data)
 
             # Exclude root dir — _collect_json_changes handles it with overall newest.
             # Process subdirs deepest-first so parent timestamps are written last.
