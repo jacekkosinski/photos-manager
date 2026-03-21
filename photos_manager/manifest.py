@@ -54,9 +54,12 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from photos_manager.common import calculate_checksums_strict as calculate_checksums
-from photos_manager.common import find_json_files_with_mtime as find_json_files
-from photos_manager.common import load_metadata_json, validate_directory
+from photos_manager.common import (
+    calculate_checksums_strict,
+    find_json_files_with_mtime,
+    load_metadata_json,
+    validate_directory,
+)
 
 # Constants
 VERSION_PREFIX = "photos"
@@ -117,7 +120,7 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
     for file_path in file_paths:
         filename = Path(file_path).name
         try:
-            sha1_hex = calculate_checksums(file_path)[0]
+            sha1_hex = calculate_checksums_strict(file_path)[0]
             data = load_metadata_json(file_path)
 
             total_bytes += sum(int(item["size"]) for item in data)
@@ -209,7 +212,7 @@ def run(args: argparse.Namespace) -> int:
     """
     directory_path = validate_directory(args.directory, check_readable=True)
 
-    json_files_with_mtimes = find_json_files(args.directory)
+    json_files_with_mtimes = find_json_files_with_mtime(args.directory)
     json_files = [path for (_, path) in json_files_with_mtimes]
     total_bytes, file_count, file_hashes = validate_and_process_json(json_files)
 
