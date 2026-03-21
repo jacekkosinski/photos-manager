@@ -36,7 +36,9 @@ class TestValidateAndProcessJson:
         file_path = tmp_path / "invalid.json"
         file_path.write_text('{"key": "value"}')
 
-        with pytest.raises(SystemExit, match="must contain an array of objects"):
+        with pytest.raises(
+            SystemExit, match=r"does not contain a JSON array|must contain an array"
+        ):
             validate_and_process_json([str(file_path)])
 
     def test_rejects_array_of_non_objects(self, tmp_path: Path) -> None:

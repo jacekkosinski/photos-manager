@@ -29,7 +29,6 @@ Usage:
 
 import argparse
 import concurrent.futures
-import hashlib
 import json
 import os
 import re
@@ -82,30 +81,6 @@ def load_version_json(file_path: str) -> dict[str, Any]:
         raise SystemExit(
             f"Error: Version file '{file_path}' contains invalid format"
         ) from exception
-
-
-def calculate_file_hash(file_path: str) -> str:
-    """Calculate SHA1 hash of entire file for version verification.
-
-    Args:
-        file_path: Path to the file to hash.
-
-    Returns:
-        SHA1 hash as hex string.
-
-    Raises:
-        OSError: If file cannot be read.
-
-    Examples:
-        >>> hash_val = calculate_file_hash("archive.json")
-        >>> len(hash_val)
-        40
-    """
-    sha1_hash = hashlib.sha1(usedforsecurity=False)
-    path = Path(file_path)
-    with path.open("rb") as f:
-        sha1_hash.update(f.read())
-    return sha1_hash.hexdigest()
 
 
 def normalize_paths(
@@ -681,7 +656,7 @@ def verify_version_file(
 
         expected_hash = version_files[json_basename]
         try:
-            actual_hash = calculate_file_hash(json_file)
+            actual_hash = calculate_checksums(json_file)[0]
             if actual_hash != expected_hash:
                 errors.append(
                     f"Hash mismatch for {json_basename}: "

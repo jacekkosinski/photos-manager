@@ -49,13 +49,14 @@ Exit codes:
 """
 
 import argparse
-import hashlib
 import json
 import os
 from datetime import datetime
 from pathlib import Path
 
+from photos_manager.common import calculate_checksums_strict as calculate_checksums
 from photos_manager.common import find_json_files_with_mtime as find_json_files
+from photos_manager.common import load_json
 
 # Constants
 VERSION_PREFIX = "photos"
@@ -116,21 +117,10 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
     file_hashes = {}
 
     for file_path in file_paths:
-        path = Path(file_path)
-        filename = path.name
+        filename = Path(file_path).name
         try:
-            sha1 = hashlib.sha1(usedforsecurity=False)
-            with path.open("rb") as file:
-                content = file.read()
-                sha1.update(content)
-
-            data = json.loads(content)
-
-            if not isinstance(data, list):
-                raise SystemExit(
-                    f"Error: JSON file {file_path} must contain an array of objects, "
-                    f"got {type(data).__name__}"
-                )
+            sha1_hex = calculate_checksums(file_path)[0]
+            data = load_json(file_path)
 
             if not all(isinstance(item, dict) for item in data):
                 raise SystemExit(f"Error: JSON file {file_path} must contain an array of objects")
@@ -141,12 +131,10 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
                     f"(md5, path, sha1, size, date)"
                 )
 
-            total_bytes += sum(item["size"] for item in data)
+            total_bytes += sum(int(item["size"]) for item in data)
             files_count += len(data)
-            file_hashes[filename] = sha1.hexdigest()
+            file_hashes[filename] = sha1_hex
 
-        except json.JSONDecodeError as exception:
-            raise SystemExit(f"Error: Invalid JSON in {file_path}") from exception
         except OSError as exception:
             raise SystemExit(f"Error: Could not read {file_path}: {exception}") from exception
 

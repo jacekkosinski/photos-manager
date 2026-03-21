@@ -12,7 +12,6 @@ import pytest
 
 from photos_manager.common import calculate_checksums_strict, find_version_file
 from photos_manager.verify import (
-    calculate_file_hash,
     collect_expected_files,
     collect_filesystem_files,
     find_duplicate_checksums,
@@ -83,16 +82,16 @@ class TestFindVersionFile:
 
 @pytest.mark.unit
 class TestCalculateFileHash:
-    """Tests for calculate_file_hash function."""
+    """Tests for calculate_checksums_strict function."""
 
     def test_calculates_file_hash(self, tmp_path: Path) -> None:
         """Test that file hash is calculated correctly."""
         test_file = tmp_path / "test.txt"
         test_file.write_text("test content")
 
-        result = calculate_file_hash(str(test_file))
+        sha1, _ = calculate_checksums_strict(str(test_file))
 
-        assert result == "1eebdf4fdc9fc7bf283031b93f9aef3338de9052"
+        assert sha1 == "1eebdf4fdc9fc7bf283031b93f9aef3338de9052"
 
 
 @pytest.mark.unit
@@ -566,7 +565,7 @@ class TestVerifyVersionFile:
         json_file.write_text(json.dumps(data))
 
         # Calculate actual hash
-        actual_hash = calculate_file_hash(str(json_file))
+        actual_hash = calculate_checksums_strict(str(json_file))[0]
 
         # Create version file
         version_file = tmp_path / ".version.json"
@@ -611,7 +610,7 @@ class TestVerifyVersionFile:
         )
         json_file.write_text(json.dumps(data))
 
-        actual_hash = calculate_file_hash(str(json_file))
+        actual_hash = calculate_checksums_strict(str(json_file))[0]
 
         version_file = tmp_path / ".version.json"
         version_data = {
@@ -636,7 +635,7 @@ class TestVerifyVersionFile:
         )
         json_file.write_text(json.dumps(data))
 
-        actual_hash = calculate_file_hash(str(json_file))
+        actual_hash = calculate_checksums_strict(str(json_file))[0]
 
         version_file = tmp_path / ".version.json"
         version_data = {
@@ -1673,7 +1672,7 @@ class TestRun:
             "file_count": 1,
             "last_modified": "2025-01-01T00:00:00+00:00",
             "last_verified": "2025-01-01T00:00:00+00:00",
-            "files": {"archive.json": calculate_file_hash(str(json_file))},
+            "files": {"archive.json": calculate_checksums_strict(str(json_file))[0]},
         }
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
@@ -1726,7 +1725,7 @@ class TestRun:
             "file_count": 1,
             "last_modified": timestamp,
             "last_verified": timestamp,
-            "files": {"archive.json": calculate_file_hash(str(json_file))},
+            "files": {"archive.json": calculate_checksums_strict(str(json_file))[0]},
         }
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
@@ -2038,7 +2037,7 @@ class TestRun:
             "file_count": 1,
             "last_modified": recent_time,
             "last_verified": recent_time,
-            "files": {"archive.json": calculate_file_hash(str(json_file))},
+            "files": {"archive.json": calculate_checksums_strict(str(json_file))[0]},
         }
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
@@ -2146,7 +2145,7 @@ class TestRun:
             "file_count": 2,
             "last_modified": "2025-01-01T00:00:00+00:00",
             "last_verified": "2025-01-01T00:00:00+00:00",
-            "files": {"archive.json": calculate_file_hash(str(json_file))},
+            "files": {"archive.json": calculate_checksums_strict(str(json_file))[0]},
         }
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
@@ -2206,7 +2205,7 @@ class TestRun:
             "file_count": 1,
             "last_modified": "2025-01-01T00:00:00+00:00",
             "last_verified": "2025-01-01T00:00:00+00:00",
-            "files": {"archive.json": calculate_file_hash(str(json_file))},
+            "files": {"archive.json": calculate_checksums_strict(str(json_file))[0]},
         }
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
@@ -2349,7 +2348,7 @@ class TestRun:
             "file_count": 99,  # Wrong!
             "last_modified": "2025-01-01T00:00:00+00:00",
             "last_verified": "2025-01-01T00:00:00+00:00",
-            "files": {"archive.json": calculate_file_hash(str(json_file))},
+            "files": {"archive.json": calculate_checksums_strict(str(json_file))[0]},
         }
         version_file = test_dir / ".version.json"
         version_file.write_text(json.dumps(version_data))
