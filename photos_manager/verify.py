@@ -273,7 +273,9 @@ def verify_directory_timestamps(data: list[dict[str, str | int]]) -> tuple[int, 
             continue
 
         try:
-            newest_file = max(files, key=lambda x: datetime.fromisoformat(str(x["date"])))
+            newest_file = max(
+                files, key=lambda x: datetime.fromisoformat(str(x["date"])).timestamp()
+            )
             newest_file_path = Path(str(newest_file["path"]))
 
             if not newest_file_path.exists():
@@ -324,7 +326,7 @@ def verify_json_file_timestamp(
         return False, errors
 
     try:
-        newest_entry = max(data, key=lambda x: datetime.fromisoformat(str(x["date"])))
+        newest_entry = max(data, key=lambda x: datetime.fromisoformat(str(x["date"])).timestamp())
         newest_file_path = Path(str(newest_entry["path"]))
 
         if not newest_file_path.exists():
