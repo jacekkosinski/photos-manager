@@ -18,9 +18,9 @@ from datetime import datetime
 from pathlib import Path
 
 from photos_manager.common import (
-    TIME_FMT,
     TS_FMT,
     format_count,
+    format_datetime_change,
     human_size,
     load_json,
     scan_files,
@@ -594,15 +594,7 @@ def format_list_line(
                 scanned_dt = datetime.fromisoformat(scanned_date)
                 archive_dt = datetime.fromisoformat(archive_date)
                 if abs((archive_dt - scanned_dt).total_seconds()) > tolerance:
-                    delta_s = int((archive_dt - scanned_dt).total_seconds())
-                    delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
-                    if scanned_dt.date() != archive_dt.date():
-                        old_str = scanned_dt.strftime(TS_FMT)
-                        new_str = archive_dt.strftime(TS_FMT)
-                    else:
-                        old_str = scanned_dt.strftime(TIME_FMT)
-                        new_str = archive_dt.strftime(TIME_FMT)
-                    parts.append(f"{old_str} -> {new_str} (delta: {delta_str})")
+                    parts.append(format_datetime_change(scanned_dt, archive_dt))
             except (ValueError, TypeError):
                 pass
 

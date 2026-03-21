@@ -24,6 +24,37 @@ TS_FMT = "%Y-%m-%d %H:%M:%S"
 TIME_FMT = "%H:%M:%S"
 
 
+def format_datetime_change(old_dt: datetime, new_dt: datetime) -> str:
+    """Format a datetime pair as ``old → new (delta: +Xs)``.
+
+    Uses the full date+time format when the calendar dates differ; uses
+    time-only otherwise.
+
+    Args:
+        old_dt: Original datetime.
+        new_dt: Target datetime.
+
+    Returns:
+        Formatted string, e.g. ``"10:00:00 → 11:00:00 (delta: +3600s)"``.
+
+    Examples:
+        >>> from datetime import datetime
+        >>> old = datetime(2023, 5, 14, 10, 0, 0)
+        >>> new = datetime(2023, 5, 14, 11, 0, 0)
+        >>> format_datetime_change(old, new)
+        '10:00:00 → 11:00:00 (delta: +3600s)'
+    """
+    if old_dt.date() != new_dt.date():
+        old_str = old_dt.strftime(TS_FMT)
+        new_str = new_dt.strftime(TS_FMT)
+    else:
+        old_str = old_dt.strftime(TIME_FMT)
+        new_str = new_dt.strftime(TIME_FMT)
+    delta_s = int((new_dt - old_dt).total_seconds())
+    delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
+    return f"{old_str} → {new_str} (delta: {delta_str})"
+
+
 def format_timestamp_change(
     name: str,
     tag: str,
