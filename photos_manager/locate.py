@@ -396,6 +396,7 @@ def match_single_file(
     nf: NewFile,
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
     context: int,
+    entry_dates: list[datetime] | None = None,
 ) -> str | None:
     """Match a single file without sequence number by timestamp proximity.
 
@@ -403,11 +404,15 @@ def match_single_file(
         nf: The new file to match.
         sorted_entries: Archive entries sorted by date.
         context: Number of neighbors to consider.
+        entry_dates: Pre-extracted datetime list from sorted_entries for bisect.
+            If None, extracted internally. Pass when calling in a loop to avoid
+            rebuilding the list on each call.
 
     Returns:
         Best matching directory path, or None.
     """
-    pos = bisect.bisect_left([dt for dt, _ in sorted_entries], nf.date)
+    dates = entry_dates if entry_dates is not None else [dt for dt, _ in sorted_entries]
+    pos = bisect.bisect_left(dates, nf.date)
     start = max(0, pos - context)
     end = min(len(sorted_entries), pos + context)
     neighbors = sorted_entries[start:end]
@@ -647,6 +652,7 @@ def _match_all_series(
         List of SeriesResult objects.
     """
     results: list[SeriesResult] = []
+    _entry_dates = [dt for dt, _ in sorted_entries]
     for s in series_list:
         sr = SeriesResult(series=s)
         if s.prefix is not None and s.seq_range is not None:
@@ -667,7 +673,7 @@ def _match_all_series(
         else:
             # Single file without seq — timestamp fallback
             nf = s.files[0]
-            best_dir = match_single_file(nf, sorted_entries, context)
+            best_dir = match_single_file(nf, sorted_entries, context, _entry_dates)
             if best_dir:
                 sr.best_directory = best_dir
         results.append(sr)
@@ -752,6 +758,7 @@ def _print_series_list(
         prefix = c.new_file.prefix or ""
         collision_seqs.setdefault(prefix, set()).add(c.new_file.seq or 0)
 
+    entry_dates = [dt for dt, _ in sorted_entries]
     for r in results:
         label = _format_series_label(r.series)
 
@@ -784,7 +791,7 @@ def _print_series_list(
         if r.best_directory and r.series.prefix is None:
             nf = r.series.files[0]
             # Compute nearest delta inline
-            pos = bisect.bisect_left([dt for dt, _ in sorted_entries], nf.date)
+            pos = bisect.bisect_left(entry_dates, nf.date)
             deltas = []
             if pos > 0:
                 deltas.append(abs((nf.date - sorted_entries[pos - 1][0]).total_seconds()))
@@ -798,7 +805,7 @@ def _print_series_list(
             else:
                 delta = f"{secs / 3600:.1f}h"
             print(f"\n--- {label} -> {r.best_directory} (timestamp, nearest ~{delta}) ---\n")
-            _print_timestamp_context(nf, sorted_entries, context)
+            _print_timestamp_context(nf, sorted_entries, context, entry_dates)
             continue
 
         print(f"\n--- {label} -> (no match found) ---\n")
@@ -886,9 +893,11 @@ def _print_timestamp_context(
     nf: NewFile,
     sorted_entries: list[tuple[datetime, dict[str, str | int]]],
     context: int,
+    entry_dates: list[datetime] | None = None,
 ) -> None:
     """Print archive context around a timestamp-matched file."""
-    pos = bisect.bisect_left([dt for dt, _ in sorted_entries], nf.date)
+    dates = entry_dates if entry_dates is not None else [dt for dt, _ in sorted_entries]
+    pos = bisect.bisect_left(dates, nf.date)
     start = max(0, pos - context)
     end = min(len(sorted_entries), pos + context)
     for i in range(start, pos):
