@@ -320,7 +320,14 @@ def fix_dir_permissions(path: Path, dry_run: bool, root: Path | None = None) -> 
 
 
 def fix_ownership(
-    path: Path, user: str, group: str, dry_run: bool, root: Path | None = None
+    path: Path,
+    user: str,
+    group: str,
+    dry_run: bool,
+    root: Path | None = None,
+    *,
+    uid: int | None = None,
+    gid: int | None = None,
 ) -> bool:
     """Fix file/directory ownership.
 
@@ -330,16 +337,19 @@ def fix_ownership(
         group: Target group name.
         dry_run: If True, only print what would be done.
         root: Root directory for relative display of paths in output.
+        uid: Pre-resolved user ID (avoids repeated passwd lookup when processing many paths).
+        gid: Pre-resolved group ID (avoids repeated group lookup when processing many paths).
 
     Returns:
         True if successful or dry-run, False on error.
     """
-    try:
-        uid = pwd.getpwnam(user).pw_uid
-        gid = grp.getgrnam(group).gr_gid
-    except KeyError as e:
-        print(f"  Error: {_rel(path, root)}: user or group not found: {e}", file=sys.stderr)
-        return False
+    if uid is None or gid is None:
+        try:
+            uid = pwd.getpwnam(user).pw_uid
+            gid = grp.getgrnam(group).gr_gid
+        except KeyError as e:
+            print(f"  Error: {_rel(path, root)}: user or group not found: {e}", file=sys.stderr)
+            return False
 
     st = path.stat()
     current_user, current_group = _owner_group_names(st)
@@ -565,13 +575,20 @@ def _process_ownership(
     has_errors = False
     count = 0
 
+    try:
+        uid = pwd.getpwnam(user).pw_uid
+        gid = grp.getgrnam(group).gr_gid
+    except KeyError as e:
+        print(f"  Error: user or group not found: {e}", file=sys.stderr)
+        return True, 0
+
     for item in all_items:
         if not item.exists():
             continue
         is_ok, _curr_user, _curr_group = check_ownership(item, user, group)
         if not is_ok:
             count += 1
-            if not fix_ownership(item, user, group, dry_run, root=root):
+            if not fix_ownership(item, user, group, dry_run, root=root, uid=uid, gid=gid):
                 has_errors = True
 
     if not count:
