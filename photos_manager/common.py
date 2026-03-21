@@ -12,6 +12,7 @@ import pwd
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any, cast
 
 # Constants
 CHUNK_SIZE = 65536  # 64KB chunks for file operations
@@ -232,6 +233,54 @@ def validate_directory(directory: str, check_readable: bool = False) -> Path:
         raise SystemExit(f"Error: Directory '{directory}' is not readable")
 
     return dir_path
+
+
+def load_version_json(file_path: str) -> dict[str, Any]:
+    """Load version JSON file, raising SystemExit on any error.
+
+    Args:
+        file_path: Path to the .version.json file.
+
+    Returns:
+        Parsed dict with version metadata.
+
+    Raises:
+        SystemExit: If the file does not exist or contains invalid JSON.
+
+    Examples:
+        >>> data = load_version_json(".version.json")
+        >>> "version" in data
+        True
+    """
+    try:
+        with Path(file_path).open(encoding="utf-8") as f:
+            return cast("dict[str, Any]", json.load(f))
+    except FileNotFoundError as exc:
+        raise SystemExit(f"Error: Version file '{file_path}' does not exist") from exc
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Error: Version file '{file_path}' contains invalid format") from exc
+
+
+def load_version_json_lenient(file_path: str) -> dict[str, Any] | None:
+    """Load version JSON file, returning None on any error.
+
+    Args:
+        file_path: Path to the .version.json file.
+
+    Returns:
+        Parsed dict with version metadata, or None if file cannot be loaded
+        or does not contain a JSON object.
+
+    Examples:
+        >>> load_version_json_lenient("/nonexistent/.version.json") is None
+        True
+    """
+    try:
+        with Path(file_path).open(encoding="utf-8") as f:
+            raw = json.load(f)
+        return raw if isinstance(raw, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
 
 
 def find_version_file(directory: str) -> str | None:

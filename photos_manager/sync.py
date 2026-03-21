@@ -18,7 +18,6 @@ Usage:
 """
 
 import argparse
-import json
 import os
 import shlex
 import stat
@@ -29,7 +28,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import cast
 
-from photos_manager.common import find_json_files, find_version_file, format_count, load_json
+from photos_manager.common import (
+    find_json_files,
+    find_version_file,
+    format_count,
+    load_json,
+    load_version_json_lenient,
+)
 
 # Type alias for file identity (sha1, md5, size)
 FileIdentity = tuple[str, str, int]
@@ -153,12 +158,7 @@ def load_version_data(directory: str) -> tuple[dict[str, object] | None, str | N
     version_file = find_version_file(directory)
     if not version_file:
         return None, None
-
-    try:
-        with Path(version_file).open(encoding="utf-8") as f:
-            return json.load(f), version_file
-    except (json.JSONDecodeError, OSError):
-        return None, version_file
+    return load_version_json_lenient(version_file), version_file
 
 
 def compare_version_files(

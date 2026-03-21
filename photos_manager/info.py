@@ -15,9 +15,7 @@ Exit codes:
 """
 
 import argparse
-import json
 import os
-import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -348,16 +346,10 @@ def run(args: argparse.Namespace) -> int:
     directory = common.validate_directory(args.directory, check_readable=True)
 
     # Look for a .version.json manifest
-    version_info: dict[str, Any] | None = None
     version_file = common.find_version_file(str(directory))
-    if version_file is not None:
-        try:
-            with Path(version_file).open(encoding="utf-8") as fh:
-                raw = json.load(fh)
-            if isinstance(raw, dict):
-                version_info = raw
-        except (OSError, json.JSONDecodeError) as exc:
-            print(f"Warning: Could not read '{version_file}': {exc}", file=sys.stderr)
+    version_info: dict[str, Any] | None = (
+        common.load_version_json_lenient(version_file) if version_file is not None else None
+    )
 
     # Find index JSON files (excludes *version.json automatically)
     try:

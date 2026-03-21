@@ -29,7 +29,6 @@ Usage:
 
 import argparse
 import concurrent.futures
-import json
 import os
 import re
 import stat
@@ -37,7 +36,6 @@ import sys
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
 
 from photos_manager.common import (
     calculate_checksums_strict as calculate_checksums,
@@ -46,42 +44,11 @@ from photos_manager.common import (
     find_json_files,
     find_version_file,
     load_json,
+    load_version_json,
     resolve_group_name,
     resolve_owner_name,
     validate_directory,
 )
-
-
-def load_version_json(file_path: str) -> dict[str, Any]:
-    """Load version JSON data from a file.
-
-    Reads a version JSON file created by manifest and parses it.
-
-    Args:
-        file_path: Path to the version JSON file to load.
-
-    Returns:
-        Dictionary containing version information with keys: version,
-        total_bytes, file_count, last_modified, last_verified, files.
-
-    Raises:
-        SystemExit: If the file cannot be read or contains invalid JSON.
-
-    Examples:
-        >>> data = load_version_json(".version.json")
-        >>> data['version']
-        'photos-2.456-234'
-    """
-    try:
-        path = Path(file_path)
-        with path.open(encoding="utf-8") as json_file:
-            return cast("dict[str, Any]", json.load(json_file))
-    except FileNotFoundError as exception:
-        raise SystemExit(f"Error: Version file '{file_path}' does not exist") from exception
-    except json.JSONDecodeError as exception:
-        raise SystemExit(
-            f"Error: Version file '{file_path}' contains invalid format"
-        ) from exception
 
 
 def normalize_paths(
