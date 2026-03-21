@@ -106,6 +106,8 @@ def format_timestamp_change(
 _METADATA_KEY_ORDER = ["path", "sha1", "md5", "date", "size"]
 _METADATA_KEYS = set(_METADATA_KEY_ORDER)
 
+_MANIFEST_KEYS = {"version", "total_bytes", "file_count", "last_modified", "last_verified", "files"}
+
 
 def load_metadata_json(file_path: str) -> list[dict[str, str | int]]:
     """Load and validate a JSON metadata file.
@@ -174,6 +176,38 @@ def write_metadata_json(file_path: str, data: list[dict[str, str | int]]) -> Non
         output_path = Path(file_path)
         with output_path.open("w", encoding="utf-8") as f:
             json.dump(ordered, f, ensure_ascii=False, indent=4)
+            f.write("\n")
+        output_path.chmod(0o644)
+    except OSError as e:
+        raise SystemExit(f"Error: Could not write to '{file_path}': {e}") from e
+
+
+def write_manifest_json(file_path: str, data: dict[str, Any]) -> None:
+    """Write a manifest (version) dict to a JSON file.
+
+    Validates that *data* contains all required manifest keys
+    (version, total_bytes, file_count, last_modified, last_verified, files),
+    then writes formatted JSON with indent=4, ensure_ascii=False, a trailing
+    newline, and sets file permissions to 0o644.
+
+    Args:
+        file_path: Destination path for the JSON file.
+        data: Manifest dictionary to write.
+
+    Raises:
+        SystemExit: If *data* is not a dict, is missing required keys, or the
+            file cannot be written.
+    """
+    if not isinstance(data, dict):
+        raise SystemExit("Error: Manifest data must be a JSON object")
+    missing = _MANIFEST_KEYS - data.keys()
+    if missing:
+        keys_str = ", ".join(sorted(missing))
+        raise SystemExit(f"Error: Manifest is missing required keys: {keys_str}")
+    try:
+        output_path = Path(file_path)
+        with output_path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
             f.write("\n")
         output_path.chmod(0o644)
     except OSError as e:

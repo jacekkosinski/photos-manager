@@ -19,6 +19,7 @@ from photos_manager.common import (
     resolve_group_name,
     resolve_owner_name,
     validate_directory,
+    write_manifest_json,
     write_metadata_json,
 )
 
@@ -168,6 +169,64 @@ class TestWriteMetadataJson:
             write_metadata_json("/nonexistent/dir/out.json", [_ENTRY])
 
         assert "Could not write to" in str(exc_info.value)
+
+
+_MANIFEST: dict[str, object] = {
+    "version": "photos-0.001-001",
+    "total_bytes": 1000,
+    "file_count": 1,
+    "last_modified": "2024-01-01T00:00:00+00:00",
+    "last_verified": "2024-01-01T01:00:00+00:00",
+    "files": {"archive.json": "aabbcc"},
+}
+
+
+@pytest.mark.unit
+class TestWriteManifestJson:
+    """Tests for write_manifest_json function."""
+
+    def test_writes_json_file(self, tmp_path: Path) -> None:
+        """Test that JSON file is written with correct content."""
+        output = tmp_path / ".version.json"
+
+        write_manifest_json(str(output), dict(_MANIFEST))
+
+        result = json.loads(output.read_text())
+        assert result == _MANIFEST
+
+    def test_sets_644_permissions(self, tmp_path: Path) -> None:
+        """Test that output file has 644 permissions."""
+        output = tmp_path / ".version.json"
+
+        write_manifest_json(str(output), dict(_MANIFEST))
+
+        mode = output.stat().st_mode & 0o777
+        assert mode == 0o644
+
+    def test_trailing_newline(self, tmp_path: Path) -> None:
+        """Test that file ends with a newline."""
+        output = tmp_path / ".version.json"
+
+        write_manifest_json(str(output), dict(_MANIFEST))
+
+        assert output.read_text().endswith("\n")
+
+    def test_raises_systemexit_when_not_dict(self, tmp_path: Path) -> None:
+        """Test that SystemExit is raised when data is not a dict."""
+        with pytest.raises(SystemExit, match="must be a JSON object"):
+            write_manifest_json(str(tmp_path / "out.json"), [])
+
+    def test_raises_systemexit_on_missing_keys(self, tmp_path: Path) -> None:
+        """Test that SystemExit is raised when required keys are missing."""
+        incomplete = {"version": "x", "total_bytes": 0}
+
+        with pytest.raises(SystemExit, match="missing required keys"):
+            write_manifest_json(str(tmp_path / "out.json"), incomplete)
+
+    def test_raises_systemexit_on_write_error(self) -> None:
+        """Test that SystemExit is raised when file cannot be written."""
+        with pytest.raises(SystemExit, match="Could not write to"):
+            write_manifest_json("/nonexistent/dir/out.json", dict(_MANIFEST))
 
 
 @pytest.mark.unit

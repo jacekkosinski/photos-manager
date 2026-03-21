@@ -49,7 +49,6 @@ Exit codes:
 """
 
 import argparse
-import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -59,6 +58,7 @@ from photos_manager.common import (
     find_json_files_with_mtime,
     load_metadata_json,
     validate_directory,
+    write_manifest_json,
 )
 
 # Constants
@@ -152,7 +152,8 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "-o",
         "--output",
         default=None,
-        help="Output file path (if not specified, writes to stdout)",
+        metavar="FILE",
+        help="Output file path (default: .version.json inside the archive directory)",
     )
     parser.add_argument(
         "-P",
@@ -233,22 +234,19 @@ def run(args: argparse.Namespace) -> int:
         "last_verified": last_verified,
         "files": file_hashes,
     }
-    output_json = json.dumps(output, ensure_ascii=False, indent=4)
+    output_file = args.output if args.output is not None else str(directory_path / ".version.json")
 
-    if args.output is None:
-        print(output_json)
-    else:
-        try:
-            output_path = Path(args.output)
-            output_path.write_text(output_json, encoding="utf-8")
-            output_path.chmod(0o644)
-            mtime = json_files_with_mtimes[0][0]
-            os.utime(output_path, (mtime, mtime))
-            os.utime(directory_path, (mtime, mtime))
-            print(f"Manifest written to {args.output} ({file_count} files)")
-        except OSError as exception:
-            raise SystemExit(
-                f"Error: Could not write to output file '{args.output}': {exception}"
-            ) from exception
+    write_manifest_json(output_file, output)
+
+    mtime = json_files_with_mtimes[0][0]
+    try:
+        os.utime(output_file, (mtime, mtime))
+        os.utime(directory_path, (mtime, mtime))
+    except OSError as exception:
+        raise SystemExit(
+            f"Error: Could not set mtime on '{output_file}': {exception}"
+        ) from exception
+
+    print(f"Manifest written to {output_file} ({file_count} files)")
 
     return os.EX_OK

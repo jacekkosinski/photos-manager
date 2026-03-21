@@ -10,6 +10,16 @@ import pytest
 
 from photos_manager.manifest import run, validate_and_process_json
 
+_DATA = [
+    {
+        "path": "/test/file.txt",
+        "sha1": "abc123",
+        "md5": "def456",
+        "date": "2025-01-01T00:00:00+00:00",
+        "size": 1000,
+    }
+]
+
 
 @pytest.mark.unit
 class TestValidateAndProcessJson:
@@ -100,79 +110,50 @@ class TestValidateAndProcessJson:
 class TestRun:
     """Integration tests for run() function."""
 
-    def test_run_prints_to_stdout(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-        """Test that run() prints version JSON to stdout when no output file specified."""
-        # Create test JSON file
-        data = [
-            {
-                "path": "/test/file.txt",
-                "sha1": "abc123",
-                "md5": "def456",
-                "date": "2025-01-01T00:00:00+00:00",
-                "size": 1000,
-            }
-        ]
-        json_file = tmp_path / "test.json"
-        json_file.write_text(json.dumps(data))
-
-        args = argparse.Namespace(directory=str(tmp_path), output=None, prefix="photos")
+    def test_run_creates_version_json(self, tmp_path: Path) -> None:
+        """Test that run() writes version JSON with correct structure."""
+        (tmp_path / "test.json").write_text(json.dumps(_DATA))
+        output_file = tmp_path / ".version.json"
+        args = argparse.Namespace(directory=str(tmp_path), output=str(output_file), prefix="photos")
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
-        captured = capsys.readouterr()
-        assert "photos-" in captured.out
-
-        # Verify stdout contains valid JSON with correct structure
-        version_data = json.loads(captured.out)
+        assert output_file.exists()
+        version_data = json.loads(output_file.read_text())
         assert "version" in version_data
         assert "total_bytes" in version_data
         assert "file_count" in version_data
         assert "last_modified" in version_data
+        assert "last_verified" in version_data
         assert "files" in version_data
         assert version_data["total_bytes"] == 1000
         assert version_data["file_count"] == 1
 
-    def test_run_version_count_zero_padded(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test that version string count component is zero-padded to 3 digits."""
-        data = [
-            {
-                "path": "/test/file.txt",
-                "sha1": "abc123",
-                "md5": "def456",
-                "date": "2025-01-01T00:00:00+00:00",
-                "size": 1000,
-            }
-        ]
-        json_file = tmp_path / "test.json"
-        json_file.write_text(json.dumps(data))
-
+    def test_run_default_output_is_version_json_in_archive_dir(self, tmp_path: Path) -> None:
+        """Test that run() writes to .version.json inside the archive directory by default."""
+        (tmp_path / "test.json").write_text(json.dumps(_DATA))
         args = argparse.Namespace(directory=str(tmp_path), output=None, prefix="photos")
 
         run(args)
 
-        captured = capsys.readouterr()
-        version_data = json.loads(captured.out)
+        assert (tmp_path / ".version.json").exists()
+
+    def test_run_version_count_zero_padded(self, tmp_path: Path) -> None:
+        """Test that version string count component is zero-padded to 3 digits."""
+        (tmp_path / "test.json").write_text(json.dumps(_DATA))
+        output_file = tmp_path / ".version.json"
+        args = argparse.Namespace(directory=str(tmp_path), output=str(output_file), prefix="photos")
+
+        run(args)
+
+        version_data = json.loads(output_file.read_text())
         # file_count=1, 1%1000=1, should be zero-padded to "001"
         assert version_data["version"].endswith("-001")
 
     def test_run_with_output_file(self, tmp_path: Path) -> None:
         """Test that run() writes to specified output file."""
-        # Create test JSON file
-        data = [
-            {
-                "path": "/test/file.txt",
-                "sha1": "abc123",
-                "md5": "def456",
-                "date": "2025-01-01T00:00:00+00:00",
-                "size": 500,
-            }
-        ]
-        json_file = tmp_path / "test.json"
-        json_file.write_text(json.dumps(data))
-
+        (tmp_path / "test.json").write_text(json.dumps(_DATA))
         output_file = tmp_path / "custom.version.json"
         args = argparse.Namespace(directory=str(tmp_path), output=str(output_file), prefix="photos")
 
@@ -180,25 +161,14 @@ class TestRun:
 
         assert exit_code == os.EX_OK
         assert output_file.exists()
-
         version_data = json.loads(output_file.read_text())
         assert version_data["file_count"] == 1
-        assert version_data["total_bytes"] == 500
+        assert version_data["total_bytes"] == 1000
 
     def test_run_output_file_mtime_matches_last_modified(self, tmp_path: Path) -> None:
         """Test that output file mtime is set to youngest JSON file mtime."""
-        data = [
-            {
-                "path": "/test/file.txt",
-                "sha1": "abc123",
-                "md5": "def456",
-                "date": "2025-01-01T00:00:00+00:00",
-                "size": 500,
-            }
-        ]
         json_file = tmp_path / "test.json"
-        json_file.write_text(json.dumps(data))
-        # Set a known mtime on the JSON file
+        json_file.write_text(json.dumps(_DATA))
         known_mtime = 1700000000.0  # 2023-11-14T22:13:20
         os.utime(json_file, (known_mtime, known_mtime))
 
@@ -213,18 +183,7 @@ class TestRun:
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         """Test that run() prints a confirmation message when writing to a file."""
-        data = [
-            {
-                "path": "/test/file.txt",
-                "sha1": "abc123",
-                "md5": "def456",
-                "date": "2025-01-01T00:00:00+00:00",
-                "size": 500,
-            }
-        ]
-        json_file = tmp_path / "test.json"
-        json_file.write_text(json.dumps(data))
-
+        (tmp_path / "test.json").write_text(json.dumps(_DATA))
         output_file = tmp_path / ".version.json"
         args = argparse.Namespace(directory=str(tmp_path), output=str(output_file), prefix="photos")
 
@@ -236,17 +195,8 @@ class TestRun:
 
     def test_run_archive_directory_mtime_matches_last_modified(self, tmp_path: Path) -> None:
         """Test that archive directory mtime is set to youngest JSON file mtime."""
-        data = [
-            {
-                "path": "/test/file.txt",
-                "sha1": "abc123",
-                "md5": "def456",
-                "date": "2025-01-01T00:00:00+00:00",
-                "size": 500,
-            }
-        ]
         json_file = tmp_path / "test.json"
-        json_file.write_text(json.dumps(data))
+        json_file.write_text(json.dumps(_DATA))
         known_mtime = 1700000000.0  # 2023-11-14T22:13:20
         os.utime(json_file, (known_mtime, known_mtime))
 
@@ -259,18 +209,7 @@ class TestRun:
 
     def test_run_output_file_has_644_permissions(self, tmp_path: Path) -> None:
         """Test that output file has 644 permissions."""
-        data = [
-            {
-                "path": "/test/file.txt",
-                "sha1": "abc123",
-                "md5": "def456",
-                "date": "2025-01-01T00:00:00+00:00",
-                "size": 500,
-            }
-        ]
-        json_file = tmp_path / "test.json"
-        json_file.write_text(json.dumps(data))
-
+        (tmp_path / "test.json").write_text(json.dumps(_DATA))
         output_file = tmp_path / ".version.json"
         args = argparse.Namespace(directory=str(tmp_path), output=str(output_file), prefix="photos")
 
@@ -279,9 +218,13 @@ class TestRun:
         mode = output_file.stat().st_mode & 0o777
         assert mode == 0o644, f"Expected 644, got {stat.filemode(output_file.stat().st_mode)}"
 
-    def test_run_with_nonexistent_directory(self) -> None:
+    def test_run_with_nonexistent_directory(self, tmp_path: Path) -> None:
         """Test that run() raises SystemExit for nonexistent directory."""
-        args = argparse.Namespace(directory="/nonexistent/directory", output=None, prefix="photos")
+        args = argparse.Namespace(
+            directory="/nonexistent/directory",
+            output=str(tmp_path / ".version.json"),
+            prefix="photos",
+        )
 
         with pytest.raises(SystemExit) as exc_info:
             run(args)
@@ -290,22 +233,21 @@ class TestRun:
 
     def test_run_with_no_json_files(self, tmp_path: Path) -> None:
         """Test that run() raises SystemExit when no JSON files found."""
-        # Create empty directory
         test_dir = tmp_path / "empty"
         test_dir.mkdir()
-
-        args = argparse.Namespace(directory=str(test_dir), output=None, prefix="photos")
+        args = argparse.Namespace(
+            directory=str(test_dir),
+            output=str(tmp_path / ".version.json"),
+            prefix="photos",
+        )
 
         with pytest.raises(SystemExit) as exc_info:
             run(args)
 
         assert "No JSON files found" in str(exc_info.value)
 
-    def test_run_excludes_version_files(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_excludes_version_files(self, tmp_path: Path) -> None:
         """Test that run() excludes *version.json files."""
-        # Create regular JSON file
         data = [
             {
                 "path": "/test/file.txt",
@@ -316,10 +258,7 @@ class TestRun:
             }
         ]
         (tmp_path / "test.json").write_text(json.dumps(data))
-
-        # Create version file (should be excluded)
-        version_data = {"version": "old"}
-        (tmp_path / "old.version.json").write_text(json.dumps(version_data))
+        (tmp_path / "old.version.json").write_text(json.dumps({"version": "old"}))
 
         output_file = tmp_path / ".version.json"
         args = argparse.Namespace(directory=str(tmp_path), output=str(output_file), prefix="photos")
@@ -327,18 +266,13 @@ class TestRun:
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
-
-        # Verify only test.json was processed
         version_result = json.loads(output_file.read_text())
         assert version_result["file_count"] == 1
         assert "test.json" in version_result["files"]
         assert "old.version.json" not in version_result["files"]
 
-    def test_run_with_multiple_json_files(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_with_multiple_json_files(self, tmp_path: Path) -> None:
         """Test that run() processes multiple JSON files."""
-        # Create multiple JSON files
         data1 = [
             {
                 "path": "/test/file1.txt",
@@ -366,7 +300,6 @@ class TestRun:
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
-
         version_data = json.loads(output_file.read_text())
         assert version_data["file_count"] == 2
         assert version_data["total_bytes"] == 300
@@ -374,61 +307,38 @@ class TestRun:
 
     def test_run_with_invalid_json_file(self, tmp_path: Path) -> None:
         """Test that run() handles invalid JSON files."""
-        # Create invalid JSON file
-        invalid_file = tmp_path / "invalid.json"
-        invalid_file.write_text("{invalid json}")
-
-        args = argparse.Namespace(directory=str(tmp_path), output=None, prefix="photos")
+        (tmp_path / "invalid.json").write_text("{invalid json}")
+        args = argparse.Namespace(
+            directory=str(tmp_path),
+            output=str(tmp_path / ".version.json"),
+            prefix="photos",
+        )
 
         with pytest.raises(SystemExit) as exc_info:
             run(args)
 
         assert "Invalid JSON" in str(exc_info.value)
 
-    def test_run_with_custom_prefix(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_run_with_custom_prefix(self, tmp_path: Path) -> None:
         """Test that run() uses custom prefix in version string."""
-        data = [
-            {
-                "path": "/test/file.txt",
-                "sha1": "abc123",
-                "md5": "def456",
-                "date": "2025-01-01T00:00:00+00:00",
-                "size": 1000,
-            }
-        ]
-        json_file = tmp_path / "test.json"
-        json_file.write_text(json.dumps(data))
-
-        args = argparse.Namespace(directory=str(tmp_path), output=None, prefix="upload")
+        (tmp_path / "test.json").write_text(json.dumps(_DATA))
+        output_file = tmp_path / ".version.json"
+        args = argparse.Namespace(directory=str(tmp_path), output=str(output_file), prefix="upload")
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
-        captured = capsys.readouterr()
-        version_data = json.loads(captured.out)
+        version_data = json.loads(output_file.read_text())
         assert version_data["version"].startswith("upload-")
 
-    def test_run_default_prefix(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_run_default_prefix(self, tmp_path: Path) -> None:
         """Test that run() uses default 'photos' prefix."""
-        data = [
-            {
-                "path": "/test/file.txt",
-                "sha1": "abc123",
-                "md5": "def456",
-                "date": "2025-01-01T00:00:00+00:00",
-                "size": 1000,
-            }
-        ]
-        json_file = tmp_path / "test.json"
-        json_file.write_text(json.dumps(data))
-
-        args = argparse.Namespace(directory=str(tmp_path), output=None, prefix="photos")
+        (tmp_path / "test.json").write_text(json.dumps(_DATA))
+        output_file = tmp_path / ".version.json"
+        args = argparse.Namespace(directory=str(tmp_path), output=str(output_file), prefix="photos")
 
         exit_code = run(args)
 
         assert exit_code == os.EX_OK
-        captured = capsys.readouterr()
-        version_data = json.loads(captured.out)
+        version_data = json.loads(output_file.read_text())
         assert version_data["version"].startswith("photos-")
