@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from photos_manager.common import load_json, validate_directory
+from photos_manager.common import load_metadata_json, validate_directory
 
 # Optional EXIF support
 try:
@@ -437,7 +437,7 @@ def load_archive_entries(
     """
     entries: list[tuple[datetime, dict[str, str | int]]] = []
     for json_file in json_files:
-        data = load_json(json_file)
+        data = load_metadata_json(json_file)
         for entry in data:
             path_str = str(entry.get("path", ""))
             if path_filters and not any(f in path_str for f in path_filters):

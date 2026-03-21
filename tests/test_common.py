@@ -15,27 +15,35 @@ from photos_manager.common import (
     find_json_files_with_mtime,
     find_version_file,
     format_count,
-    load_json,
+    load_metadata_json,
     resolve_group_name,
     resolve_owner_name,
     validate_directory,
 )
 
+_ENTRY = {
+    "path": "/test/file.jpg",
+    "sha1": "aabbcc",
+    "md5": "ddeeff",
+    "date": "2024-01-01T00:00:00+00:00",
+    "size": 100,
+}
+
 
 @pytest.mark.unit
-class TestLoadJson:
-    """Tests for load_json function."""
+class TestLoadMetadataJson:
+    """Tests for load_metadata_json function."""
 
     def test_valid_json_file(self, tmp_path: Path) -> None:
         """Test loading valid JSON file."""
         json_file = tmp_path / "test.json"
         data = [
-            {"path": "/test/file1.jpg", "size": 100},
-            {"path": "/test/file2.jpg", "size": 200},
+            {**_ENTRY, "path": "/test/file1.jpg", "size": 100},
+            {**_ENTRY, "path": "/test/file2.jpg", "size": 200},
         ]
         json_file.write_text(json.dumps(data), encoding="utf-8")
 
-        result = load_json(str(json_file))
+        result = load_metadata_json(str(json_file))
         assert result == data
 
     def test_nonexistent_file_raises_systemexit(self, tmp_path: Path) -> None:
@@ -43,7 +51,7 @@ class TestLoadJson:
         nonexistent = tmp_path / "nonexistent.json"
 
         with pytest.raises(SystemExit) as exc_info:
-            load_json(str(nonexistent))
+            load_metadata_json(str(nonexistent))
 
         assert "does not exist" in str(exc_info.value)
 
@@ -53,7 +61,7 @@ class TestLoadJson:
         json_file.write_text("{invalid json}", encoding="utf-8")
 
         with pytest.raises(SystemExit) as exc_info:
-            load_json(str(json_file))
+            load_metadata_json(str(json_file))
 
         assert "Invalid JSON" in str(exc_info.value)
 
@@ -63,7 +71,7 @@ class TestLoadJson:
         json_file.write_text("", encoding="utf-8")
 
         with pytest.raises(SystemExit) as exc_info:
-            load_json(str(json_file))
+            load_metadata_json(str(json_file))
 
         assert "Invalid JSON" in str(exc_info.value)
 
@@ -73,16 +81,36 @@ class TestLoadJson:
         json_file.write_text('{"key": "value"}', encoding="utf-8")
 
         with pytest.raises(SystemExit) as exc_info:
-            load_json(str(json_file))
+            load_metadata_json(str(json_file))
 
         assert "does not contain a JSON array" in str(exc_info.value)
 
     def test_directory_raises_systemexit(self, tmp_path: Path) -> None:
         """Test that passing a directory raises SystemExit."""
         with pytest.raises(SystemExit) as exc_info:
-            load_json(str(tmp_path))
+            load_metadata_json(str(tmp_path))
 
         assert "is not a file" in str(exc_info.value)
+
+    def test_entry_not_dict_raises_systemexit(self, tmp_path: Path) -> None:
+        """Test that non-dict entry raises SystemExit."""
+        json_file = tmp_path / "test.json"
+        json_file.write_text(json.dumps(["not", "dicts"]), encoding="utf-8")
+
+        with pytest.raises(SystemExit) as exc_info:
+            load_metadata_json(str(json_file))
+
+        assert "array of objects" in str(exc_info.value)
+
+    def test_entry_missing_keys_raises_systemexit(self, tmp_path: Path) -> None:
+        """Test that entry missing required keys raises SystemExit."""
+        json_file = tmp_path / "test.json"
+        json_file.write_text(json.dumps([{"path": "/x.jpg", "size": 1}]), encoding="utf-8")
+
+        with pytest.raises(SystemExit) as exc_info:
+            load_metadata_json(str(json_file))
+
+        assert "missing required keys" in str(exc_info.value)
 
 
 @pytest.mark.unit

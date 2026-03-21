@@ -32,7 +32,7 @@ from photos_manager.common import (
     find_json_files,
     find_version_file,
     format_count,
-    load_json,
+    load_metadata_json,
     load_version_json_lenient,
 )
 
@@ -697,7 +697,7 @@ def load_archive(
                 continue
 
         try:
-            data = load_json(json_file)
+            data = load_metadata_json(json_file)
             all_data.extend(data)
             loaded_json_files.append(json_file)
         except SystemExit as e:

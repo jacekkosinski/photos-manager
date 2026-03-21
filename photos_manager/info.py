@@ -362,7 +362,7 @@ def run(args: argparse.Namespace) -> int:
     # Load records from each index file
     records_per_file: dict[Path, list[dict[str, str | int]]] = {}
     for json_file in json_files:
-        records_per_file[json_file] = common.load_json(str(json_file))
+        records_per_file[json_file] = common.load_metadata_json(str(json_file))
 
     stats = _gather_stats(json_files, records_per_file)
     _print_stats(directory, version_info, stats, args.stats, args.top_n)

@@ -43,7 +43,7 @@ from photos_manager.common import (
 from photos_manager.common import (
     find_json_files,
     find_version_file,
-    load_json,
+    load_metadata_json,
     load_version_json,
     resolve_group_name,
     resolve_owner_name,
@@ -1360,7 +1360,7 @@ def run(args: argparse.Namespace) -> int:
         print(f"\nVerifying {Path(json_file).name}...")
 
         try:
-            data = load_json(json_file)
+            data = load_metadata_json(json_file)
             data = normalize_paths(data, args.directory)
             all_data.extend(data)
             file_count = len(data)

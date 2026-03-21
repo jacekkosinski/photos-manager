@@ -56,7 +56,7 @@ from pathlib import Path
 
 from photos_manager.common import calculate_checksums_strict as calculate_checksums
 from photos_manager.common import find_json_files_with_mtime as find_json_files
-from photos_manager.common import load_json, validate_directory
+from photos_manager.common import load_metadata_json, validate_directory
 
 # Constants
 VERSION_PREFIX = "photos"
@@ -110,8 +110,6 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
         >>> hashes
         {'file1.json': 'a1b2c3...', 'file2.json': 'd4e5f6...'}
     """
-    required_json_fields = {"md5", "path", "sha1", "size", "date"}
-
     total_bytes = 0
     files_count = 0
     file_hashes = {}
@@ -120,21 +118,9 @@ def validate_and_process_json(file_paths: list[str]) -> tuple[int, int, dict[str
         filename = Path(file_path).name
         try:
             sha1_hex = calculate_checksums(file_path)[0]
-            data = load_json(file_path)
+            data = load_metadata_json(file_path)
 
-            local_bytes = 0
-            for item in data:
-                if not isinstance(item, dict):
-                    raise SystemExit(
-                        f"Error: JSON file {file_path} must contain an array of objects"
-                    )
-                if not required_json_fields <= item.keys():
-                    raise SystemExit(
-                        f"Error: JSON file {file_path} is missing required fields "
-                        f"(md5, path, sha1, size, date)"
-                    )
-                local_bytes += int(item["size"])
-            total_bytes += local_bytes
+            total_bytes += sum(int(item["size"]) for item in data)
             files_count += len(data)
             file_hashes[filename] = sha1_hex
 

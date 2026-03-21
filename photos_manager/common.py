@@ -103,17 +103,26 @@ def format_timestamp_change(
     return f"{name_col}  {tag:<{tag_width}}  {old_str} → {new_str} (delta: {delta_str}{extra})"
 
 
-def load_json(file_path: str) -> list[dict[str, str | int]]:
-    """Load and parse JSON metadata file.
+_METADATA_KEYS = {"path", "sha1", "md5", "date", "size"}
+
+
+def load_metadata_json(file_path: str) -> list[dict[str, str | int]]:
+    """Load and validate a JSON metadata file.
+
+    Reads a file produced by ``photos index`` and verifies that every entry
+    is a dict with the required keys: path, sha1, md5, date, size.
 
     Args:
-        file_path: Path to the JSON file to load
+        file_path: Path to the JSON metadata file to load.
 
     Returns:
-        List of file metadata dictionaries
+        List of file metadata dictionaries, each with keys path, sha1, md5,
+        date, size.
 
     Raises:
-        SystemExit: If file doesn't exist or JSON is invalid
+        SystemExit: If the file doesn't exist, contains invalid JSON, is not
+            an array, any entry is not a dict, or any entry is missing required
+            keys.
     """
     path = Path(file_path)
 
@@ -133,6 +142,14 @@ def load_json(file_path: str) -> list[dict[str, str | int]]:
 
     if not isinstance(data, list):
         raise SystemExit(f"Error: '{file_path}' does not contain a JSON array")
+
+    for entry in data:
+        if not isinstance(entry, dict):
+            raise SystemExit(f"Error: '{file_path}' must contain an array of objects")
+        missing = _METADATA_KEYS - entry.keys()
+        if missing:
+            keys_str = ", ".join(sorted(missing))
+            raise SystemExit(f"Error: Entry in '{file_path}' is missing required keys: {keys_str}")
 
     return data
 

@@ -157,7 +157,9 @@ class TestSetFilesTimestamps:
         # Create JSON with different timestamp
         json_file = tmp_path / "test.json"
         target_date = "2024-01-01T12:00:00+0000"
-        data = [{"path": str(test_file), "date": target_date, "size": 12}]
+        data = [
+            {"path": str(test_file), "sha1": "aa", "md5": "bb", "date": target_date, "size": 12}
+        ]
         json_file.write_text(json.dumps(data))
 
         # Get original mtime
@@ -183,7 +185,9 @@ class TestSetFilesTimestamps:
         json_file = tmp_path / "test.json"
         target_date = "2024-01-01T12:00:00+0000"
         target_timestamp = int(datetime.fromisoformat(target_date).timestamp())
-        data = [{"path": str(test_file), "date": target_date, "size": 12}]
+        data = [
+            {"path": str(test_file), "sha1": "aa", "md5": "bb", "date": target_date, "size": 12}
+        ]
         json_file.write_text(json.dumps(data))
 
         # Update timestamp
@@ -200,6 +204,8 @@ class TestSetFilesTimestamps:
         data = [
             {
                 "path": str(tmp_path / "missing.jpg"),
+                "sha1": "aa",
+                "md5": "bb",
                 "date": "2024-01-01T12:00:00+0000",
                 "size": 100,
             }
@@ -212,19 +218,16 @@ class TestSetFilesTimestamps:
         captured = capsys.readouterr()
         assert "not found" in captured.err or "not writable" in captured.err
 
-    def test_skips_entries_with_missing_fields(
-        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        """Test that entries with missing fields are skipped."""
+    def test_rejects_entries_with_missing_fields(self, tmp_path: Path) -> None:
+        """Test that a JSON file with incomplete entries is rejected at load time."""
         json_file = tmp_path / "test.json"
-        data = [{"path": "/test.jpg"}]  # Missing date field
+        data = [{"path": "/test.jpg"}]  # Missing sha1, md5, date, size
         json_file.write_text(json.dumps(data))
 
-        set_files_timestamps(str(json_file), dry_run=False)
+        with pytest.raises(SystemExit) as exc_info:
+            set_files_timestamps(str(json_file), dry_run=False)
 
-        # Should print error
-        captured = capsys.readouterr()
-        assert "missing path or date" in captured.err
+        assert "missing required keys" in str(exc_info.value)
 
     def test_raises_on_empty_json_array(self, tmp_path: Path) -> None:
         """Test that SystemExit is raised for an empty JSON array."""
@@ -239,7 +242,15 @@ class TestSetFilesTimestamps:
     ) -> None:
         """Test that entries with unparsable date strings are skipped with error."""
         json_file = tmp_path / "test.json"
-        data = [{"path": str(tmp_path / "photo.jpg"), "date": "not-a-date", "size": 5}]
+        data = [
+            {
+                "path": str(tmp_path / "photo.jpg"),
+                "sha1": "aa",
+                "md5": "bb",
+                "date": "not-a-date",
+                "size": 5,
+            }
+        ]
         json_file.write_text(json.dumps(data))
 
         set_files_timestamps(str(json_file), dry_run=False)

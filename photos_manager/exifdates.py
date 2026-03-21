@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from photos_manager.common import TIME_FMT, format_timestamp_change, load_json
+from photos_manager.common import TIME_FMT, format_timestamp_change, load_metadata_json
 
 # Optional EXIF support
 try:
@@ -492,7 +492,7 @@ def run(args: argparse.Namespace) -> int:
         raise SystemExit(f"Error: '{args.json_file}' does not exist")
 
     try:
-        entries = load_json(args.json_file)
+        entries = load_metadata_json(args.json_file)
     except SystemExit as exc:
         print(str(exc), file=sys.stderr)
         return 1

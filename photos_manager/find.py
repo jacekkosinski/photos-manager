@@ -23,7 +23,7 @@ from photos_manager.common import (
     format_count,
     format_datetime_change,
     human_size,
-    load_json,
+    load_metadata_json,
     scan_files,
     validate_directory,
 )
@@ -882,7 +882,7 @@ def run(args: argparse.Namespace) -> int:
     """
     validate_args(args)
 
-    archive_data = load_json(args.json_file)
+    archive_data = load_metadata_json(args.json_file)
     size_index, checksum_index = build_archive_index(archive_data)
 
     scanned_files: list[dict[str, str | int]] = []

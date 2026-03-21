@@ -24,7 +24,7 @@ import textwrap
 from datetime import datetime
 from pathlib import Path
 
-from photos_manager.common import load_json
+from photos_manager.common import load_metadata_json
 
 _SEQ_RE = re.compile(r"^(.*?)(\d+)\.[^.]+$")
 _DATE_FMT = "%Y-%m-%d"
@@ -46,7 +46,7 @@ def load_files(
     """
     results: list[tuple[str, str, int, datetime]] = []
     for json_file in json_files:
-        data = load_json(json_file)
+        data = load_metadata_json(json_file)
         for entry in data:
             path_str = str(entry.get("path", ""))
             if path_filters and not any(f in path_str for f in path_filters):

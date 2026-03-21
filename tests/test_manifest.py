@@ -50,12 +50,12 @@ class TestValidateAndProcessJson:
             validate_and_process_json([str(file_path)])
 
     def test_rejects_missing_required_fields(self, tmp_path: Path) -> None:
-        """Test that missing required fields are detected."""
+        """Test that missing required keys are detected."""
         data = [{"md5": "abc", "path": "/test"}]  # Missing sha1, size, date
         file_path = tmp_path / "incomplete.json"
         file_path.write_text(json.dumps(data))
 
-        with pytest.raises(SystemExit, match="missing required fields"):
+        with pytest.raises(SystemExit, match="missing required keys"):
             validate_and_process_json([str(file_path)])
 
     def test_rejects_invalid_json_syntax(self, tmp_path: Path) -> None:

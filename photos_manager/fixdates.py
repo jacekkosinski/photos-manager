@@ -21,7 +21,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from photos_manager.common import format_timestamp_change, load_json
+from photos_manager.common import format_timestamp_change, load_metadata_json
 
 _TAG_WIDTH = 6  # max(len("[FILE]"), len("[JSON]")) — "[DIR]" is 5, padded to 6
 _TAG_FILE = "[FILE]"
@@ -340,7 +340,7 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> int:
         Set timestamp for file '/photos/img.jpg' to match '1704376496' time
         >>> set_files_timestamps("archive.json")  # Actually updates files
     """
-    json_data = load_json(json_file)
+    json_data = load_metadata_json(json_file)
     if not json_data:
         raise SystemExit(f"Error: JSON file '{json_file}' is empty")
     pending = _collect_file_changes(json_data, dry_run)
@@ -512,7 +512,7 @@ def run(args: argparse.Namespace) -> int:
             dry_run = not args.fix
             all_pending: list[_PendingChange] = []
 
-            json_data = load_json(json_file)
+            json_data = load_metadata_json(json_file)
             if not json_data:
                 raise SystemExit(f"Error: JSON file '{json_file}' is empty")
 

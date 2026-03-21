@@ -22,7 +22,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from photos_manager.common import load_json, scan_files, validate_directory
+from photos_manager.common import load_metadata_json, scan_files, validate_directory
 
 
 def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
@@ -169,18 +169,7 @@ def run(args: argparse.Namespace) -> int:
     file_info_list = get_file_info(args.directory, args.time_zone)
 
     if args.merge:
-        merge_data = load_json(args.merge)
-        required_keys = {"path", "sha1", "md5", "date", "size"}
-        for entry in merge_data:
-            if not isinstance(entry, dict):
-                raise SystemExit(
-                    f"Error: Merge file '{args.merge}' must contain an array of objects"
-                )
-            missing = required_keys - entry.keys()
-            if missing:
-                keys_str = ", ".join(sorted(missing))
-                raise SystemExit(f"Error: Merge file entry is missing required keys: {keys_str}")
-        file_info_list.extend(merge_data)
+        file_info_list.extend(load_metadata_json(args.merge))
 
     for key in ["path", "sha1", "md5"]:
         counts = Counter(entry[key] for entry in file_info_list)
