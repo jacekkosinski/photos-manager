@@ -421,8 +421,8 @@ def _get_current_path(item: Path, path_map: dict[Path, Path]) -> Path:
         The current path after accounting for any parent directory renames.
     """
     for old, new in path_map.items():
-        if item != old and str(item).startswith(str(old) + "/"):
-            return Path(str(item).replace(str(old), str(new), 1))
+        if item != old and item.is_relative_to(old):
+            return new / item.relative_to(old)
     return item
 
 
