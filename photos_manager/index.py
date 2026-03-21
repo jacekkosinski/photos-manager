@@ -25,41 +25,6 @@ from pathlib import Path
 from photos_manager.common import load_metadata_json, scan_files, validate_directory
 
 
-def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
-    """Collect information about all files in a given directory.
-
-    Recursively walks through the directory tree starting from the specified
-    directory and collects metadata for each file found. For each file,
-    calculates SHA1 and MD5 checksums, retrieves file size and modification
-    time with timezone information.
-
-    Args:
-        directory: Directory path to scan recursively. Can be an absolute or
-            relative path string.
-        time_zone: Time zone identifier (e.g., 'UTC', 'Europe/Warsaw') for
-            formatting modification timestamps. Uses zoneinfo for timezone handling.
-
-    Returns:
-        A list of dictionaries, where each dictionary contains file metadata
-        with the following keys:
-            - path (str): Absolute path to the file
-            - sha1 (str): SHA1 checksum as hex string
-            - md5 (str): MD5 checksum as hex string
-            - date (str): Modification time in ISO 8601 format with timezone
-            - size (int): File size in bytes
-
-    Warnings:
-        Files that cannot be accessed due to permission errors or OS errors
-        during checksum calculation are skipped with a warning message.
-
-    Examples:
-        >>> files = get_file_info("/path/to/photos", "Europe/Warsaw")
-        >>> files[0]["sha1"]  # doctest: +SKIP
-        'a1b2c3...'
-    """
-    return scan_files(directory, time_zone=time_zone)
-
-
 def extract_numbers(path: str) -> tuple[int, int, str]:
     """Extract numbers from a given path for numerical sorting.
 
@@ -166,7 +131,7 @@ def run(args: argparse.Namespace) -> int:
     """
     validate_directory(args.directory)
 
-    file_info_list = get_file_info(args.directory, args.time_zone)
+    file_info_list = scan_files(args.directory, time_zone=args.time_zone)
 
     if args.merge:
         file_info_list.extend(load_metadata_json(args.merge))
