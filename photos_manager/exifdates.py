@@ -39,6 +39,14 @@ except ImportError:  # pragma: no cover
 # Std-dev threshold (seconds) above which an offset is considered unstable (~)
 _GPS_STD_THRESHOLD = 30.0
 
+# Tag constants for correction source labels
+_TAG_GPS = "[GPS]"
+_TAG_EXIF_GPS = "[EXIF+GPS]"
+_TAG_EXIF_GPS_UNSTABLE = "[EXIF+GPS~]"
+_TAG_EXIF = "[EXIF]"
+_TAG_INT = "[INT]"
+_TAG_INT_UNSTABLE = "[INT~]"
+
 # Column width for tag alignment (len("[EXIF+GPS~]") + 1)
 _TAG_WIDTH = 12
 
@@ -135,17 +143,17 @@ def format_report_line(
     """
     core = format_timestamp_change(filename, tag, old_dt, new_dt, tag_width=_TAG_WIDTH)
 
-    if tag == "[GPS]":
+    if tag == _TAG_GPS:
         return core  # GPS-only fallback — no EXIF available
 
-    if tag in ("[EXIF+GPS]", "[EXIF+GPS~]"):
+    if tag in (_TAG_EXIF_GPS, _TAG_EXIF_GPS_UNSTABLE):
         exif_str = info["exif_dt"].strftime(TIME_FMT)
         off = info["offset"]
         off_str = f"+{off}s" if off >= 0 else f"{off}s"
         std = round(info["std"])
         return f"{core} [EXIF {exif_str}, offset: {off_str} std: {std}s]"
 
-    if tag in ("[INT]", "[INT~]"):
+    if tag in (_TAG_INT, _TAG_INT_UNSTABLE):
         off = info["offset"]
         off_str = f"+{off}s" if off >= 0 else f"{off}s"
         std = round(info["std"])
@@ -305,14 +313,14 @@ def compute_corrections(
             return None, (center, 0)
 
         if rolling is not None:
-            tag = "[EXIF+GPS]" if std <= _GPS_STD_THRESHOLD else "[EXIF+GPS~]"
+            tag = _TAG_EXIF_GPS if std <= _GPS_STD_THRESHOLD else _TAG_EXIF_GPS_UNSTABLE
             info: dict[str, Any] = {
                 "exif_dt": exif_dt,
                 "offset": round(mean_drift),
                 "std": std,
             }
         else:
-            tag = "[EXIF]"
+            tag = _TAG_EXIF
             info = {}
 
         return (tag, new_dt.isoformat(), info), (center, offset_from_json)
@@ -336,7 +344,7 @@ def compute_corrections(
                     corrections.append(None)
                     effective_offsets.append((i, 0))
                 else:
-                    corrections.append(("[GPS]", gps_local.isoformat(), {}))
+                    corrections.append((_TAG_GPS, gps_local.isoformat(), {}))
                     effective_offsets.append((i, offset_from_json))
             continue
 
@@ -362,7 +370,7 @@ def compute_corrections(
         json_dt = datetime.fromisoformat(str(entry["date"])).astimezone(tz)
         new_dt = json_dt + timedelta(seconds=round(mean_off))
         count = sum(1 for idx, _ in non_zero_offsets if abs(idx - i) <= radius)
-        tag = "[INT]" if std <= _GPS_STD_THRESHOLD else "[INT~]"
+        tag = _TAG_INT if std <= _GPS_STD_THRESHOLD else _TAG_INT_UNSTABLE
         corrections[i] = (
             tag,
             new_dt.isoformat(),
