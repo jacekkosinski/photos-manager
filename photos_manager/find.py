@@ -11,6 +11,7 @@ filename or timestamp differences, or to a specific camera model.
 """
 
 import argparse
+import functools
 import os
 import shlex
 import sys
@@ -250,6 +251,7 @@ def _find_exif_in_bytes(data: bytes) -> bytes | None:
         offset = idx + 1
 
 
+@functools.cache
 def read_camera_slug(file_path: str) -> str | None:
     """Read EXIF Make/Model from a JPEG, TIFF, or HEIC/HEIF file and return a normalised slug.
 

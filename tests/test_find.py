@@ -1993,6 +1993,11 @@ class TestFindExifInBytes:
 class TestReadCameraSlug:
     """Tests for read_camera_slug (mocked piexif)."""
 
+    @pytest.fixture(autouse=True)
+    def clear_slug_cache(self) -> None:
+        """Clear lru_cache between tests so monkeypatches take effect."""
+        find.read_camera_slug.cache_clear()
+
     def test_returns_slug_when_make_and_model_present(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
