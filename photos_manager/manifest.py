@@ -210,6 +210,7 @@ def run(args: argparse.Namespace) -> int:
     Examples:
         >>> args = parser.parse_args(['/path/to/archive'])
         >>> exit_code = run(args)
+        Manifest written to /path/to/archive/.version.json (1234 files)
     """
     directory_path = validate_directory(args.directory, check_readable=True)
 
@@ -219,8 +220,7 @@ def run(args: argparse.Namespace) -> int:
 
     total_tb = total_bytes / BYTES_PER_TB
     last_three_digits = file_count % 1000
-    prefix = args.prefix
-    version = f"{prefix}-{total_tb:.3f}-{last_three_digits:03d}"
+    version = f"{args.prefix}-{total_tb:.3f}-{last_three_digits:03d}"
 
     newest_mtime = datetime.fromtimestamp(json_files_with_mtimes[0][0]).astimezone()
     last_modified = newest_mtime.isoformat(timespec="seconds")
