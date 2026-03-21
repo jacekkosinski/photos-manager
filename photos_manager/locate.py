@@ -929,7 +929,7 @@ def run(args: argparse.Namespace) -> int:
     if not sorted_entries:
         raise SystemExit("Error: No archive entries found (check JSON files and filter)")
 
-    new_files = scan_new_files(args.directory, use_exif=getattr(args, "exif", False))
+    new_files = scan_new_files(args.directory, use_exif=args.exif)
     if not new_files:
         raise SystemExit(f"Error: No files found in {args.directory}")
 
@@ -940,7 +940,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"Scanned {len(new_files)} new files in {args.directory}.")
     print()
 
-    match_prefix = not getattr(args, "no_prefix", False)
+    match_prefix = not args.no_prefix
 
     # Group into series
     series_list = group_into_series(new_files)
