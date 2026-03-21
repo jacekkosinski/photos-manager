@@ -20,7 +20,15 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from photos_manager import common
+from photos_manager.common import (
+    find_json_files,
+    find_version_file,
+    format_count,
+    human_size,
+    load_metadata_json,
+    load_version_json_lenient,
+    validate_directory,
+)
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -224,8 +232,8 @@ def _print_table(
     sep = " " * col_gap
     for label, count, size in shown:
         pct = size / denominator * 100 if denominator > 0 else 0.0
-        count_str = common.format_count(count)
-        size_str = common.human_size(size)
+        count_str = format_count(count)
+        size_str = human_size(size)
         print(f"  {label:<{label_width}}{sep}{count_str:>8} files  {size_str:>10}  {pct:>8.2f}%")
     if len(rows) > top_n:
         print(f"  \u2026 and {len(rows) - top_n} more")
@@ -259,19 +267,19 @@ def _print_stats(
     index_file_count: int = stats["index_file_count"]
 
     denom = grand_total_size or 1
-    ic_str = common.format_count(index_file_count)
-    tf_str = common.format_count(total_files)
+    ic_str = format_count(index_file_count)
+    tf_str = format_count(total_files)
     print(
         f"{'Index files:':<14}{ic_str:>8}  "
-        f"{common.human_size(index_files_size):>10}  {index_files_size / denom * 100:>8.2f}%"
+        f"{human_size(index_files_size):>10}  {index_files_size / denom * 100:>8.2f}%"
     )
     print(
         f"{'Total files:':<14}{tf_str:>8}  "
-        f"{common.human_size(total_size):>10}  {total_size / denom * 100:>8.2f}%"
+        f"{human_size(total_size):>10}  {total_size / denom * 100:>8.2f}%"
     )
     grand_count = index_file_count + total_files
-    gc_str = common.format_count(grand_count)
-    print(f"{'Grand total:':<14}{gc_str:>8}  {common.human_size(grand_total_size):>10}")
+    gc_str = format_count(grand_count)
+    print(f"{'Grand total:':<14}{gc_str:>8}  {human_size(grand_total_size):>10}")
     print()
 
     date_min: str | None = stats["date_min"]
@@ -287,9 +295,9 @@ def _print_stats(
         rows: list[tuple[str, str, str, str]] = []
         for filename, count, photo_bytes in per_index:
             pct = photo_bytes / grand_total_size * 100 if grand_total_size > 0 else 0.0
-            count_str = common.format_count(count)
+            count_str = format_count(count)
             pct_str = f"{pct:.2f}%"
-            rows.append((filename, count_str, common.human_size(photo_bytes), pct_str))
+            rows.append((filename, count_str, human_size(photo_bytes), pct_str))
         name_w = max(len(r[0]) for r in rows)
         count_w = max(len(r[1]) for r in rows)
         size_w = max(len(r[2]) for r in rows)
@@ -343,17 +351,17 @@ def run(args: argparse.Namespace) -> int:
     Raises:
         SystemExit: If directory is invalid or no JSON index files are found.
     """
-    directory = common.validate_directory(args.directory, check_readable=True)
+    directory = validate_directory(args.directory, check_readable=True)
 
     # Look for a .version.json manifest
-    version_file = common.find_version_file(str(directory))
+    version_file = find_version_file(str(directory))
     version_info: dict[str, Any] | None = (
-        common.load_version_json_lenient(version_file) if version_file is not None else None
+        load_version_json_lenient(version_file) if version_file is not None else None
     )
 
     # Find index JSON files (excludes *version.json automatically)
     try:
-        json_file_paths = common.find_json_files(str(directory))
+        json_file_paths = find_json_files(str(directory))
     except SystemExit:
         raise SystemExit(f"Error: no JSON index files found in '{directory}'") from None
 
@@ -362,7 +370,7 @@ def run(args: argparse.Namespace) -> int:
     # Load records from each index file
     records_per_file: dict[Path, list[dict[str, str | int]]] = {}
     for json_file in json_files:
-        records_per_file[json_file] = common.load_metadata_json(str(json_file))
+        records_per_file[json_file] = load_metadata_json(str(json_file))
 
     stats = _gather_stats(json_files, records_per_file)
     _print_stats(directory, version_info, stats, args.stats, args.top_n)
