@@ -297,9 +297,10 @@ def _apply_changes(pending: list[_PendingChange], name_width: int, dry_run: bool
     Returns:
         Number of changes printed (and applied if not dry_run).
     """
-    for name, tag, old_ts, new_ts, path, src in pending:
+    for name, tag, old_ts, new_ts, _path, src in pending:
         print(format_change_line(name, tag, old_ts, new_ts, name_width=name_width, src=src))
-        if not dry_run:
+    if not dry_run:
+        for name, _tag, _old_ts, new_ts, path, _src in pending:
             try:
                 os.utime(path, (new_ts, new_ts))
             except OSError as e:
