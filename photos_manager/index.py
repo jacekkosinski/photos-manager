@@ -57,6 +57,9 @@ from photos_manager.common import (
     write_metadata_json,
 )
 
+# Constants
+DUPLICATE_CHECK_KEYS = ["path", "sha1", "md5"]
+
 
 def extract_numbers(path: str) -> tuple[int, int, str]:
     """Extract numbers from a given path for numerical sorting.
@@ -102,9 +105,17 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     Args:
         parser: ArgumentParser instance to configure with index arguments.
     """
-    parser.add_argument("directory", type=str, help="Path to the source directory")
     parser.add_argument(
-        "-m", "--merge", required=False, metavar="JSON", help="Path to the JSON file to merge"
+        "directory",
+        type=str,
+        help="Path to the source directory",
+    )
+    parser.add_argument(
+        "-m",
+        "--merge",
+        required=False,
+        metavar="JSON",
+        help="Path to the JSON file to merge",
     )
     parser.add_argument(
         "-z",
@@ -160,6 +171,7 @@ def run(args: argparse.Namespace) -> int:
     Returns:
         int: Exit code indicating success or failure
             - os.EX_OK (0): Successful execution
+            - 1 (SystemExit): Error occurred during processing
 
     Raises:
         SystemExit: If any of the following errors occur:
@@ -192,7 +204,7 @@ def run(args: argparse.Namespace) -> int:
     if args.merge:
         file_info_list.extend(load_metadata_json(args.merge))
 
-    for key in ["path", "sha1", "md5"]:
+    for key in DUPLICATE_CHECK_KEYS:
         counts = Counter(entry[key] for entry in file_info_list)
         duplicates = sorted(str(item) for item, count in counts.items() if count > 1)
 
