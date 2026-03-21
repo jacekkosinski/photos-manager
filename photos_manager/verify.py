@@ -1505,6 +1505,7 @@ def run(args: argparse.Namespace) -> int:
             print(f"    MD5 {md5} appears in {len(paths)} file(s):", file=sys.stderr)
             for path in sorted(paths):
                 print(f"      - {path}", file=sys.stderr)
+            total_errors += len(paths) - 1
     else:
         print("  No duplicate MD5 checksums found")
 

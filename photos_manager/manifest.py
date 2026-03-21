@@ -245,8 +245,8 @@ def run(args: argparse.Namespace) -> int:
     prefix = args.prefix
     version = f"{prefix}-{total_tb:.3f}-{last_three_digits:03d}"
 
-    youngest_mtime = datetime.fromtimestamp(json_files_with_mtimes[0][0]).astimezone()
-    last_modified = youngest_mtime.isoformat(timespec="seconds")
+    newest_mtime = datetime.fromtimestamp(json_files_with_mtimes[0][0]).astimezone()
+    last_modified = newest_mtime.isoformat(timespec="seconds")
     last_verified = datetime.now().astimezone().isoformat(timespec="seconds")
 
     output = {
