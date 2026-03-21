@@ -400,7 +400,6 @@ class TestRun:
         with pytest.raises(SystemExit) as exc_info:
             run(args)
 
-        assert "merge file" in str(exc_info.value).lower()
         assert "does not exist" in str(exc_info.value).lower()
 
     def test_run_with_invalid_merge_json(self, tmp_path: Path) -> None:
@@ -422,4 +421,4 @@ class TestRun:
         with pytest.raises(SystemExit) as exc_info:
             run(args)
 
-        assert "invalid format" in str(exc_info.value).lower()
+        assert "invalid json" in str(exc_info.value).lower()

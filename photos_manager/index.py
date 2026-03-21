@@ -22,7 +22,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from photos_manager.common import scan_files, validate_directory
+from photos_manager.common import load_json, scan_files, validate_directory
 
 
 def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
@@ -169,19 +169,7 @@ def run(args: argparse.Namespace) -> int:
     file_info_list = get_file_info(args.directory, args.time_zone)
 
     if args.merge:
-        try:
-            merge_path = Path(args.merge)
-            with merge_path.open(encoding="utf-8") as json_file:
-                merge_data = json.load(json_file)
-                file_info_list.extend(merge_data)
-        except FileNotFoundError as exception:
-            raise SystemExit(
-                f"Error: The specified merge file '{args.merge}' does not exist"
-            ) from exception
-        except json.JSONDecodeError as exception:
-            raise SystemExit(
-                f"Error: JSON file '{args.merge}' contains invalid format"
-            ) from exception
+        file_info_list.extend(load_json(args.merge))
 
     for key in ["path", "sha1", "md5"]:
         counts = Counter(entry[key] for entry in file_info_list)
