@@ -48,6 +48,7 @@ from photos_manager.common import (
     load_json,
     resolve_group_name,
     resolve_owner_name,
+    validate_directory,
 )
 
 
@@ -1364,11 +1365,7 @@ def run(args: argparse.Namespace) -> int:
         Found 2 JSON metadata file(s)
         ...
     """
-    directory_path = Path(args.directory)
-    if not directory_path.is_dir() or not os.access(args.directory, os.R_OK):
-        raise SystemExit(
-            f"Error: The directory '{args.directory}' does not exist or is not readable"
-        )
+    validate_directory(args.directory, check_readable=True)
 
     print(f"Scanning directory: {args.directory}")
     version_file = find_version_file(args.directory)

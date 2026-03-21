@@ -56,7 +56,7 @@ from pathlib import Path
 
 from photos_manager.common import calculate_checksums_strict as calculate_checksums
 from photos_manager.common import find_json_files_with_mtime as find_json_files
-from photos_manager.common import load_json
+from photos_manager.common import load_json, validate_directory
 
 # Constants
 VERSION_PREFIX = "photos"
@@ -218,11 +218,7 @@ def run(args: argparse.Namespace) -> int:
         >>> args = parser.parse_args(['/path/to/archive'])
         >>> exit_code = run(args)
     """
-    directory_path = Path(args.directory)
-    if not directory_path.is_dir() or not os.access(args.directory, os.R_OK):
-        raise SystemExit(
-            f"Error: The directory '{args.directory}' does not exist or is not readable"
-        )
+    directory_path = validate_directory(args.directory, check_readable=True)
 
     json_files_with_mtimes = find_json_files(args.directory)
     json_files = [path for (_, path) in json_files_with_mtimes]

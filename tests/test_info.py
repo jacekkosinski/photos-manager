@@ -422,7 +422,7 @@ class TestRun:
         with pytest.raises(SystemExit) as exc_info:
             run(info_args(directory=tmp_path / "nonexistent"))
 
-        assert "not a directory" in str(exc_info.value)
+        assert "does not exist" in str(exc_info.value) or "not a directory" in str(exc_info.value)
 
     def test_run_top_n_limits_rows(
         self,

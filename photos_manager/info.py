@@ -345,10 +345,7 @@ def run(args: argparse.Namespace) -> int:
     Raises:
         SystemExit: If directory is invalid or no JSON index files are found.
     """
-    directory = Path(args.directory)
-
-    if not directory.is_dir():
-        raise SystemExit(f"Error: not a directory: {directory}")
+    directory = common.validate_directory(args.directory, check_readable=True)
 
     # Look for a .version.json manifest
     version_info: dict[str, Any] | None = None
