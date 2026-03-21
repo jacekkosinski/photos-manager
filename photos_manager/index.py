@@ -1,18 +1,47 @@
-"""index - Generate JSON file with file metadata from directory.
+"""index - Generate JSON metadata file from a directory of files.
 
 This script recursively scans a directory and generates a JSON file containing
-metadata for each file found:
-- Path to the file
-- SHA1 and MD5 checksums
-- File size in bytes
-- Modification timestamp with timezone
+metadata for each file found. The output file is named after the source directory
+(e.g., scanning ``photos/`` produces ``photos.json`` in the current directory).
 
-Supports merging with existing JSON files and provides multiple sorting options.
+Each entry in the output JSON array contains the following fields:
+    - path: Absolute path to the file
+    - sha1: SHA1 checksum of the file contents
+    - md5: MD5 checksum of the file contents
+    - date: File modification timestamp in ISO 8601 format with timezone offset
+    - size: File size in bytes
+
+The script validates the result for duplicate paths, SHA1 hashes, and MD5 hashes
+before writing. An optional merge flag allows combining a newly scanned directory
+with an existing JSON file (e.g., to build a composite index from multiple sources).
+
+Three mutually exclusive sort orders are available:
+    - Default: by modification timestamp, then filename
+    - ``--sort-by-number`` (``-n``): numerically by number embedded in the
+      parent directory name, then by number in the filename
+    - ``--sort-by-dir`` (``-D``): by parent directory path, then by
+      modification timestamp, then filename
 
 Usage:
-    photos index /path/to/directory
-    photos index /path/to/directory --merge existing.json
-    photos index /path/to/directory --sort-by-number
+    photos index /path/to/photos
+    photos index /path/to/photos --merge existing.json
+    photos index /path/to/photos --sort-by-number
+    photos index /path/to/photos --sort-by-dir --time-zone UTC
+
+Example output (photos.json):
+    [
+        {
+            "path": "/archive/photos/IMG_0001.jpg",
+            "sha1": "a1b2c3d4e5f6...",
+            "md5": "f6e5d4c3b2a1...",
+            "date": "2024-06-15T14:32:10+02:00",
+            "size": 4823041
+        }
+    ]
+
+Exit codes:
+    0 (os.EX_OK): Success
+    1 (SystemExit): Error occurred (invalid directory, duplicate hashes, write failure)
 """
 
 import argparse
