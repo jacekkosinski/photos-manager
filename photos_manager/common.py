@@ -4,6 +4,7 @@ This module provides shared functionality to eliminate code duplication
 across all photos_manager modules.
 """
 
+import concurrent.futures
 import grp
 import hashlib
 import json
@@ -13,6 +14,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 # Constants
 CHUNK_SIZE = 65536  # 64KB chunks for file operations
@@ -394,3 +396,65 @@ def find_json_files_with_mtime(directory: str) -> list[tuple[float, str]]:
     """
     json_files = [(f.stat().st_mtime, str(f)) for f in _find_metadata_json_files(directory)]
     return sorted(json_files, key=lambda x: x[0], reverse=True)
+
+
+def scan_files(
+    directory: str,
+    *,
+    time_zone: str | None = None,
+    resolve_paths: bool = False,
+) -> list[dict[str, str | int]]:
+    """Scan directory recursively and collect file metadata with checksums.
+
+    Implements a three-phase pipeline: stat collection (sequential), checksum
+    computation (parallel, hashlib releases the GIL), and result assembly.
+
+    Args:
+        directory: Path to the directory to scan. Must already be validated.
+        time_zone: IANA timezone name for timestamps (e.g. ``'Europe/Warsaw'``).
+            If None, uses the local system timezone via ``.astimezone()``.
+        resolve_paths: If True, resolve symlinks and relative components in
+            file paths via ``Path.resolve()``. If False, use the path as-is.
+
+    Returns:
+        List of file metadata dicts with keys: path, sha1, md5, date, size.
+        Files that cannot be stat'd or hashed are silently skipped with a
+        warning printed to stderr.
+
+    Examples:
+        >>> files = scan_files("/path/to/photos")
+        >>> files[0]["sha1"]  # doctest: +SKIP
+        'a1b2c3...'
+    """
+    tz: ZoneInfo | None = ZoneInfo(time_zone) if time_zone else None
+    dir_path = Path(directory)
+
+    # Phase 1: collect paths and stat info (sequential)
+    file_entries: list[tuple[str, float, int]] = []
+    for file_path in dir_path.rglob("*"):
+        if not file_path.is_file():
+            continue
+        try:
+            stat_result = file_path.stat()
+            resolved = str(file_path.resolve()) if resolve_paths else str(file_path)
+            file_entries.append((resolved, stat_result.st_mtime, stat_result.st_size))
+        except OSError as e:
+            print(f"Warning: Could not process {file_path}: {e}", file=sys.stderr)
+
+    # Phase 2: compute checksums in parallel (hashlib releases the GIL)
+    workers = os.cpu_count() or 1
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        checksums = list(executor.map(calculate_checksums, [p for p, _, _ in file_entries]))
+
+    # Phase 3: assemble results (order preserved by executor.map)
+    files: list[dict[str, str | int]] = []
+    for (path, mtime, size), (sha1, md5) in zip(file_entries, checksums, strict=True):
+        if sha1 is None or md5 is None:
+            continue
+        if tz is not None:
+            date = datetime.fromtimestamp(mtime, tz).isoformat()
+        else:
+            date = datetime.fromtimestamp(mtime).astimezone().isoformat()
+        files.append({"path": path, "sha1": sha1, "md5": md5, "date": date, "size": size})
+
+    return files

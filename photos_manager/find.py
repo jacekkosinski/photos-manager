@@ -11,7 +11,6 @@ filename or timestamp differences, or to a specific camera model.
 """
 
 import argparse
-import concurrent.futures
 import os
 import shlex
 import sys
@@ -21,10 +20,10 @@ from pathlib import Path
 from photos_manager.common import (
     TIME_FMT,
     TS_FMT,
-    calculate_checksums,
     format_count,
     human_size,
     load_json,
+    scan_files,
     validate_directory,
 )
 
@@ -47,33 +46,8 @@ def scan_directory(directory: str) -> list[dict[str, str | int]]:
         List of file metadata dictionaries with keys:
         path (str), sha1 (str), md5 (str), date (str), size (int)
     """
-    dir_path = validate_directory(directory)
-
-    # Phase 1: collect paths and stat info (sequential)
-    file_entries: list[tuple[str, str, int]] = []
-    for file_path in dir_path.rglob("*"):
-        if not file_path.is_file():
-            continue
-        try:
-            stat_result = file_path.stat()
-            date = datetime.fromtimestamp(stat_result.st_mtime).astimezone().isoformat()
-            file_entries.append((str(file_path.resolve()), date, stat_result.st_size))
-        except OSError as e:
-            print(f"Warning: Could not process {file_path}: {e}", file=sys.stderr)
-
-    # Phase 2: compute checksums in parallel (hashlib releases the GIL)
-    workers = os.cpu_count() or 1
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        checksums = list(executor.map(calculate_checksums, [p for p, _, _ in file_entries]))
-
-    # Phase 3: assemble results (order preserved by executor.map)
-    files: list[dict[str, str | int]] = []
-    for (path, date, size), (sha1, md5) in zip(file_entries, checksums, strict=True):
-        if sha1 is None or md5 is None:
-            continue
-        files.append({"path": path, "sha1": sha1, "md5": md5, "date": date, "size": size})
-
-    return files
+    validate_directory(directory)
+    return scan_files(directory, resolve_paths=True)
 
 
 def load_psv(file_path: str) -> list[dict[str, str | int]]:

@@ -16,17 +16,13 @@ Usage:
 """
 
 import argparse
-import concurrent.futures
 import json
 import os
 import re
-import sys
 from collections import Counter
-from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
-from photos_manager.common import calculate_checksums, validate_directory
+from photos_manager.common import scan_files, validate_directory
 
 
 def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
@@ -54,59 +50,14 @@ def get_file_info(directory: str, time_zone: str) -> list[dict[str, str | int]]:
 
     Warnings:
         Files that cannot be accessed due to permission errors or OS errors
-        during checksum calculation are skipped with a warning message. The
-        function continues processing other files.
-
-        If the directory itself cannot be accessed, a warning is printed to
-        stderr and an empty list is returned.
+        during checksum calculation are skipped with a warning message.
 
     Examples:
         >>> files = get_file_info("/path/to/photos", "Europe/Warsaw")
-        >>> files[0]
-        {
-            'path': '/path/to/photos/image.jpg',
-            'sha1': 'a1b2c3...',
-            'md5': 'd4e5f6...',
-            'date': '2025-01-04T12:34:56+01:00',
-            'size': 1234567
-        }
+        >>> files[0]["sha1"]  # doctest: +SKIP
+        'a1b2c3...'
     """
-    local_tz = ZoneInfo(time_zone)
-    file_info_list: list[dict[str, str | int]] = []
-
-    # Phase 1: collect paths and stat info (sequential)
-    file_entries: list[tuple[str, float, int]] = []
-    dir_path = Path(directory)
-    for file_path in dir_path.rglob("*"):
-        if not file_path.is_file():
-            continue
-        try:
-            stat_info = file_path.stat()
-            file_entries.append((str(file_path), stat_info.st_mtime, stat_info.st_size))
-        except OSError as e:
-            print(f"Warning: Cannot stat {file_path}: {e}", file=sys.stderr)
-
-    # Phase 2: compute checksums in parallel (hashlib releases the GIL)
-    workers = os.cpu_count() or 1
-    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        checksums = list(executor.map(calculate_checksums, [path for path, _, _ in file_entries]))
-
-    # Phase 3: assemble results (order preserved by executor.map)
-    for (path, mtime, size), (sha1, md5) in zip(file_entries, checksums, strict=True):
-        if sha1 is None or md5 is None:
-            continue
-        mod_time_with_tz = datetime.fromtimestamp(mtime, local_tz).isoformat()
-        file_info_list.append(
-            {
-                "path": path,
-                "sha1": sha1,
-                "md5": md5,
-                "date": mod_time_with_tz,
-                "size": size,
-            }
-        )
-
-    return file_info_list
+    return scan_files(directory, time_zone=time_zone)
 
 
 def extract_numbers(path: str) -> tuple[int, int, str]:
