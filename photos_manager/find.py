@@ -374,6 +374,8 @@ def generate_file_operation_commands(
     target_dir: str,
     dir_mapping: dict[str, str],
     operation: str = "mv",
+    *,
+    file_groups: dict[str, list[dict[str, str | int]]] | None = None,
 ) -> list[str]:
     """Generate file operation commands (mv or cp) for organizing files.
 
@@ -382,6 +384,8 @@ def generate_file_operation_commands(
         target_dir: Target directory path
         dir_mapping: Mapping of source directories to numbered subdirectories
         operation: File operation to use - "mv" for move or "cp" for copy
+        file_groups: Pre-computed grouping of files by directory. If provided,
+            skips the internal group_files_by_directory() call.
 
     Returns:
         List of shell commands (mkdir and mv/cp)
@@ -396,8 +400,9 @@ def generate_file_operation_commands(
     created_dirs: set[str] = set()
     cmd_flags = "-iv" if operation == "mv" else "-pv"
 
-    # Group files by source directory
-    file_groups = group_files_by_directory(files)
+    # Group files by source directory (use pre-computed groups when available)
+    if file_groups is None:
+        file_groups = group_files_by_directory(files)
 
     # Generate commands for each source directory
     for source_dir in sorted(file_groups.keys()):
@@ -797,7 +802,7 @@ def process_command_mode(
     target_dir = args.move or args.copy
     operation = "mv" if args.move else "cp"
     commands = generate_file_operation_commands(
-        files_to_process, target_dir, dir_mapping, operation
+        files_to_process, target_dir, dir_mapping, operation, file_groups=file_groups
     )
 
     print("umask 022")
