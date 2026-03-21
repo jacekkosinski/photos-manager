@@ -273,20 +273,24 @@ def get_unique_normalized_path(path: Path) -> Path:
     return new_path
 
 
-def fix_file_permissions(path: Path, dry_run: bool, root: Path | None = None) -> bool:
+def fix_file_permissions(
+    path: Path, dry_run: bool, root: Path | None = None, *, current_mode: int | None = None
+) -> bool:
     """Fix file permissions to 644.
 
     Args:
         path: Path to the file.
         dry_run: If True, only print what would be done.
         root: Root directory for relative display of paths in output.
+        current_mode: Pre-fetched permission bits (avoids second stat() during dry-run).
 
     Returns:
         True if successful or dry-run, False on error.
     """
     try:
         if dry_run:
-            print(f"  {_rel(path, root)}: {oct(stat.S_IMODE(path.stat().st_mode))} → 0o644")
+            mode = current_mode if current_mode is not None else stat.S_IMODE(path.stat().st_mode)
+            print(f"  {_rel(path, root)}: {oct(mode)} → 0o644")
         else:
             path.chmod(FILE_PERMISSIONS)
             print(f"  {_rel(path, root)}: permissions set to 0o644")
@@ -296,20 +300,24 @@ def fix_file_permissions(path: Path, dry_run: bool, root: Path | None = None) ->
         return False
 
 
-def fix_dir_permissions(path: Path, dry_run: bool, root: Path | None = None) -> bool:
+def fix_dir_permissions(
+    path: Path, dry_run: bool, root: Path | None = None, *, current_mode: int | None = None
+) -> bool:
     """Fix directory permissions to 755.
 
     Args:
         path: Path to the directory.
         dry_run: If True, only print what would be done.
         root: Root directory for relative display of paths in output.
+        current_mode: Pre-fetched permission bits (avoids second stat() during dry-run).
 
     Returns:
         True if successful or dry-run, False on error.
     """
     try:
         if dry_run:
-            print(f"  {_rel(path, root)}: {oct(stat.S_IMODE(path.stat().st_mode))} → 0o755")
+            mode = current_mode if current_mode is not None else stat.S_IMODE(path.stat().st_mode)
+            print(f"  {_rel(path, root)}: {oct(mode)} → 0o755")
         else:
             path.chmod(DIR_PERMISSIONS)
             print(f"  {_rel(path, root)}: permissions set to 0o755")
@@ -512,10 +520,10 @@ def _process_file_permissions(
     for item in all_items:
         if item.is_symlink() or not item.is_file():
             continue
-        is_ok, _current_perms = check_file_permissions(item)
+        is_ok, current_perms = check_file_permissions(item)
         if not is_ok:
             count += 1
-            if not fix_file_permissions(item, dry_run, root=root):
+            if not fix_file_permissions(item, dry_run, root=root, current_mode=current_perms):
                 has_errors = True
 
     if not count:
@@ -544,10 +552,10 @@ def _process_dir_permissions(
     for item in all_items:
         if item.is_symlink() or not item.is_dir():
             continue
-        is_ok, _current_perms = check_dir_permissions(item)
+        is_ok, current_perms = check_dir_permissions(item)
         if not is_ok:
             count += 1
-            if not fix_dir_permissions(item, dry_run, root=root):
+            if not fix_dir_permissions(item, dry_run, root=root, current_mode=current_perms):
                 has_errors = True
 
     if not count:
