@@ -214,7 +214,7 @@ def run(args: argparse.Namespace) -> int:
     Examples:
         >>> args = parser.parse_args(['/path/to/archive'])
         >>> exit_code = run(args)
-        Manifest written to /path/to/archive/.version.json (1234 files)
+        Manifest written to .version.json (5 files)
     """
     directory_path = validate_directory(args.directory, check_readable=True)
 
@@ -256,6 +256,6 @@ def run(args: argparse.Namespace) -> int:
             f"Error: Could not set mtime on '{directory_path}': {exception}"
         ) from exception
 
-    print(f"Manifest written to {output_file} ({file_count} files)")
+    print(f"Manifest written to {Path(output_file).name} ({len(json_files)} files)")
 
     return os.EX_OK

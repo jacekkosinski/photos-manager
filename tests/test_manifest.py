@@ -190,7 +190,7 @@ class TestRun:
         run(args)
 
         captured = capsys.readouterr()
-        assert str(output_file) in captured.out
+        assert output_file.name in captured.out
         assert "1 files" in captured.out
 
     def test_run_archive_directory_mtime_matches_last_modified(self, tmp_path: Path) -> None:
