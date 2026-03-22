@@ -175,21 +175,17 @@ def _print_table(
         print(f"  \u2026 and {len(rows) - top_n} more")
 
 
-def _print_stats(
+def _print_summary(
     directory: Path,
     version_info: dict[str, Any] | None,
     stats: dict[str, Any],
-    show_detailed: bool,
-    top_n: int = 10,
 ) -> None:
-    """Print a human-readable archive statistics summary to stdout.
+    """Print the basic archive summary to stdout.
 
     Args:
         directory: Path to the archive directory.
         version_info: Parsed .version.json data, or None if absent.
         stats: Aggregated statistics from _gather_stats().
-        show_detailed: Whether to print by-year and by-extension breakdowns.
-        top_n: Maximum rows to show in each breakdown table.
     """
     grand_total_size: int = stats["grand_total_size"]
     total_size: int = stats["total_size"]
@@ -284,28 +280,38 @@ def _print_stats(
         ).splitlines():
             print(f"  {line}")
 
-    if show_detailed:
-        print()
-        by_year: dict[str, tuple[int, int]] = stats["by_year"]
-        if by_year:
-            _print_table(
-                "By year:",
-                [(yr, c, s) for yr, (c, s) in sorted(by_year.items())],
-                total_size,
-                top_n,
-            )
-        print()
-        by_ext: dict[str, tuple[int, int]] = stats["by_extension"]
-        if by_ext:
-            _print_table(
-                "By extension:",
-                [
-                    (ext, c, s)
-                    for ext, (c, s) in sorted(by_ext.items(), key=lambda x: x[1][1], reverse=True)
-                ],
-                grand_total_size,
-                top_n,
-            )
+
+def _print_detail(stats: dict[str, Any], top_n: int) -> None:
+    """Print by-year and by-extension breakdowns to stdout.
+
+    Args:
+        stats: Aggregated statistics from _gather_stats().
+        top_n: Maximum rows to show in each breakdown table.
+    """
+    total_size: int = stats["total_size"]
+    grand_total_size: int = stats["grand_total_size"]
+
+    print()
+    by_year: dict[str, tuple[int, int]] = stats["by_year"]
+    if by_year:
+        _print_table(
+            "By year:",
+            [(yr, c, s) for yr, (c, s) in sorted(by_year.items())],
+            total_size,
+            top_n,
+        )
+    print()
+    by_ext: dict[str, tuple[int, int]] = stats["by_extension"]
+    if by_ext:
+        _print_table(
+            "By extension:",
+            [
+                (ext, c, s)
+                for ext, (c, s) in sorted(by_ext.items(), key=lambda x: x[1][1], reverse=True)
+            ],
+            grand_total_size,
+            top_n,
+        )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -348,5 +354,7 @@ def run(args: argparse.Namespace) -> int:
         records_per_file[json_file] = load_metadata_json(str(json_file))
 
     stats = _gather_stats(json_files, records_per_file)
-    _print_stats(directory, version_info, stats, args.stats, args.top_n)
+    _print_summary(directory, version_info, stats)
+    if args.stats:
+        _print_detail(stats, args.top_n)
     return os.EX_OK
