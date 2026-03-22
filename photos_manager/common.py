@@ -16,8 +16,22 @@ from pathlib import Path
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
+from tabulate import DataRow, TableFormat
+
 # Constants
 CHUNK_SIZE = 65536  # 64KB chunks for file operations
+
+# Table format with 4-space column separator
+TABLE_FMT = TableFormat(
+    lineabove=None,
+    linebelowheader=None,
+    linebetweenrows=None,
+    linebelow=None,
+    headerrow=DataRow("", "    ", ""),
+    datarow=DataRow("", "    ", ""),
+    padding=0,
+    with_header_hide=None,
+)
 
 # Timestamp display formats
 TS_FMT = "%Y-%m-%d %H:%M:%S"

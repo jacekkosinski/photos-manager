@@ -39,6 +39,7 @@ from typing import Any
 from tabulate import tabulate
 
 from photos_manager.common import (
+    TABLE_FMT,
     date_span,
     find_json_files,
     find_version_file,
@@ -89,7 +90,6 @@ def _gather_stats(
           as ``(filename, record_count, total_bytes)``, in input order.
         - ``index_file_count`` (int): Number of index JSON files processed.
     """
-    total_size = 0
     date_min: str | None = None
     date_max: str | None = None
     by_year: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
@@ -103,7 +103,6 @@ def _gather_stats(
         for record in records:
             size = int(record.get("size", 0))
             file_size += size
-            total_size += size
 
             # Date handling — skip silently if missing or malformed
             date_val = record.get("date")
@@ -117,27 +116,25 @@ def _gather_stats(
                 by_year[year][0] += 1
                 by_year[year][1] += size
 
-            path_val = record.get("path", "")
-            ext = Path(str(path_val)).suffix.lower()
-            ext_key = ext if ext else "(no ext)"
-            by_extension[ext_key][0] += 1
-            by_extension[ext_key][1] += size
+            ext = Path(str(record.get("path", ""))).suffix.lower() or "(no ext)"
+            by_extension[ext][0] += 1
+            by_extension[ext][1] += size
 
         per_index.append((json_file.name, len(records), file_size))
 
     total_files = sum(cnt for _, cnt, _ in per_index)
+    total_size = sum(size for _, _, size in per_index)
     index_files_size = sum(f.stat().st_size for f in json_files)
-    grand_total_size = total_size + index_files_size
 
     return {
         "total_files": total_files,
         "total_size": total_size,
         "date_min": date_min,
         "date_max": date_max,
-        "by_year": {k: (v[0], v[1]) for k, v in by_year.items()},
-        "by_extension": {k: (v[0], v[1]) for k, v in by_extension.items()},
+        "by_year": {k: tuple(v) for k, v in by_year.items()},
+        "by_extension": {k: tuple(v) for k, v in by_extension.items()},
         "index_files_size": index_files_size,
-        "grand_total_size": grand_total_size,
+        "grand_total_size": total_size + index_files_size,
         "per_index": per_index,
         "index_file_count": len(json_files),
     }
@@ -164,7 +161,6 @@ def _print_table(
         top_n: Maximum number of data rows to display before the overflow hint.
     """
     print(heading)
-    shown = rows[:top_n]
     table_rows = [
         (
             label,
@@ -172,10 +168,10 @@ def _print_table(
             human_size(size),
             f"{size / denominator * 100 if denominator else 0:.2f}%",
         )
-        for label, count, size in shown
+        for label, count, size in rows[:top_n]
     ]
     for line in tabulate(
-        table_rows, tablefmt="plain", colalign=("left", "right", "right", "right")
+        table_rows, tablefmt=TABLE_FMT, colalign=("left", "right", "right", "right")
     ).splitlines():
         print(f"  {line}")
     if len(rows) > top_n:
@@ -253,15 +249,12 @@ def _print_summary(
     if date_min and date_max:
         date_rows = [("Date range:", date_span(date_min, date_max))]
 
-    all_labels = (
-        [r[0] for r in header_rows] + [r[0] for r in summary_rows] + [r[0] for r in date_rows]
-    )
-    max_label = max(len(label) for label in all_labels)
+    max_label = max(len(r[0]) for r in (*header_rows, *summary_rows, *date_rows))
 
     print(
         tabulate(
             [(r[0].ljust(max_label), r[1]) for r in header_rows],
-            tablefmt="plain",
+            tablefmt=TABLE_FMT,
             colalign=("left", "left"),
         )
     )
@@ -269,7 +262,7 @@ def _print_summary(
     print(
         tabulate(
             [(r[0].ljust(max_label), r[1], r[2], r[3]) for r in summary_rows],
-            tablefmt="plain",
+            tablefmt=TABLE_FMT,
             colalign=("left", "right", "right", "right"),
         )
     )
@@ -278,7 +271,7 @@ def _print_summary(
         print(
             tabulate(
                 [(r[0].ljust(max_label), r[1]) for r in date_rows],
-                tablefmt="plain",
+                tablefmt=TABLE_FMT,
                 colalign=("left", "left"),
             )
         )
@@ -413,24 +406,18 @@ def run(args: argparse.Namespace) -> int:
     """
     directory = validate_directory(args.directory, check_readable=True)
 
-    # Look for a .version.json manifest
     version_file = find_version_file(str(directory))
     version_info: dict[str, Any] | None = (
         load_version_json_lenient(version_file) if version_file is not None else None
     )
 
-    # Find index JSON files (excludes *version.json automatically)
     try:
         json_file_paths = find_json_files(str(directory))
     except SystemExit:
         raise SystemExit(f"Error: no JSON index files found in '{directory}'") from None
 
     json_files = [Path(p) for p in json_file_paths]
-
-    # Load records from each index file
-    records_per_file: dict[Path, list[dict[str, str | int]]] = {}
-    for json_file in json_files:
-        records_per_file[json_file] = load_metadata_json(str(json_file))
+    records_per_file = {f: load_metadata_json(str(f)) for f in json_files}
 
     stats = _gather_stats(json_files, records_per_file)
     _print_summary(directory, version_info, stats)
