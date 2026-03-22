@@ -198,13 +198,17 @@ def run(args: argparse.Namespace) -> int:
 
     Output:
         Writes JSON object with structure:
+
             {
-                "version": "{prefix}-{TB:.3f}-{count%1000:03d}",
-                "total_bytes": int,
-                "file_count": int,
-                "last_modified": str,   # ISO 8601 timestamp
-                "last_verified": str,   # ISO 8601 timestamp
-                "files": {filename: sha1_hash, ...}
+                "version": "photos-2.456-234",
+                "total_bytes": 2701131776000,
+                "file_count": 12234,
+                "last_modified": "2025-12-30T12:34:56+01:00",
+                "last_verified": "2025-12-30T13:45:23+01:00",
+                "files": {
+                    "archive1.json": "a1b2c3d4e5f6...",
+                    "archive2.json": "f6e5d4c3b2a1..."
+                }
             }
 
     Examples:
