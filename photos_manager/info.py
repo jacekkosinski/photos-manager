@@ -32,7 +32,6 @@ Exit codes:
 
 import argparse
 import os
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -92,38 +91,56 @@ def _gather_stats(
     """
     date_min: str | None = None
     date_max: str | None = None
-    by_year: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
-    by_extension: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
+
+    by_year: dict[str, list[int]] = {}
+    by_extension: dict[str, list[int]] = {}
     per_index: list[tuple[str, int, int]] = []
+
+    total_files = 0
+    total_size = 0
 
     for json_file in json_files:
         records = records_per_file[json_file]
         file_size = 0
 
         for record in records:
-            size = int(record.get("size", 0))
+            size = record.get("size")
+            if not isinstance(size, int):
+                size = int(size or 0)
+
+            total_files += 1
+            total_size += size
             file_size += size
 
             # Date handling — skip silently if missing or malformed
             date_val = record.get("date")
             if isinstance(date_val, str) and len(date_val) >= 10:
                 date_str = date_val[:10]
+
                 if date_min is None or date_str < date_min:
                     date_min = date_str
                 if date_max is None or date_str > date_max:
                     date_max = date_str
-                year = date_str[:4]
-                by_year[year][0] += 1
-                by_year[year][1] += size
 
-            ext = Path(str(record.get("path", ""))).suffix.lower() or "(no ext)"
-            by_extension[ext][0] += 1
-            by_extension[ext][1] += size
+                year = date_str[:4]
+                entry = by_year.setdefault(year, [0, 0])
+                entry[0] += 1
+                entry[1] += size
+
+            # Extension — files without one are grouped as "(no ext)"
+            path = record.get("path")
+            if isinstance(path, str):
+                idx = path.rfind(".")
+                ext = path[idx:].lower() if idx != -1 else "(no ext)"
+            else:
+                ext = "(no ext)"
+
+            entry = by_extension.setdefault(ext, [0, 0])
+            entry[0] += 1
+            entry[1] += size
 
         per_index.append((json_file.name, len(records), file_size))
 
-    total_files = sum(cnt for _, cnt, _ in per_index)
-    total_size = sum(size for _, _, size in per_index)
     index_files_size = sum(f.stat().st_size for f in json_files)
 
     return {
