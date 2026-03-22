@@ -123,21 +123,17 @@ def _gather_stats(
                     date_max = date_str
 
                 year = date_str[:4]
-                entry = by_year.setdefault(year, [0, 0])
-                entry[0] += 1
-                entry[1] += size
+                year_entry = by_year.setdefault(year, [0, 0])
+                year_entry[0] += 1
+                year_entry[1] += size
 
             # Extension — files without one are grouped as "(no ext)"
             path = record.get("path")
-            if isinstance(path, str):
-                idx = path.rfind(".")
-                ext = path[idx:].lower() if idx != -1 else "(no ext)"
-            else:
-                ext = "(no ext)"
+            ext = Path(path).suffix.lower() or "(no ext)" if isinstance(path, str) else "(no ext)"
 
-            entry = by_extension.setdefault(ext, [0, 0])
-            entry[0] += 1
-            entry[1] += size
+            ext_entry = by_extension.setdefault(ext, [0, 0])
+            ext_entry[0] += 1
+            ext_entry[1] += size
 
         per_index.append((json_file.name, len(records), file_size))
 
