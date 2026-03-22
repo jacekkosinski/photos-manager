@@ -241,10 +241,15 @@ def run(args: argparse.Namespace) -> int:
     mtime = json_files_with_mtimes[0][0]
     try:
         os.utime(output_file, (mtime, mtime))
-        os.utime(directory_path, (mtime, mtime))
     except OSError as exception:
         raise SystemExit(
             f"Error: Could not set mtime on '{output_file}': {exception}"
+        ) from exception
+    try:
+        os.utime(directory_path, (mtime, mtime))
+    except OSError as exception:
+        raise SystemExit(
+            f"Error: Could not set mtime on '{directory_path}': {exception}"
         ) from exception
 
     print(f"Manifest written to {output_file} ({file_count} files)")
