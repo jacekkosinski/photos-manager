@@ -256,6 +256,7 @@ def run(args: argparse.Namespace) -> int:
             f"Error: Could not set mtime on '{directory_path}': {exception}"
         ) from exception
 
-    print(f"Manifest written to {Path(output_file).name} ({len(json_files)} files)")
+    n = len(json_files)
+    print(f"Manifest written to {Path(output_file).name} ({n} file{'s' if n != 1 else ''})")
 
     return os.EX_OK

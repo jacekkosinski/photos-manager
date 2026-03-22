@@ -229,6 +229,7 @@ def run(args: argparse.Namespace) -> int:
     output_json = f"{dir_name}.json"
 
     write_metadata_json(output_json, file_info_list)
-    print(f"File information written to {output_json} ({len(file_info_list)} files)")
+    n = len(file_info_list)
+    print(f"File information written to {output_json} ({n} file{'s' if n != 1 else ''})")
 
     return os.EX_OK
