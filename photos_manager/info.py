@@ -9,6 +9,22 @@ Usage:
     photos info /path/to/archive --stats
     photos info /path/to/archive --stats --top-n 20
 
+Example output (photos info /path/to/archive):
+    Archive:        /Volumes/backup/photos
+    Version:        photos-2.456-234
+    Last modified:  Saturday, 15 March 2025  (7 days ago)
+    Last verified:  Saturday, 22 March 2025  (2 hours ago)
+
+    Index files:       3       1.2 MB    0.04%
+    Total files:   12 345     2.9 TB   99.96%
+    Grand total:   12 348     2.9 TB
+
+    Date range:  2018-03-01  →  2024-11-15  (6 years, 8 months)
+
+    Index files:
+      archive1.json    5 000 files    1.2 TB   45.00%
+      archive2.json    7 345 files    1.7 TB   55.00%
+
 Exit codes:
     0 (os.EX_OK): Success
     1 (SystemExit): Error occurred (invalid directory, no JSON files found)
@@ -40,19 +56,37 @@ def _gather_stats(
 ) -> dict[str, Any]:
     """Aggregate statistics from all loaded index records.
 
-    Computes total file counts and sizes, date ranges, per-year and
-    per-extension breakdowns, and per-index-file summaries.
+    Iterates over every record in every index file to compute totals, date
+    ranges, per-year breakdowns, per-extension breakdowns, and per-file
+    summaries. Records with a missing or malformed ``date`` field are counted
+    in all totals but silently excluded from date and year aggregation.
 
     Args:
-        json_files: List of index JSON file paths (ordered).
-        records_per_file: Mapping from each JSON path to its loaded records.
+        json_files: Ordered list of index JSON file paths; order determines the
+            sequence of rows in the ``per_index`` summary.
+        records_per_file: Mapping from each JSON path to its validated records
+            as returned by ``load_metadata_json()``.
 
     Returns:
-        Dictionary with keys:
-            total_files (int), total_size (int), date_min (str|None),
-            date_max (str|None), by_year (dict), by_extension (dict),
-            index_files_size (int), grand_total_size (int),
-            per_index (list), index_file_count (int).
+        Dictionary with the following keys:
+
+        - ``total_files`` (int): Total number of records across all index files.
+        - ``total_size`` (int): Combined size of all indexed files in bytes.
+        - ``date_min`` (str | None): Earliest date found (``YYYY-MM-DD``), or
+          None if no records contain a parseable date.
+        - ``date_max`` (str | None): Latest date found (``YYYY-MM-DD``), or
+          None if no records contain a parseable date.
+        - ``by_year`` (dict[str, tuple[int, int]]): Maps four-digit year string
+          to ``(count, bytes)`` for all records with a parseable date.
+        - ``by_extension`` (dict[str, tuple[int, int]]): Maps lowercase file
+          extension (e.g. ``'.jpg'``) to ``(count, bytes)``; files without an
+          extension are grouped under ``'(no ext)'``.
+        - ``index_files_size`` (int): Combined on-disk size of the JSON index
+          files themselves in bytes.
+        - ``grand_total_size`` (int): ``total_size + index_files_size``.
+        - ``per_index`` (list[tuple[str, int, int]]): One entry per index file
+          as ``(filename, record_count, total_bytes)``, in input order.
+        - ``index_file_count`` (int): Number of index JSON files processed.
     """
     total_files = 0
     total_size = 0
@@ -119,13 +153,19 @@ def _print_table(
     denominator: int,
     top_n: int,
 ) -> None:
-    """Print a labelled table of (name, count, size) rows with an overflow hint.
+    """Print a labelled stats table to stdout with count, size, and percentage columns.
+
+    Prints ``heading`` as a plain line, then up to ``top_n`` rows indented by
+    two spaces, each showing label, file count, human-readable size, and
+    percentage of ``denominator``. If the total number of rows exceeds
+    ``top_n``, appends an overflow hint (e.g. ``… and 5 more``).
 
     Args:
-        heading: Section header text, e.g. 'By year:'.
-        rows: Pre-sorted list of (label, count, bytes) tuples.
-        denominator: Total bytes used for percentage calculation.
-        top_n: Maximum rows to display.
+        heading: Section header printed as-is, e.g. ``'By year:'``.
+        rows: Pre-sorted list of ``(label, count, bytes)`` tuples.
+        denominator: Total bytes used as the percentage denominator; treated
+            as 1 when zero to avoid division by zero.
+        top_n: Maximum number of data rows to display before the overflow hint.
     """
     print(heading)
     shown = rows[:top_n]
@@ -153,10 +193,24 @@ def _print_summary(
 ) -> None:
     """Print the basic archive summary to stdout.
 
+    Outputs up to four sections, all label columns padded to a common width:
+
+    1. **Header** — resolved archive path; if a manifest is present: version
+       string, last-modified timestamp, and last-verified timestamp.
+    2. **Summary table** — index file count and size, total indexed file count
+       and size, and the grand total (index + indexed), each with a percentage
+       of the grand total.
+    3. **Date range** — earliest and latest file dates with the span between
+       them; omitted if no records contain a parseable date.
+    4. **Per-index breakdown** — one indented row per JSON file showing its
+       record count, size, and percentage of the grand total.
+
     Args:
-        directory: Path to the archive directory.
-        version_info: Parsed .version.json data, or None if absent.
-        stats: Aggregated statistics from _gather_stats().
+        directory: Path to the archive directory; displayed as its resolved
+            absolute path.
+        version_info: Parsed ``.version.json`` data, or None if the manifest
+            is absent or cannot be loaded.
+        stats: Aggregated statistics dict produced by ``_gather_stats()``.
     """
     grand_total_size: int = stats["grand_total_size"]
     total_size: int = stats["total_size"]
@@ -253,11 +307,24 @@ def _print_summary(
 
 
 def _print_detail(stats: dict[str, Any], top_n: int) -> None:
-    """Print by-year and by-extension breakdowns to stdout.
+    """Print by-year and by-extension breakdown tables to stdout.
+
+    Outputs two sections separated by a blank line, each via ``_print_table``:
+
+    1. **By year** — file count and size per calendar year, sorted
+       chronologically; percentages are relative to ``total_size``.
+    2. **By extension** — file count and size per lowercase file extension,
+       sorted by size descending; percentages are relative to
+       ``grand_total_size``. Files without an extension are grouped as
+       ``'(no ext)'``.
+
+    Each section is capped at ``top_n`` rows; an overflow hint is appended
+    when there are more rows than the cap.
 
     Args:
-        stats: Aggregated statistics from _gather_stats().
-        top_n: Maximum rows to show in each breakdown table.
+        stats: Aggregated statistics dict produced by ``_gather_stats()``.
+        top_n: Maximum rows to display per table before showing an overflow
+            hint.
     """
     total_size: int = stats["total_size"]
     grand_total_size: int = stats["grand_total_size"]
@@ -288,6 +355,8 @@ def _print_detail(stats: dict[str, Any], top_n: int) -> None:
 def setup_parser(parser: argparse.ArgumentParser) -> None:
     """Configure argument parser for info command.
 
+    Adds all command-line arguments for the info tool to the provided parser.
+
     Args:
         parser: ArgumentParser instance to configure with info arguments.
     """
@@ -317,20 +386,47 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
 def run(args: argparse.Namespace) -> int:
     """Execute info command with parsed arguments.
 
-    Reads index JSON files and an optional .version.json manifest from
-    the given archive directory and prints a human-readable summary.
+    Reads index JSON files and an optional .version.json manifest from the
+    given archive directory and prints a human-readable summary to stdout.
+
+    Workflow:
+        1. Validates that the archive directory exists and is readable.
+        2. Looks for a .version.json manifest in the directory (lenient —
+           a missing or malformed manifest is silently ignored).
+        3. Finds all JSON index files in the directory tree, excluding files
+           whose names end with ``'version.json'``.
+        4. Loads and validates every index file via ``load_metadata_json()``.
+        5. Aggregates statistics across all records with ``_gather_stats()``.
+        6. Prints the basic summary (always).
+        7. If ``--stats`` is set, prints by-year and by-extension tables.
 
     Args:
         args: Parsed command-line arguments with fields:
-            - directory (Path): Archive directory to inspect.
-            - stats (bool): Whether to print detailed year/extension tables.
-            - top_n (int): Maximum rows in detail tables (default 10).
+
+            - ``directory`` (str): Path to the archive directory to inspect.
+            - ``stats`` (bool): Whether to print detailed year/extension
+              breakdown tables.
+            - ``top_n`` (int): Maximum rows per breakdown table (default: 10).
 
     Returns:
-        os.EX_OK (0) on success.
+        int: Exit code indicating success or failure:
+
+            - ``os.EX_OK`` (0): Summary printed successfully.
+            - 1 (``SystemExit``): Error occurred during processing.
 
     Raises:
-        SystemExit: If directory is invalid or no JSON index files are found.
+        SystemExit: If any of the following errors occur:
+
+            - Archive directory does not exist, is not a directory, or is not
+              readable.
+            - No JSON index files are found in the archive directory.
+            - An index file contains invalid JSON or is missing required fields.
+
+    Examples:
+        >>> args = parser.parse_args(['/path/to/archive'])
+        >>> exit_code = run(args)
+        Archive:  /path/to/archive
+        ...
     """
     directory = validate_directory(args.directory, check_readable=True)
 
