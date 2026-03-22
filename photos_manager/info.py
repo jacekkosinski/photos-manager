@@ -34,35 +34,6 @@ from photos_manager.common import (
 )
 
 
-def setup_parser(parser: argparse.ArgumentParser) -> None:
-    """Configure argument parser for info command.
-
-    Args:
-        parser: ArgumentParser instance to configure with info arguments.
-    """
-    parser.add_argument(
-        "directory",
-        type=str,
-        nargs="?",
-        default=".",
-        help="Path to the archive directory (default: current directory)",
-    )
-    parser.add_argument(
-        "-s",
-        "--stats",
-        action="store_true",
-        help="Show detailed stats by year and file extension",
-    )
-    parser.add_argument(
-        "-N",
-        "--top-n",
-        type=int,
-        default=10,
-        dest="top_n",
-        help="Max rows to show in year/extension tables (default: 10)",
-    )
-
-
 def _gather_stats(
     json_files: list[Path],
     records_per_file: dict[Path, list[dict[str, str | int]]],
@@ -312,6 +283,35 @@ def _print_detail(stats: dict[str, Any], top_n: int) -> None:
             grand_total_size,
             top_n,
         )
+
+
+def setup_parser(parser: argparse.ArgumentParser) -> None:
+    """Configure argument parser for info command.
+
+    Args:
+        parser: ArgumentParser instance to configure with info arguments.
+    """
+    parser.add_argument(
+        "directory",
+        type=str,
+        nargs="?",
+        default=".",
+        help="Path to the archive directory (default: current directory)",
+    )
+    parser.add_argument(
+        "-s",
+        "--stats",
+        action="store_true",
+        help="Show detailed stats by year and file extension",
+    )
+    parser.add_argument(
+        "-N",
+        "--top-n",
+        type=int,
+        default=10,
+        dest="top_n",
+        help="Max rows to show in year/extension tables (default: 10)",
+    )
 
 
 def run(args: argparse.Namespace) -> int:
