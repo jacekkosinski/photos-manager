@@ -32,6 +32,7 @@ Exit codes:
 
 import argparse
 import os
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -88,50 +89,45 @@ def _gather_stats(
           as ``(filename, record_count, total_bytes)``, in input order.
         - ``index_file_count`` (int): Number of index JSON files processed.
     """
-    total_files = 0
     total_size = 0
-    dates: list[str] = []
-    by_year: dict[str, list[int]] = {}
-    by_extension: dict[str, list[int]] = {}
+    date_min: str | None = None
+    date_max: str | None = None
+    by_year: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
+    by_extension: defaultdict[str, list[int]] = defaultdict(lambda: [0, 0])
     per_index: list[tuple[str, int, int]] = []
 
     for json_file in json_files:
         records = records_per_file[json_file]
-        file_count = len(records)
         file_size = 0
 
         for record in records:
             size = int(record.get("size", 0))
             file_size += size
             total_size += size
-            total_files += 1
 
             # Date handling — skip silently if missing or malformed
             date_val = record.get("date")
             if isinstance(date_val, str) and len(date_val) >= 10:
                 date_str = date_val[:10]
-                dates.append(date_str)
-                year = date_val[:4]
-                if year not in by_year:
-                    by_year[year] = [0, 0]
+                if date_min is None or date_str < date_min:
+                    date_min = date_str
+                if date_max is None or date_str > date_max:
+                    date_max = date_str
+                year = date_str[:4]
                 by_year[year][0] += 1
                 by_year[year][1] += size
 
-            # Extension handling
             path_val = record.get("path", "")
             ext = Path(str(path_val)).suffix.lower()
             ext_key = ext if ext else "(no ext)"
-            if ext_key not in by_extension:
-                by_extension[ext_key] = [0, 0]
             by_extension[ext_key][0] += 1
             by_extension[ext_key][1] += size
 
-        per_index.append((json_file.name, file_count, file_size))
+        per_index.append((json_file.name, len(records), file_size))
 
+    total_files = sum(cnt for _, cnt, _ in per_index)
     index_files_size = sum(f.stat().st_size for f in json_files)
     grand_total_size = total_size + index_files_size
-    date_min: str | None = min(dates) if dates else None
-    date_max: str | None = max(dates) if dates else None
 
     return {
         "total_files": total_files,
@@ -290,20 +286,7 @@ def _print_summary(
 
     per_index: list[tuple[str, int, int]] = stats["per_index"]
     if per_index:
-        print("Index files:")
-        table_rows = [
-            (
-                fname,
-                f"{format_count(cnt)} files",
-                human_size(size),
-                f"{size / grand_total_size * 100 if grand_total_size else 0:.2f}%",
-            )
-            for fname, cnt, size in per_index
-        ]
-        for line in tabulate(
-            table_rows, tablefmt="plain", colalign=("left", "right", "right", "right")
-        ).splitlines():
-            print(f"  {line}")
+        _print_table("Index files:", per_index, grand_total_size, len(per_index))
 
 
 def _print_detail(stats: dict[str, Any], top_n: int) -> None:
