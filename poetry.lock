@@ -1620,15 +1620,14 @@ files = [
 
 [[package]]
 name = "tabulate"
-version = "0.9.0"
+version = "0.10.0"
 description = "Pretty-print tabular data"
-optional = true
-python-versions = ">=3.7"
+optional = false
+python-versions = ">=3.10"
 groups = ["main"]
-markers = "extra == \"dev\""
 files = [
-    {file = "tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f"},
-    {file = "tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c"},
+    {file = "tabulate-0.10.0-py3-none-any.whl", hash = "sha256:f0b0622e567335c8fabaaa659f1b33bcb6ddfe2e496071b743aa113f8774f2d3"},
+    {file = "tabulate-0.10.0.tar.gz", hash = "sha256:e2cfde8f79420f6deeffdeda9aaec3b6bc5abce947655d17ac662b126e48a60d"},
 ]
 
 [package.extras]
@@ -1661,6 +1660,18 @@ markers = "extra == \"dev\""
 files = [
     {file = "tomlkit-0.14.0-py3-none-any.whl", hash = "sha256:592064ed85b40fa213469f81ac584f67a4f2992509a7c3ea2d632208623a3680"},
     {file = "tomlkit-0.14.0.tar.gz", hash = "sha256:cf00efca415dbd57575befb1f6634c4f42d2d87dbba376128adb42c121b87064"},
+]
+
+[[package]]
+name = "types-tabulate"
+version = "0.10.0.20260308"
+description = "Typing stubs for tabulate"
+optional = false
+python-versions = ">=3.10"
+groups = ["dev"]
+files = [
+    {file = "types_tabulate-0.10.0.20260308-py3-none-any.whl", hash = "sha256:94a9795965bc6290f844d61e8680a1270040664b88fd12014624090fd847e13c"},
+    {file = "types_tabulate-0.10.0.20260308.tar.gz", hash = "sha256:724dcb1330ffba5f46d3cf6e29f45089fccb8e85801e6e7ac9efb1195bf7bea1"},
 ]
 
 [[package]]
@@ -1799,4 +1810,4 @@ exif = ["piexif", "pillow", "pillow-heif"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12"
-content-hash = "2c450523eaaf5a084928a7a36feabd2771f5a0aab6da37dc4f1a1f6710948dca"
+content-hash = "1b7129db8d38ec26709ca778bcf103ecfea49123d2b174a5bc58ec346dc6f8f4"

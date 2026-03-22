@@ -20,6 +20,8 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+from tabulate import tabulate
+
 from photos_manager.common import (
     find_json_files,
     find_version_file,
@@ -172,20 +174,6 @@ def _gather_stats(
     }
 
 
-def _print_version_section(version_info: dict[str, Any]) -> None:
-    """Print version, last-modified, and last-verified lines to stdout.
-
-    Args:
-        version_info: Parsed .version.json data.
-    """
-    print(f"{'Version:':<16}{version_info.get('version', 'N/A')}")
-    for label, key in (("Last modified:", "last_modified"), ("Last verified:", "last_verified")):
-        val = version_info.get(key, "")
-        if isinstance(val, str) and val:
-            date_str = datetime.fromisoformat(val).strftime("%A, %d %B %Y")
-            print(f"{label:<16}{date_str}  ({_time_ago(val)})")
-
-
 def _date_span(date_min: str, date_max: str) -> str:
     """Return human-readable duration between two ISO date strings (YYYY-MM-DD).
 
@@ -215,7 +203,6 @@ def _print_table(
     rows: list[tuple[str, int, int]],
     denominator: int,
     top_n: int,
-    col_gap: int = 2,
 ) -> None:
     """Print a labelled table of (name, count, size) rows with an overflow hint.
 
@@ -224,17 +211,22 @@ def _print_table(
         rows: Pre-sorted list of (label, count, bytes) tuples.
         denominator: Total bytes used for percentage calculation.
         top_n: Maximum rows to display.
-        col_gap: Number of spaces between the label and count columns (default: 2).
     """
     print(heading)
     shown = rows[:top_n]
-    label_width = max((len(label) for label, _, _ in shown), default=0)
-    sep = " " * col_gap
-    for label, count, size in shown:
-        pct = size / denominator * 100 if denominator > 0 else 0.0
-        count_str = format_count(count)
-        size_str = human_size(size)
-        print(f"  {label:<{label_width}}{sep}{count_str:>8} files  {size_str:>10}  {pct:>8.2f}%")
+    table_rows = [
+        (
+            label,
+            f"{format_count(count)} files",
+            human_size(size),
+            f"{size / denominator * 100 if denominator else 0:.2f}%",
+        )
+        for label, count, size in shown
+    ]
+    for line in tabulate(
+        table_rows, tablefmt="plain", colalign=("left", "right", "right", "right")
+    ).splitlines():
+        print(f"  {line}")
     if len(rows) > top_n:
         print(f"  \u2026 and {len(rows) - top_n} more")
 
@@ -255,58 +247,101 @@ def _print_stats(
         show_detailed: Whether to print by-year and by-extension breakdowns.
         top_n: Maximum rows to show in each breakdown table.
     """
-    print(f"{'Archive:':<16}{directory.resolve()}")
-    if version_info is not None:
-        _print_version_section(version_info)
-    print()
-
     grand_total_size: int = stats["grand_total_size"]
     total_size: int = stats["total_size"]
     index_files_size: int = stats["index_files_size"]
     total_files: int = stats["total_files"]
     index_file_count: int = stats["index_file_count"]
-
-    denom = grand_total_size or 1
-    ic_str = format_count(index_file_count)
-    tf_str = format_count(total_files)
-    print(
-        f"{'Index files:':<14}{ic_str:>8}  "
-        f"{human_size(index_files_size):>10}  {index_files_size / denom * 100:>8.2f}%"
-    )
-    print(
-        f"{'Total files:':<14}{tf_str:>8}  "
-        f"{human_size(total_size):>10}  {total_size / denom * 100:>8.2f}%"
-    )
-    grand_count = index_file_count + total_files
-    gc_str = format_count(grand_count)
-    print(f"{'Grand total:':<14}{gc_str:>8}  {human_size(grand_total_size):>10}")
-    print()
-
     date_min: str | None = stats["date_min"]
     date_max: str | None = stats["date_max"]
+
+    header_rows: list[tuple[str, str]] = [("Archive:", str(directory.resolve()))]
+    if version_info is not None:
+        header_rows.append(("Version:", str(version_info.get("version", "N/A"))))
+        for label, key in (
+            ("Last modified:", "last_modified"),
+            ("Last verified:", "last_verified"),
+        ):
+            val = version_info.get(key, "")
+            if isinstance(val, str) and val:
+                date_str = datetime.fromisoformat(val).strftime("%A, %d %B %Y")
+                header_rows.append((label, f"{date_str}  ({_time_ago(val)})"))
+
+    denom = grand_total_size or 1
+    summary_rows: list[tuple[str, str, str, str]] = [
+        (
+            "Index files:",
+            format_count(index_file_count),
+            human_size(index_files_size),
+            f"{index_files_size / denom * 100:.2f}%",
+        ),
+        (
+            "Total files:",
+            format_count(total_files),
+            human_size(total_size),
+            f"{total_size / denom * 100:.2f}%",
+        ),
+        (
+            "Grand total:",
+            format_count(index_file_count + total_files),
+            human_size(grand_total_size),
+            "",
+        ),
+    ]
+
+    date_rows: list[tuple[str, str]] = []
     if date_min and date_max:
-        span = _date_span(date_min, date_max)
-        print(f"{'Date range:':<14}{date_min}  \u2192  {date_max}  ({span})")
+        date_rows = [
+            ("Date range:", f"{date_min}  \u2192  {date_max}  ({_date_span(date_min, date_max)})")
+        ]
+
+    all_labels = (
+        [r[0] for r in header_rows] + [r[0] for r in summary_rows] + [r[0] for r in date_rows]
+    )
+    max_label = max(len(label) for label in all_labels)
+
+    print(
+        tabulate(
+            [(r[0].ljust(max_label), r[1]) for r in header_rows],
+            tablefmt="plain",
+            colalign=("left", "left"),
+        )
+    )
+    print()
+    print(
+        tabulate(
+            [(r[0].ljust(max_label), r[1], r[2], r[3]) for r in summary_rows],
+            tablefmt="plain",
+            colalign=("left", "right", "right", "right"),
+        )
+    )
+    print()
+    if date_rows:
+        print(
+            tabulate(
+                [(r[0].ljust(max_label), r[1]) for r in date_rows],
+                tablefmt="plain",
+                colalign=("left", "left"),
+            )
+        )
         print()
 
     per_index: list[tuple[str, int, int]] = stats["per_index"]
     if per_index:
         print("Index files:")
-        rows: list[tuple[str, str, str, str]] = []
-        for filename, count, photo_bytes in per_index:
-            pct = photo_bytes / grand_total_size * 100 if grand_total_size > 0 else 0.0
-            count_str = format_count(count)
-            pct_str = f"{pct:.2f}%"
-            rows.append((filename, count_str, human_size(photo_bytes), pct_str))
-        name_w = max(len(r[0]) for r in rows)
-        count_w = max(len(r[1]) for r in rows)
-        size_w = max(len(r[2]) for r in rows)
-        pct_w = max(len(r[3]) for r in rows)
-        for filename, count_str, size_str, pct_str in rows:
-            print(
-                f"  {filename:<{name_w}}    {count_str:>{count_w}} files"
-                f"    {size_str:>{size_w}}    {pct_str:>{pct_w}}"
+        table_rows = [
+            (
+                fname,
+                f"{format_count(cnt)} files",
+                human_size(size),
+                f"{size / grand_total_size * 100 if grand_total_size else 0:.2f}%",
             )
+            for fname, cnt, size in per_index
+        ]
+        for line in tabulate(
+            table_rows, tablefmt="plain", colalign=("left", "right", "right", "right")
+        ).splitlines():
+            print(f"  {line}")
 
     if show_detailed:
         print()
@@ -317,7 +352,6 @@ def _print_stats(
                 [(yr, c, s) for yr, (c, s) in sorted(by_year.items())],
                 total_size,
                 top_n,
-                col_gap=3,
             )
         print()
         by_ext: dict[str, tuple[int, int]] = stats["by_extension"]
