@@ -16,7 +16,7 @@ Exit codes:
 
 import argparse
 import os
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +26,7 @@ from photos_manager.common import (
     find_json_files,
     find_version_file,
     format_count,
+    format_date_verbose,
     human_size,
     load_metadata_json,
     load_version_json_lenient,
@@ -60,39 +61,6 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         dest="top_n",
         help="Max rows to show in year/extension tables (default: 10)",
     )
-
-
-_TIME_THRESHOLDS: list[tuple[int, int, str]] = [
-    (60, 1, "second"),
-    (3600, 60, "minute"),
-    (86400, 3600, "hour"),
-    (86400 * 30, 86400, "day"),
-    (86400 * 365, 86400 * 30, "month"),
-]
-
-
-def _time_ago(iso_timestamp: str) -> str:
-    """Return human-readable relative time from an ISO 8601 timestamp.
-
-    Computes the difference between the given timestamp and now (UTC) and
-    returns a string like '3 days ago', '2 months ago', '1 year ago'.
-
-    Args:
-        iso_timestamp: ISO 8601 timestamp string, e.g. '2025-12-30T12:34:56+01:00'.
-
-    Returns:
-        Human-readable relative time string.
-    """
-    dt = datetime.fromisoformat(iso_timestamp)
-    seconds = int((datetime.now(tz=UTC) - dt.astimezone(UTC)).total_seconds())
-    if seconds < 0:
-        return "just now"
-    for limit, divisor, unit in _TIME_THRESHOLDS:
-        if seconds < limit:
-            n = seconds // divisor
-            return f"{n} {unit}{'s' if n != 1 else ''} ago"
-    years = seconds // (86400 * 365)
-    return f"{years} year{'s' if years != 1 else ''} ago"
 
 
 def _gather_stats(
@@ -264,8 +232,7 @@ def _print_stats(
         ):
             val = version_info.get(key, "")
             if isinstance(val, str) and val:
-                date_str = datetime.fromisoformat(val).strftime("%A, %d %B %Y")
-                header_rows.append((label, f"{date_str}  ({_time_ago(val)})"))
+                header_rows.append((label, format_date_verbose(val)))
 
     denom = grand_total_size or 1
     summary_rows: list[tuple[str, str, str, str]] = [

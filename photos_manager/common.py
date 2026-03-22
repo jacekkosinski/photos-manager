@@ -11,7 +11,7 @@ import json
 import os
 import pwd
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from zoneinfo import ZoneInfo
@@ -22,6 +22,40 @@ CHUNK_SIZE = 65536  # 64KB chunks for file operations
 # Timestamp display formats
 TS_FMT = "%Y-%m-%d %H:%M:%S"
 TIME_FMT = "%H:%M:%S"
+
+_TIME_AGO_THRESHOLDS: list[tuple[int, int, str]] = [
+    (60, 1, "second"),
+    (3600, 60, "minute"),
+    (86400, 3600, "hour"),
+    (86400 * 30, 86400, "day"),
+    (86400 * 365, 86400 * 30, "month"),
+]
+
+
+def format_date_verbose(iso_timestamp: str) -> str:
+    """Format an ISO 8601 timestamp as a human-readable date with relative age.
+
+    Args:
+        iso_timestamp: ISO 8601 timestamp string, e.g. ``'2025-12-30T12:34:56+01:00'``.
+
+    Returns:
+        String like ``'Saturday, 21 March 2026  (14 hours ago)'``.
+
+    Examples:
+        >>> format_date_verbose('2025-03-21T10:00:00+01:00')  # doctest: +SKIP
+        'Saturday, 21 March 2026  (14 hours ago)'
+    """
+    dt = datetime.fromisoformat(iso_timestamp)
+    date_str = dt.strftime("%A, %d %B %Y")
+    seconds = int((datetime.now(tz=UTC) - dt.astimezone(UTC)).total_seconds())
+    if seconds < 0:
+        return f"{date_str}  (just now)"
+    for limit, divisor, unit in _TIME_AGO_THRESHOLDS:
+        if seconds < limit:
+            n = seconds // divisor
+            return f"{date_str}  ({n} {unit}{'s' if n != 1 else ''} ago)"
+    years = seconds // (86400 * 365)
+    return f"{date_str}  ({years} year{'s' if years != 1 else ''} ago)"
 
 
 def format_datetime_change(old_dt: datetime, new_dt: datetime) -> str:

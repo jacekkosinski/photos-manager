@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from photos_manager.common import format_date_verbose
 from photos_manager.common import human_size as _human_size
-from photos_manager.info import _date_span, _gather_stats, _time_ago, run
+from photos_manager.info import _date_span, _gather_stats, run
 
 _Record = dict[str, str | int]
 
@@ -134,7 +135,7 @@ class TestTimeAgo:
         ],
     )
     def test_seconds(self, seconds_ago: int, expected: str) -> None:
-        assert _time_ago(self._ts(seconds_ago)) == expected
+        assert expected in format_date_verbose(self._ts(seconds_ago))
 
     @pytest.mark.parametrize(
         "seconds_ago,expected",
@@ -145,7 +146,7 @@ class TestTimeAgo:
         ],
     )
     def test_minutes(self, seconds_ago: int, expected: str) -> None:
-        assert _time_ago(self._ts(seconds_ago)) == expected
+        assert expected in format_date_verbose(self._ts(seconds_ago))
 
     @pytest.mark.parametrize(
         "seconds_ago,expected",
@@ -156,7 +157,7 @@ class TestTimeAgo:
         ],
     )
     def test_hours(self, seconds_ago: int, expected: str) -> None:
-        assert _time_ago(self._ts(seconds_ago)) == expected
+        assert expected in format_date_verbose(self._ts(seconds_ago))
 
     @pytest.mark.parametrize(
         "seconds_ago,expected",
@@ -167,7 +168,7 @@ class TestTimeAgo:
         ],
     )
     def test_days(self, seconds_ago: int, expected: str) -> None:
-        assert _time_ago(self._ts(seconds_ago)) == expected
+        assert expected in format_date_verbose(self._ts(seconds_ago))
 
     @pytest.mark.parametrize(
         "seconds_ago,expected",
@@ -177,7 +178,7 @@ class TestTimeAgo:
         ],
     )
     def test_months(self, seconds_ago: int, expected: str) -> None:
-        assert _time_ago(self._ts(seconds_ago)) == expected
+        assert expected in format_date_verbose(self._ts(seconds_ago))
 
     @pytest.mark.parametrize(
         "seconds_ago,expected",
@@ -187,13 +188,13 @@ class TestTimeAgo:
         ],
     )
     def test_years(self, seconds_ago: int, expected: str) -> None:
-        assert _time_ago(self._ts(seconds_ago)) == expected
+        assert expected in format_date_verbose(self._ts(seconds_ago))
 
     def test_future_timestamp(self) -> None:
         from datetime import UTC, datetime, timedelta
 
         future = (datetime.now(tz=UTC) + timedelta(seconds=100)).isoformat()
-        assert _time_ago(future) == "just now"
+        assert "just now" in format_date_verbose(future)
 
 
 @pytest.mark.unit
