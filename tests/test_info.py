@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from photos_manager.common import format_date_verbose
+from photos_manager.common import date_span, format_date_verbose
 from photos_manager.common import human_size as _human_size
-from photos_manager.info import _date_span, _gather_stats, run
+from photos_manager.info import _gather_stats, run
 
 _Record = dict[str, str | int]
 
@@ -39,52 +39,57 @@ def _write_index(tmp_path: Path, name: str, records: list[_Record]) -> Path:
 
 @pytest.mark.unit
 class TestDateSpan:
-    """Tests for _date_span helper."""
+    """Tests for date_span helper."""
 
     @pytest.mark.parametrize(
-        "date_min,date_max,expected",
+        "ts_min,ts_max,expected",
         [
-            ("2024-01-01", "2024-01-01", "0 days"),
-            ("2024-01-01", "2024-01-02", "1 day"),
-            ("2024-01-01", "2024-01-15", "14 days"),
-            ("2024-01-01", "2024-01-31", "30 days"),
+            ("2024-01-01", "2024-01-01", "2024-01-01  →  2024-01-01  (0 days)"),
+            ("2024-01-01", "2024-01-02", "2024-01-01  →  2024-01-02  (1 day)"),
+            ("2024-01-01", "2024-01-15", "2024-01-01  →  2024-01-15  (14 days)"),
+            ("2024-01-01", "2024-01-31", "2024-01-01  →  2024-01-31  (30 days)"),
         ],
     )
-    def test_days(self, date_min: str, date_max: str, expected: str) -> None:
-        assert _date_span(date_min, date_max) == expected
+    def test_days(self, ts_min: str, ts_max: str, expected: str) -> None:
+        assert date_span(ts_min, ts_max) == expected
 
     @pytest.mark.parametrize(
-        "date_min,date_max,expected",
+        "ts_min,ts_max,expected",
         [
-            ("2024-01-01", "2024-02-01", "1 month"),
-            ("2024-01-01", "2024-03-01", "2 months"),
-            ("2024-01-01", "2024-12-01", "11 months"),
+            ("2024-01-01", "2024-02-01", "2024-01-01  →  2024-02-01  (1 month)"),
+            ("2024-01-01", "2024-03-01", "2024-01-01  →  2024-03-01  (2 months)"),
+            ("2024-01-01", "2024-12-01", "2024-01-01  →  2024-12-01  (11 months)"),
         ],
     )
-    def test_months_only(self, date_min: str, date_max: str, expected: str) -> None:
-        assert _date_span(date_min, date_max) == expected
+    def test_months_only(self, ts_min: str, ts_max: str, expected: str) -> None:
+        assert date_span(ts_min, ts_max) == expected
 
     @pytest.mark.parametrize(
-        "date_min,date_max,expected",
+        "ts_min,ts_max,expected",
         [
-            ("2023-01-01", "2024-01-01", "1 year"),
-            ("2022-01-01", "2024-01-01", "2 years"),
+            ("2023-01-01", "2024-01-01", "2023-01-01  →  2024-01-01  (1 year)"),
+            ("2022-01-01", "2024-01-01", "2022-01-01  →  2024-01-01  (2 years)"),
         ],
     )
-    def test_years_only(self, date_min: str, date_max: str, expected: str) -> None:
-        assert _date_span(date_min, date_max) == expected
+    def test_years_only(self, ts_min: str, ts_max: str, expected: str) -> None:
+        assert date_span(ts_min, ts_max) == expected
 
     @pytest.mark.parametrize(
-        "date_min,date_max,expected",
+        "ts_min,ts_max,expected",
         [
-            ("2023-01-01", "2024-02-01", "1 year, 1 month"),
-            ("2023-01-01", "2024-03-01", "1 year, 2 months"),
-            ("2018-03-01", "2024-11-01", "6 years, 8 months"),
-            ("2020-06-15", "2023-09-15", "3 years, 3 months"),
+            ("2023-01-01", "2024-02-01", "2023-01-01  →  2024-02-01  (1 year, 1 month)"),
+            ("2023-01-01", "2024-03-01", "2023-01-01  →  2024-03-01  (1 year, 2 months)"),
+            ("2018-03-01", "2024-11-01", "2018-03-01  →  2024-11-01  (6 years, 8 months)"),
+            ("2020-06-15", "2023-09-15", "2020-06-15  →  2023-09-15  (3 years, 3 months)"),
         ],
     )
-    def test_years_and_months(self, date_min: str, date_max: str, expected: str) -> None:
-        assert _date_span(date_min, date_max) == expected
+    def test_years_and_months(self, ts_min: str, ts_max: str, expected: str) -> None:
+        assert date_span(ts_min, ts_max) == expected
+
+    def test_full_timestamps(self) -> None:
+        assert date_span("2014-07-08T10:46:19+02:00", "2014-07-29T15:00:00+02:00") == (
+            "2014-07-08  →  2014-07-29  (21 days)"
+        )
 
 
 @pytest.mark.unit

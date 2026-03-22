@@ -308,6 +308,46 @@ def calculate_checksums_strict(file_path: str) -> tuple[str, str]:
     return _hash_file(file_path)
 
 
+def date_span(ts_min: str, ts_max: str) -> str:
+    """Format two ISO 8601 timestamps as a date range with human-readable span.
+
+    Accepts full timestamps or bare date strings.
+
+    Args:
+        ts_min: Earlier ISO 8601 timestamp, e.g. ``'2014-07-08T10:46:19+02:00'``.
+        ts_max: Later ISO 8601 timestamp, e.g. ``'2014-07-29T15:00:00+02:00'``.
+
+    Returns:
+        String like ``'2014-07-08  →  2014-07-29  (21 days)'``.
+
+    Examples:
+        >>> date_span('2014-07-08T10:46:19+02:00', '2014-07-29T15:00:00+02:00')
+        '2014-07-08  →  2014-07-29  (21 days)'
+        >>> date_span('2018-03-01', '2024-11-01')
+        '2018-03-01  →  2024-11-01  (6 years, 8 months)'
+    """
+    d1 = datetime.fromisoformat(ts_min).date()
+    d2 = datetime.fromisoformat(ts_max).date()
+    days = (d2 - d1).days
+
+    if days < 31:
+        span = f"{days} day{'s' if days != 1 else ''}"
+    else:
+        months_total = (d2.year - d1.year) * 12 + (d2.month - d1.month)
+        years, months = divmod(months_total, 12)
+
+        if years == 0:
+            span = f"{months} month{'s' if months != 1 else ''}"
+        elif months == 0:
+            span = f"{years} year{'s' if years != 1 else ''}"
+        else:
+            y = f"{years} year{'s' if years != 1 else ''}"
+            m = f"{months} month{'s' if months != 1 else ''}"
+            span = f"{y}, {m}"
+
+    return f"{d1}  \u2192  {d2}  ({span})"
+
+
 def format_count(n: int) -> str:
     """Format integer with space as thousands separator.
 

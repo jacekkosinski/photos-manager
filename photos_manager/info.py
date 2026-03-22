@@ -16,13 +16,13 @@ Exit codes:
 
 import argparse
 import os
-from datetime import date
 from pathlib import Path
 from typing import Any
 
 from tabulate import tabulate
 
 from photos_manager.common import (
+    date_span,
     find_json_files,
     find_version_file,
     format_count,
@@ -142,30 +142,6 @@ def _gather_stats(
     }
 
 
-def _date_span(date_min: str, date_max: str) -> str:
-    """Return human-readable duration between two ISO date strings (YYYY-MM-DD).
-
-    Args:
-        date_min: Earlier date string, e.g. '2018-03-01'.
-        date_max: Later date string, e.g. '2024-11-15'.
-
-    Returns:
-        Human-readable span string, e.g. '6 years, 8 months' or '45 days'.
-    """
-    d1 = date.fromisoformat(date_min)
-    d2 = date.fromisoformat(date_max)
-    days = (d2 - d1).days
-    if days < 31:
-        return f"{days} day{'s' if days != 1 else ''}"
-    months_total = (d2.year - d1.year) * 12 + (d2.month - d1.month)
-    years, months = divmod(months_total, 12)
-    if years == 0:
-        return f"{months} month{'s' if months != 1 else ''}"
-    if months == 0:
-        return f"{years} year{'s' if years != 1 else ''}"
-    return f"{years} year{'s' if years != 1 else ''}, {months} month{'s' if months != 1 else ''}"
-
-
 def _print_table(
     heading: str,
     rows: list[tuple[str, int, int]],
@@ -258,9 +234,7 @@ def _print_stats(
 
     date_rows: list[tuple[str, str]] = []
     if date_min and date_max:
-        date_rows = [
-            ("Date range:", f"{date_min}  \u2192  {date_max}  ({_date_span(date_min, date_max)})")
-        ]
+        date_rows = [("Date range:", date_span(date_min, date_max))]
 
     all_labels = (
         [r[0] for r in header_rows] + [r[0] for r in summary_rows] + [r[0] for r in date_rows]
