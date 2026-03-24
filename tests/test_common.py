@@ -2,6 +2,7 @@
 
 import json
 import os
+import struct
 import time
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import pytest
 
 from photos_manager.common import (
     CHUNK_SIZE,
+    _qt_find_atom,
     calculate_checksums,
     calculate_checksums_strict,
     find_json_files,
@@ -16,6 +18,7 @@ from photos_manager.common import (
     find_version_file,
     format_count,
     load_metadata_json,
+    read_quicktime_metadata,
     resolve_group_name,
     resolve_owner_name,
     validate_directory,
@@ -613,3 +616,141 @@ class TestResolveGroupName:
         """Test that an invalid GID returns None."""
         result = resolve_group_name(999999999)
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# QuickTime metadata parser helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_atom(atype: bytes, body: bytes) -> bytes:
+    """Build a QuickTime atom (size + type + body)."""
+    return struct.pack(">I", 8 + len(body)) + atype + body
+
+
+def _build_mov(
+    keys: list[str],
+    values: dict[int, str],
+    *,
+    meta_under_udta: bool = False,
+) -> bytes:
+    """Build a minimal MOV file with QuickTime metadata."""
+    # keys atom
+    keys_body = struct.pack(">II", 0, len(keys))
+    for name in keys:
+        nb = name.encode("utf-8")
+        keys_body += struct.pack(">I", 8 + len(nb)) + b"mdta" + nb
+    keys_atom = _make_atom(b"keys", keys_body)
+
+    # ilst atom
+    ilst_body = b""
+    for idx, val in values.items():
+        vb = val.encode("utf-8")
+        data_atom = _make_atom(b"data", struct.pack(">II", 1, 0) + vb)
+        ilst_body += struct.pack(">I", 8 + len(data_atom)) + struct.pack(">I", idx) + data_atom
+    ilst_atom = _make_atom(b"ilst", ilst_body)
+
+    hdlr = _make_atom(b"hdlr", b"\x00" * 4 + b"mdta" + b"\x00" * 12)
+    meta_atom = _make_atom(b"meta", hdlr + keys_atom + ilst_atom)
+
+    moov_body = _make_atom(b"udta", meta_atom) if meta_under_udta else meta_atom
+
+    moov = _make_atom(b"moov", moov_body)
+    ftyp = _make_atom(b"ftyp", b"qt  \x00\x00\x00\x00qt  ")
+    return ftyp + moov
+
+
+class TestQtFindAtom:
+    """Tests for _qt_find_atom."""
+
+    @pytest.mark.unit
+    def test_finds_target_atom(self):
+        """Finds and returns body of the target atom."""
+        atom = _make_atom(b"test", b"hello")
+        assert _qt_find_atom(atom, b"test") == b"hello"
+
+    @pytest.mark.unit
+    def test_skips_non_matching_atoms(self):
+        """Skips atoms that don't match and finds the right one."""
+        data = _make_atom(b"aaaa", b"skip") + _make_atom(b"bbbb", b"found")
+        assert _qt_find_atom(data, b"bbbb") == b"found"
+
+    @pytest.mark.unit
+    def test_returns_none_when_not_found(self):
+        """Returns None when target is not present."""
+        data = _make_atom(b"aaaa", b"x")
+        assert _qt_find_atom(data, b"bbbb") is None
+
+    @pytest.mark.unit
+    def test_returns_none_on_empty_data(self):
+        """Returns None on empty input."""
+        assert _qt_find_atom(b"", b"test") is None
+
+    @pytest.mark.unit
+    def test_respects_offset(self):
+        """Starts scanning from the given offset."""
+        first = _make_atom(b"aaaa", b"first")
+        second = _make_atom(b"aaaa", b"second")
+        assert _qt_find_atom(first + second, b"aaaa", offset=len(first)) == b"second"
+
+
+class TestReadQuicktimeMetadata:
+    """Tests for read_quicktime_metadata."""
+
+    @pytest.mark.unit
+    def test_reads_make_model_date(self, tmp_path):
+        """Reads make, model and creation date from a synthetic MOV."""
+        mov = tmp_path / "test.mov"
+        mov.write_bytes(
+            _build_mov(
+                [
+                    "com.apple.quicktime.make",
+                    "com.apple.quicktime.model",
+                    "com.apple.quicktime.creationdate",
+                ],
+                {
+                    1: "Apple",
+                    2: "iPhone 15 Pro Max",
+                    3: "2026-03-12T11:14:04+0100",
+                },
+            )
+        )
+        meta = read_quicktime_metadata(str(mov))
+        assert meta is not None
+        assert meta["com.apple.quicktime.make"] == "Apple"
+        assert meta["com.apple.quicktime.model"] == "iPhone 15 Pro Max"
+        assert meta["com.apple.quicktime.creationdate"] == "2026-03-12T11:14:04+0100"
+
+    @pytest.mark.unit
+    def test_meta_under_udta(self, tmp_path):
+        """Finds metadata when meta is nested under moov/udta."""
+        mov = tmp_path / "test.mov"
+        mov.write_bytes(
+            _build_mov(
+                ["com.apple.quicktime.make"],
+                {1: "Sony"},
+                meta_under_udta=True,
+            )
+        )
+        meta = read_quicktime_metadata(str(mov))
+        assert meta is not None
+        assert meta["com.apple.quicktime.make"] == "Sony"
+
+    @pytest.mark.unit
+    def test_returns_none_for_non_qt_file(self, tmp_path):
+        """Returns None for a file with no moov atom."""
+        f = tmp_path / "random.bin"
+        f.write_bytes(b"\x00" * 100)
+        assert read_quicktime_metadata(str(f)) is None
+
+    @pytest.mark.unit
+    def test_returns_none_for_missing_file(self):
+        """Returns None for a nonexistent file."""
+        assert read_quicktime_metadata("/nonexistent/file.mov") is None
+
+    @pytest.mark.unit
+    def test_returns_none_for_empty_file(self, tmp_path):
+        """Returns None for an empty file."""
+        f = tmp_path / "empty.mov"
+        f.write_bytes(b"")
+        assert read_quicktime_metadata(str(f)) is None

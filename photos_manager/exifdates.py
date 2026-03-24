@@ -29,6 +29,7 @@ from photos_manager.common import (
     TIME_FMT,
     format_timestamp_change,
     load_metadata_json,
+    read_quicktime_metadata,
     write_metadata_json,
 )
 
@@ -206,10 +207,13 @@ def parse_exif_date(date_str: str) -> datetime | None:
 
 
 def read_file_exif(file_path: str) -> tuple[datetime | None, datetime | None]:
-    """Read EXIF DateTimeOriginal and GPS timestamp from a file.
+    """Read DateTimeOriginal and GPS/creation timestamp from a file.
+
+    Tries EXIF first (JPEG/TIFF via piexif), then falls back to QuickTime
+    metadata for MOV/MP4 containers.
 
     Args:
-        file_path: Absolute path to the image file.
+        file_path: Absolute path to the image or video file.
 
     Returns:
         Tuple of ``(exif_datetime, gps_datetime_utc)``.
@@ -220,7 +224,15 @@ def read_file_exif(file_path: str) -> tuple[datetime | None, datetime | None]:
     Examples:
         >>> exif_dt, gps_dt = read_file_exif("/path/to/photo.jpg")
     """
-    if not _EXIF_AVAILABLE:  # pragma: no cover
+    exif_dt, gps_dt = _read_exif_piexif(file_path)
+    if exif_dt is not None or gps_dt is not None:
+        return exif_dt, gps_dt
+    return _read_exif_quicktime(file_path)
+
+
+def _read_exif_piexif(file_path: str) -> tuple[datetime | None, datetime | None]:
+    """Read EXIF dates via piexif (JPEG/TIFF)."""
+    if not _EXIF_AVAILABLE:
         return None, None
 
     try:
@@ -245,6 +257,28 @@ def read_file_exif(file_path: str) -> tuple[datetime | None, datetime | None]:
         gps_dt = parse_gps_datetime(gps_date_bytes, gps_time_rationals)
 
     return exif_dt, gps_dt
+
+
+def _read_exif_quicktime(file_path: str) -> tuple[datetime | None, datetime | None]:
+    """Read creation date from QuickTime metadata (MOV/MP4).
+
+    Parses ``com.apple.quicktime.creationdate`` which includes timezone
+    (e.g. ``2026-03-12T11:14:04+0100``).  Returns the local time as
+    ``exif_dt`` (naive) and the UTC equivalent as ``gps_dt`` (aware).
+    """
+    meta = read_quicktime_metadata(file_path)
+    if meta is None:
+        return None, None
+    raw = meta.get("com.apple.quicktime.creationdate")
+    if not raw:
+        return None, None
+    try:
+        dt_aware = datetime.fromisoformat(raw)
+        exif_dt = dt_aware.replace(tzinfo=None)
+        gps_dt = dt_aware.astimezone(UTC)
+        return exif_dt, gps_dt
+    except (ValueError, TypeError):
+        return None, None
 
 
 # ---------------------------------------------------------------------------

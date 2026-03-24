@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import pwd
+import struct
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -654,3 +655,159 @@ def scan_files(
         files.append({"path": path, "sha1": sha1, "md5": md5, "date": date, "size": size})
 
     return files
+
+
+# ---------------------------------------------------------------------------
+# QuickTime / ISOBMFF metadata parser
+# ---------------------------------------------------------------------------
+
+# Maximum moov atom body to read (10 MB).
+_QT_MOOV_MAX = 10 * 1024 * 1024
+
+
+def _qt_find_atom(data: bytes, target: bytes, offset: int = 0) -> bytes | None:
+    """Find *target* atom in *data* and return its body (after header).
+
+    Args:
+        data: Buffer with concatenated atoms.
+        target: 4-byte atom type.
+        offset: Start position.
+
+    Returns:
+        Body bytes or ``None``.
+    """
+    end = len(data)
+    pos = offset
+    while pos + 8 <= end:
+        size = struct.unpack(">I", data[pos : pos + 4])[0]
+        atype = data[pos + 4 : pos + 8]
+        hdr = 8
+        if size == 1 and pos + 16 <= end:
+            size = struct.unpack(">Q", data[pos + 8 : pos + 16])[0]
+            hdr = 16
+        if size < 8 or pos + size > end:
+            break
+        if atype == target:
+            return data[pos + hdr : pos + size]
+        pos += size
+    return None
+
+
+def read_quicktime_metadata(file_path: str) -> dict[str, str] | None:
+    """Read Apple QuickTime metadata from a MOV/MP4 container.
+
+    Parses ``moov/meta/keys+ilst`` atoms to extract text metadata
+    (make, model, creation date, etc.).
+
+    Args:
+        file_path: Path to the video file.
+
+    Returns:
+        Dict of key name → string value, or ``None``.
+    """
+    try:
+        return _qt_parse_file(file_path)
+    except Exception:
+        return None
+
+
+def _qt_read_moov(file_path: str) -> bytes | None:
+    """Read the ``moov`` atom body from a QuickTime/ISOBMFF file."""
+    with Path(file_path).open("rb") as f:
+        file_size = f.seek(0, 2)
+        f.seek(0)
+        pos = 0
+        while pos < file_size:
+            f.seek(pos)
+            hdr_raw = f.read(16)
+            if len(hdr_raw) < 8:
+                break
+            size = struct.unpack(">I", hdr_raw[:4])[0]
+            atype = hdr_raw[4:8]
+            hdr = 8
+            if size == 1 and len(hdr_raw) >= 16:
+                size = struct.unpack(">Q", hdr_raw[8:16])[0]
+                hdr = 16
+            elif size == 0:
+                size = file_size - pos
+            if size < hdr:
+                break
+            if atype == b"moov":
+                body = size - hdr
+                if body > _QT_MOOV_MAX:
+                    return None
+                f.seek(pos + hdr)
+                return f.read(body)
+            pos += size
+    return None
+
+
+def _qt_parse_meta(meta_body: bytes) -> dict[str, str] | None:
+    """Parse ``keys`` and ``ilst`` atoms inside a ``meta`` atom body."""
+    # meta may be a full box (4-byte version/flags prefix) or regular box
+    keys_body = _qt_find_atom(meta_body, b"keys")
+    ilst_body = _qt_find_atom(meta_body, b"ilst")
+    if (keys_body is None or ilst_body is None) and len(meta_body) > 4:
+        keys_body = _qt_find_atom(meta_body, b"keys", offset=4)
+        ilst_body = _qt_find_atom(meta_body, b"ilst", offset=4)
+    if keys_body is None or ilst_body is None:
+        return None
+
+    # Parse keys: version(4) + count(4) + entries(size(4) + ns(4) + name)
+    if len(keys_body) < 8:
+        return None
+    count = struct.unpack(">I", keys_body[4:8])[0]
+    keys: dict[int, str] = {}
+    kpos = 8
+    for i in range(1, count + 1):
+        if kpos + 8 > len(keys_body):
+            break
+        ksize = struct.unpack(">I", keys_body[kpos : kpos + 4])[0]
+        if ksize < 8 or kpos + ksize > len(keys_body):
+            break
+        keys[i] = keys_body[kpos + 8 : kpos + ksize].decode("utf-8", errors="replace")
+        kpos += ksize
+
+    # Parse ilst: entries keyed by 1-based index, each with a data sub-atom
+    values: dict[int, str] = {}
+    ipos = 0
+    while ipos + 8 <= len(ilst_body):
+        isize = struct.unpack(">I", ilst_body[ipos : ipos + 4])[0]
+        if isize < 8 or ipos + isize > len(ilst_body):
+            break
+        key_idx = struct.unpack(">I", ilst_body[ipos + 4 : ipos + 8])[0]
+        dpos = ipos + 8
+        if dpos + 16 <= ipos + isize:
+            dsize = struct.unpack(">I", ilst_body[dpos : dpos + 4])[0]
+            if (
+                ilst_body[dpos + 4 : dpos + 8] == b"data"
+                and dsize >= 16
+                and dpos + dsize <= ipos + isize
+            ):
+                type_ind = struct.unpack(">I", ilst_body[dpos + 8 : dpos + 12])[0]
+                if type_ind == 1:  # UTF-8 text
+                    values[key_idx] = ilst_body[dpos + 16 : dpos + dsize].decode(
+                        "utf-8", errors="replace"
+                    )
+        ipos += isize
+
+    result = {keys[i]: values[i] for i in keys if i in values}
+    return result or None
+
+
+def _qt_parse_file(file_path: str) -> dict[str, str] | None:
+    """Locate ``moov`` atom and extract ``keys/ilst`` metadata."""
+    moov_data = _qt_read_moov(file_path)
+    if moov_data is None:
+        return None
+
+    # meta can be direct child of moov or nested under moov/udta
+    meta_body = _qt_find_atom(moov_data, b"meta")
+    if meta_body is None:
+        udta = _qt_find_atom(moov_data, b"udta")
+        if udta is not None:
+            meta_body = _qt_find_atom(udta, b"meta")
+    if meta_body is None:
+        return None
+
+    return _qt_parse_meta(meta_body)

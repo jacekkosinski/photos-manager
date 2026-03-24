@@ -581,3 +581,31 @@ class TestReadFileExif:
         exif_dt, gps_dt = exifdates.read_file_exif(str(txt_file))
         assert exif_dt is None
         assert gps_dt is None
+
+    @pytest.mark.unit
+    def test_quicktime_fallback_parses_creation_date(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Falls back to QuickTime creationdate when piexif returns nothing."""
+        monkeypatch.setattr(
+            exifdates,
+            "read_quicktime_metadata",
+            lambda _: {"com.apple.quicktime.creationdate": "2026-03-12T11:14:04+0100"},
+        )
+        monkeypatch.setattr(exifdates, "_EXIF_AVAILABLE", False)
+        exif_dt, gps_dt = exifdates.read_file_exif("/some/video.mov")
+        assert exif_dt == datetime(2026, 3, 12, 11, 14, 4)
+        assert gps_dt == datetime(2026, 3, 12, 10, 14, 4, tzinfo=UTC)
+
+    @pytest.mark.unit
+    def test_quicktime_fallback_returns_none_without_date(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Returns (None, None) when QuickTime has no creationdate."""
+        monkeypatch.setattr(
+            exifdates,
+            "read_quicktime_metadata",
+            lambda _: {"com.apple.quicktime.make": "Apple"},
+        )
+        monkeypatch.setattr(exifdates, "_EXIF_AVAILABLE", False)
+        exif_dt, gps_dt = exifdates.read_file_exif("/some/video.mov")
+        assert exif_dt is None
+        assert gps_dt is None

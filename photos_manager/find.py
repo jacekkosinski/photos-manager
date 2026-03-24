@@ -24,6 +24,7 @@ from photos_manager.common import (
     format_datetime_change,
     human_size,
     load_metadata_json,
+    read_quicktime_metadata,
     scan_files,
     validate_directory,
 )
@@ -253,27 +254,32 @@ def _find_exif_in_bytes(data: bytes) -> bytes | None:
 
 @functools.cache
 def read_camera_slug(file_path: str) -> str | None:
-    """Read EXIF Make/Model from a JPEG, TIFF, or HEIC/HEIF file and return a normalised slug.
+    """Read Make/Model from EXIF or QuickTime metadata and return a normalised slug.
 
-    Tries ``piexif.load()`` first (handles JPEG/TIFF).  When that fails —
-    e.g. for HEIC/HEIF files whose container piexif cannot parse — falls back
-    to scanning the first ``_EXIF_SCAN_LIMIT`` bytes of the file for a raw
-    EXIF block and loading it directly.
+    Tries ``piexif.load()`` first (JPEG/TIFF), then scans for a raw EXIF
+    block (HEIC/HEIF), and finally falls back to QuickTime metadata
+    (MOV/MP4).
 
     Args:
-        file_path: Path to the image file.
+        file_path: Path to the image or video file.
 
     Returns:
-        Camera slug (e.g. ``"apple-iphone-14-pro"``) or ``None`` when piexif
-        is unavailable, the file has no Make/Model tags, or an error occurs.
+        Camera slug (e.g. ``"apple-iphone-15-pro-max"``) or ``None``
+        when no Make/Model tags can be read.
     """
-    if not _PIEXIF_AVAILABLE:  # pragma: no cover
+    slug = _read_slug_exif(file_path)
+    if slug is not None:
+        return slug
+    return _read_slug_quicktime(file_path)
+
+
+def _read_slug_exif(file_path: str) -> str | None:
+    """Try to read camera slug via piexif (JPEG/TIFF/HEIC)."""
+    if not _PIEXIF_AVAILABLE:
         return None
     try:
         exif_dict = piexif.load(file_path)
     except Exception:
-        # piexif cannot parse this container (e.g. HEIC/HEIF) — search for a
-        # raw EXIF block embedded in the binary data.
         try:
             raw_data = Path(file_path).read_bytes()[:_EXIF_SCAN_LIMIT]
             exif_bytes = _find_exif_in_bytes(raw_data)
@@ -295,6 +301,18 @@ def read_camera_slug(file_path: str) -> str | None:
         return normalize_camera_slug(make, model)
     except Exception:
         return None
+
+
+def _read_slug_quicktime(file_path: str) -> str | None:
+    """Try to read camera slug from QuickTime metadata (MOV/MP4)."""
+    meta = read_quicktime_metadata(file_path)
+    if meta is None:
+        return None
+    make = meta.get("com.apple.quicktime.make", "").strip("\x00 ")
+    model = meta.get("com.apple.quicktime.model", "").strip("\x00 ")
+    if not make:
+        return None
+    return normalize_camera_slug(make, model)
 
 
 def compute_camera_stats(

@@ -2137,6 +2137,49 @@ class TestReadCameraSlug:
 
         assert find.read_camera_slug(str(heic_file)) is None
 
+    def test_quicktime_fallback_reads_make_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Falls back to QuickTime metadata when piexif is unavailable."""
+        monkeypatch.setattr(find, "_PIEXIF_AVAILABLE", False)
+        monkeypatch.setattr(
+            find,
+            "read_quicktime_metadata",
+            lambda _: {
+                "com.apple.quicktime.make": "Apple",
+                "com.apple.quicktime.model": "iPhone 15 Pro Max",
+            },
+        )
+        assert find.read_camera_slug("/some/video.mov") == "apple-iphone-15-pro-max"
+
+    def test_quicktime_fallback_returns_none_without_make(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Returns None when QuickTime metadata has no make."""
+        monkeypatch.setattr(find, "_PIEXIF_AVAILABLE", False)
+        monkeypatch.setattr(
+            find, "read_quicktime_metadata", lambda _: {"com.apple.quicktime.model": "X"}
+        )
+        assert find.read_camera_slug("/some/video.mov") is None
+
+    def test_quicktime_fallback_after_piexif_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Falls back to QuickTime when piexif.load raises and no EXIF block found."""
+        import types
+
+        fake_piexif = types.SimpleNamespace(
+            load=lambda _: (_ for _ in ()).throw(OSError("nope")),
+            ImageIFD=types.SimpleNamespace(Make=271, Model=272),
+        )
+        monkeypatch.setattr(find, "_PIEXIF_AVAILABLE", True)
+        monkeypatch.setattr(find, "piexif", fake_piexif, raising=False)
+        monkeypatch.setattr(
+            find,
+            "read_quicktime_metadata",
+            lambda _: {
+                "com.apple.quicktime.make": "Sony",
+                "com.apple.quicktime.model": "FDR-X3000",
+            },
+        )
+        assert find.read_camera_slug("/video.mp4") == "sony-fdr-x3000"
+
 
 @pytest.mark.unit
 class TestComputeCameraStats:
