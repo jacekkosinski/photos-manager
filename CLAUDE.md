@@ -48,6 +48,18 @@ raises `SystemExit` on error. Some `run()` functions catch `SystemExit`
 internally to continue processing remaining items (e.g. fixdates, verify) —
 intentional.
 
+### Module Structure
+
+Each tool module must contain:
+
+- **Module-level docstring** — short description, `Usage:` section with CLI
+  examples, `Example output:` block, `Exit codes:` list.
+- **`setup_parser(parser)`** — configures the subcommand's `ArgumentParser`.
+- **`run(args)`** — CLI entry point; docstring must include a `Workflow:`
+  section (numbered steps), `Args:`, `Returns:`, `Raises:`, and `Examples:`.
+- **Private helpers** — internal logic extracted into `_prefixed` functions with
+  full docstrings (Args + Returns).
+
 ```
 photos_manager/
 ├── cli.py        # CLI entry point
