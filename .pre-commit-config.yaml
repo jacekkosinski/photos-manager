@@ -21,7 +21,7 @@ repos:
 
   # Ruff - ultra-fast Python linter and formatter
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.1
+    rev: v0.15.8
     hooks:
       # Run the linter
       - id: ruff
@@ -125,7 +125,7 @@ repos:
 
   # Security checks - bandit
   - repo: https://github.com/PyCQA/bandit
-    rev: 1.9.3
+    rev: 1.9.4
     hooks:
       - id: bandit
         name: check security issues (bandit)
@@ -141,14 +141,14 @@ repos:
 
   # pyproject.toml formatter - ensures consistent formatting
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: v2.16.1
+    rev: v2.20.0
     hooks:
       - id: pyproject-fmt
         name: format pyproject.toml (pyproject-fmt)
 
   # Dead code detection - finds unused functions, classes, and variables
   - repo: https://github.com/jendrikseipp/vulture
-    rev: v2.14
+    rev: v2.16
     hooks:
       - id: vulture
         name: detect dead code (vulture)
@@ -156,7 +156,7 @@ repos:
 
   # Duplicate code detection - finds copy-paste duplication across modules and tests
   - repo: https://github.com/PyCQA/pylint
-    rev: v4.0.4
+    rev: v4.0.5
     hooks:
       - id: pylint
         name: detect duplicate code (pylint)
@@ -170,7 +170,7 @@ repos:
 
   # Spell checker - catches typos in code and documentation
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.2
     hooks:
       - id: codespell
         name: check spelling (codespell)
@@ -192,7 +192,7 @@ repos:
 
   # Conventional commits - enforces commit message format
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.13.8 # automatically updated by Commitizen
+    rev: v4.13.9 # automatically updated by Commitizen
     hooks:
       # Validates commit message format (commit-msg hook)
       - id: commitizen
@@ -227,7 +227,7 @@ repos:
 
   # Prettier - opinionated formatter for YAML files
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
+    rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
         name: format yaml (prettier)

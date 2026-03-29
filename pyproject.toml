@@ -74,7 +74,6 @@ packages = [ { include = "photos_manager" } ]
 
 [tool.setuptools]
 # No runtime dependencies - project uses only Python standard library
-
 dynamic.version = { attr = "photos_manager.__version__" }
 
 [tool.ruff]
@@ -120,6 +119,52 @@ lint.pydocstyle.convention = "google"
 skip = ".git*,*.svg,*.lock"
 check-hidden = true
 ignore-words-list = "asend"
+
+# bandit configuration (security linter)
+[tool.bandit]
+exclude_dirs = [
+  "tests",
+  ".venv",
+  "venv",
+  "build",
+  "dist",
+  ".git",
+  "__pycache__",
+]
+skips = [
+  "B101", # assert_used - allow asserts in tests
+]
+
+# interrogate configuration (docstring coverage)
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+pretty = true
+show_error_codes = true
+show_column_numbers = true
+
+[[tool.mypy.overrides]]
+module = [ "tests.*", "tests.conftest" ]
+disallow_untyped_defs = false
+disable_error_code = "arg-type,var-annotated,untyped-decorator"
+
+[[tool.mypy.overrides]]
+module = [ "piexif", "pillow_heif", "tabulate" ]
+ignore_missing_imports = true
 
 [tool.pytest]
 ini_options.minversion = "8.0"
@@ -167,40 +212,7 @@ report.show_missing = true
 report.skip_covered = false
 html.directory = "htmlcov"
 
-# interrogate configuration (docstring coverage)
-
-[tool.mypy]
-python_version = "3.12"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_any_generics = true
-disallow_subclassing_any = true
-disallow_untyped_calls = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-pretty = true
-show_error_codes = true
-show_column_numbers = true
-
-[[tool.mypy.overrides]]
-module = [ "tests.*", "tests.conftest" ]
-disallow_untyped_defs = false
-disable_error_code = "arg-type,var-annotated,untyped-decorator"
-
-[[tool.mypy.overrides]]
-module = [ "piexif", "pillow_heif", "tabulate" ]
-ignore_missing_imports = true
-
 # pytest configuration
-
 [tool.interrogate]
 ignore-init-module = false
 ignore-magic = false
@@ -223,24 +235,7 @@ generate-badge = "."
 badge-format = "svg"
 style = "google"
 
-# bandit configuration (security linter)
-
-[tool.bandit]
-exclude_dirs = [
-  "tests",
-  ".venv",
-  "venv",
-  "build",
-  "dist",
-  ".git",
-  "__pycache__",
-]
-skips = [
-  "B101", # assert_used - allow asserts in tests
-]
-
 # commitizen configuration (version bumping and changelog)
-
 [tool.commitizen]
 name = "cz_conventional_commits"
 version = "0.5.0"

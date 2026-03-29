@@ -10,7 +10,11 @@ from typing import cast
 
 import pytest
 
-from photos_manager.common import calculate_checksums_strict, find_version_file
+from photos_manager.common import (
+    calculate_checksums_strict,
+    find_version_file,
+    load_version_json,
+)
 from photos_manager.verify import (
     collect_expected_files,
     collect_filesystem_files,
@@ -18,7 +22,6 @@ from photos_manager.verify import (
     find_extra_files,
     find_invalid_dates,
     find_zero_byte_files,
-    load_version_json,
     normalize_paths,
     run,
     validate_date_format,
