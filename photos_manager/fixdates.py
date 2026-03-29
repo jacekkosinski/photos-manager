@@ -21,7 +21,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from photos_manager.common import format_timestamp_change, load_metadata_json
+from tabulate import tabulate
+
+from photos_manager.common import TABLE_FMT, TIME_FMT, TS_FMT, load_metadata_json
 
 _TAG_WIDTH = 6  # max(len("[FILE]"), len("[JSON]")) — "[DIR]" is 5, padded to 6
 _TAG_FILE = "[FILE]"
@@ -32,15 +34,10 @@ _TAG_JSON = "[JSON]"
 _PendingChange = tuple[str, str, float, float, Path, str | None]
 
 
-def _name_col_width(pending: list[_PendingChange]) -> int:
-    """Return the max name length for aligned column formatting."""
-    return max((len(name) for name, *_ in pending), default=0)
-
-
-def format_change_line(
-    name: str, tag: str, old_ts: float, new_ts: float, name_width: int = 0, src: str | None = None
-) -> str:
-    """Format one output line describing a timestamp change.
+def _make_change_row(
+    name: str, tag: str, old_ts: float, new_ts: float, src: str | None = None
+) -> tuple[str, str, str, str]:
+    """Build a 4-column tabulate row describing one timestamp change.
 
     Args:
         name: Display name — full path of the file or directory (with trailing
@@ -48,31 +45,33 @@ def format_change_line(
         tag: Type tag — one of ``[FILE]``, ``[DIR]``, ``[JSON]``.
         old_ts: Current modification time as POSIX timestamp.
         new_ts: Target modification time as POSIX timestamp.
-        name_width: When non-zero, left-justifies the name column to this width
-            so tags align across all lines in the output block.
-        src: Source file whose mtime was used as the new timestamp.  When
-            not None, appended as ``src: <path>`` inside the trailing
-            parentheses.  None for ``[FILE]`` entries.
+        src: Source file whose mtime was used as the new timestamp. When not
+            None, appended as ``src: <path>`` inside the delta parentheses.
 
     Returns:
-        Aligned line with full date when the date changes, time only otherwise:
-        ``name  [TAG]  HH:MM:SS → HH:MM:SS (delta: +Xs[, src: path])``
+        Tuple of ``(name, tag, "old → new", "(delta: +Xs[, src: path])")``.
+        Uses time-only format when both timestamps fall on the same calendar
+        date; full ``YYYY-MM-DD HH:MM:SS`` format otherwise.
 
     Examples:
-        >>> line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_000_003_600.0)
-        >>> "->" in line and "delta:" in line
+        >>> row = _make_change_row("photo.jpg", "[FILE]", 1_000_000_000.0, 1_000_003_600.0)
+        >>> row[1]
+        '[FILE]'
+        >>> "delta:" in row[3]
         True
     """
+    old_dt = datetime.fromtimestamp(old_ts)
+    new_dt = datetime.fromtimestamp(new_ts)
+    if old_dt.date() != new_dt.date():
+        old_str = old_dt.strftime(TS_FMT)
+        new_str = new_dt.strftime(TS_FMT)
+    else:
+        old_str = old_dt.strftime(TIME_FMT)
+        new_str = new_dt.strftime(TIME_FMT)
+    delta_s = int((new_dt - old_dt).total_seconds())
+    delta_str = f"+{delta_s}s" if delta_s >= 0 else f"{delta_s}s"
     extra = f", src: {src}" if src is not None else ""
-    return format_timestamp_change(
-        name,
-        tag,
-        datetime.fromtimestamp(old_ts),
-        datetime.fromtimestamp(new_ts),
-        name_width=name_width,
-        tag_width=_TAG_WIDTH,
-        extra=extra,
-    )
+    return (name, tag, f"{old_str} → {new_str}", f"(delta: {delta_str}{extra})")
 
 
 def get_newest_files(
@@ -286,19 +285,23 @@ def _collect_json_changes(
     return pending
 
 
-def _apply_changes(pending: list[_PendingChange], name_width: int, dry_run: bool) -> int:
+def _apply_changes(pending: list[_PendingChange], dry_run: bool) -> int:
     """Print aligned output and optionally apply timestamp changes.
 
     Args:
-        pending: List of ``(name, tag, old_ts, new_ts, path)`` tuples.
-        name_width: Column width for the name field; 0 means no padding.
+        pending: List of ``(name, tag, old_ts, new_ts, path, src)`` tuples.
         dry_run: If True, only prints without modifying timestamps.
 
     Returns:
         Number of changes printed (and applied if not dry_run).
     """
-    for name, tag, old_ts, new_ts, _path, src in pending:
-        print(format_change_line(name, tag, old_ts, new_ts, name_width=name_width, src=src))
+    if not pending:
+        return 0
+    rows = [
+        _make_change_row(name, tag, old_ts, new_ts, src)
+        for name, tag, old_ts, new_ts, _path, src in pending
+    ]
+    print(tabulate(rows, tablefmt=TABLE_FMT, colalign=("left", "left", "left", "left")))
     if not dry_run:
         for name, _tag, _old_ts, new_ts, path, _src in pending:
             try:
@@ -344,8 +347,7 @@ def set_files_timestamps(json_file: str, dry_run: bool = False) -> int:
     if not json_data:
         raise SystemExit(f"Error: JSON file '{json_file}' is empty")
     pending = _collect_file_changes(json_data, dry_run)
-    name_width = _name_col_width(pending)
-    return _apply_changes(pending, name_width, dry_run)
+    return _apply_changes(pending, dry_run)
 
 
 def set_dirs_timestamps(
@@ -376,8 +378,7 @@ def set_dirs_timestamps(
         Set timestamp for directory '/photos/2024' to match file '/photos/2024/img.jpg' (...)
     """
     pending = _collect_dir_changes(newest_files)
-    name_width = _name_col_width(pending)
-    return _apply_changes(pending, name_width, dry_run)
+    return _apply_changes(pending, dry_run)
 
 
 def set_json_timestamps(
@@ -416,8 +417,7 @@ def set_json_timestamps(
     except OSError as e:
         print(f"Error: Failed to set timestamps for '{dir_name}': {e}", file=sys.stderr)
         return 0
-    name_width = _name_col_width(pending)
-    return _apply_changes(pending, name_width, dry_run)
+    return _apply_changes(pending, dry_run)
 
 
 def setup_parser(parser: argparse.ArgumentParser) -> None:
@@ -539,8 +539,7 @@ def run(args: argparse.Namespace) -> int:
             if not all_pending:
                 print(f"All timestamps already correct for {json_file}")
             else:
-                global_width = _name_col_width(all_pending)
-                total_changes += _apply_changes(all_pending, global_width, dry_run)
+                total_changes += _apply_changes(all_pending, dry_run)
 
         except SystemExit as e:
             print(str(e), file=sys.stderr)

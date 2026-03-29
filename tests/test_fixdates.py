@@ -10,7 +10,8 @@ from typing import cast
 import pytest
 
 from photos_manager.fixdates import (
-    format_change_line,
+    _apply_changes,
+    _make_change_row,
     get_newest_files,
     run,
     set_dirs_timestamps,
@@ -20,63 +21,70 @@ from photos_manager.fixdates import (
 
 
 @pytest.mark.unit
-class TestFormatChangeLine:
-    """Tests for format_change_line helper."""
+class TestMakeChangeRow:
+    """Tests for _make_change_row helper."""
 
     def test_contains_arrow_separator(self) -> None:
-        """Output must contain ' → ' between old and new timestamps."""
-        line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
-        assert " → " in line
+        """Time column must contain ' → ' between old and new timestamps."""
+        row = _make_change_row("photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
+        assert "→" in row[2]
 
     def test_contains_delta_colon(self) -> None:
-        """Output must contain 'delta:' label."""
-        line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
-        assert "delta:" in line
+        """Delta column must contain 'delta:' label."""
+        row = _make_change_row("photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
+        assert "delta:" in row[3]
 
     def test_shows_human_readable_dates_not_epoch(self) -> None:
         """Dates must be shown as YYYY-MM-DD HH:MM:SS, not as UNIX epoch integers."""
-        line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
-        assert "2001" in line  # year from epoch 1_000_000_000
-        assert "1000000000" not in line
+        row = _make_change_row("photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
+        assert "2001" in row[2]  # year from epoch 1_000_000_000
+        assert "1000000000" not in row[2]
 
     def test_positive_delta_has_plus_sign(self) -> None:
-        line = format_change_line("photo.jpg", "[FILE]", 1_000_000_000.0, 1_000_003_600.0)
-        assert "+3600s" in line
+        row = _make_change_row("photo.jpg", "[FILE]", 1_000_000_000.0, 1_000_003_600.0)
+        assert "+3600s" in row[3]
 
     def test_negative_delta_has_minus_sign(self) -> None:
-        line = format_change_line("photo.jpg", "[FILE]", 1_000_003_600.0, 1_000_000_000.0)
-        assert "-3600s" in line
+        row = _make_change_row("photo.jpg", "[FILE]", 1_000_003_600.0, 1_000_000_000.0)
+        assert "-3600s" in row[3]
 
-    def test_path_appears_in_output(self) -> None:
-        line = format_change_line("subdir/photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
-        assert "subdir/photo.jpg" in line
+    def test_name_in_first_column(self) -> None:
+        row = _make_change_row("subdir/photo.jpg", "[FILE]", 1_000_000_000.0, 1_100_000_000.0)
+        assert row[0] == "subdir/photo.jpg"
 
-    def test_tag_appears_in_output(self) -> None:
+    def test_tag_in_second_column(self) -> None:
         for tag in ("[FILE]", "[DIR]", "[JSON]"):
-            line = format_change_line("x", tag, 1_000_000_000.0, 1_100_000_000.0)
-            assert tag in line
+            row = _make_change_row("x", tag, 1_000_000_000.0, 1_100_000_000.0)
+            assert row[1] == tag
 
-    def test_name_width_pads_shorter_names(self) -> None:
-        """Tags align when name_width is larger than the name."""
+    def test_tags_align_across_rows(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """tabulate must pad name column so tags align across rows of different lengths."""
         ts0, ts1 = 1_000_000_000.0, 1_100_000_000.0
-        short = format_change_line("a.jpg", "[FILE]", ts0, ts1, name_width=20)
-        long = format_change_line("/path/to/photo.jpg", "[FILE]", ts0, ts1, name_width=20)
-        assert short.index("[FILE]") == long.index("[FILE]")
+        fake_path = tmp_path / "x"
+        pending = [
+            ("a.jpg", "[FILE]", ts0, ts1, fake_path, None),
+            ("/longer/path/photo.jpg", "[FILE]", ts0, ts1, fake_path, None),
+        ]
+        _apply_changes(pending, dry_run=True)
+        lines = [ln for ln in capsys.readouterr().out.splitlines() if "[FILE]" in ln]
+        assert len(lines) == 2
+        assert lines[0].index("[FILE]") == lines[1].index("[FILE]")
 
     def test_shows_time_only_when_same_date(self) -> None:
         """When old and new timestamps fall on the same date, show HH:MM:SS only."""
-        # Two timestamps on the same day, 1 hour apart
         base = datetime(2023, 5, 14, 10, 0, 0).timestamp()
-        line = format_change_line("photo.jpg", "[FILE]", base, base + 3600)
-        assert "10:00:00 → 11:00:00" in line
-        assert "2023" not in line
+        row = _make_change_row("photo.jpg", "[FILE]", base, base + 3600)
+        assert "10:00:00 → 11:00:00" in row[2]
+        assert "2023" not in row[2]
 
     def test_shows_full_date_when_date_changes(self) -> None:
         """When timestamps span a midnight boundary, show full YYYY-MM-DD HH:MM:SS."""
         old_ts = datetime(2023, 5, 14, 23, 59, 59).timestamp()
         new_ts = datetime(2023, 5, 15, 0, 0, 0).timestamp()
-        line = format_change_line("photo.jpg", "[FILE]", old_ts, new_ts)
-        assert "2023-05-14 23:59:59 → 2023-05-15 00:00:00" in line
+        row = _make_change_row("photo.jpg", "[FILE]", old_ts, new_ts)
+        assert "2023-05-14 23:59:59 → 2023-05-15 00:00:00" in row[2]
 
 
 @pytest.mark.unit
