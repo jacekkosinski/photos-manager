@@ -68,7 +68,7 @@ scripts.photos = "photos_manager.cli:main"
 dev = [ "types-tabulate>=0.10.0.20260308,<0.11" ]
 
 [tool.poetry]
-version = "0.5.0"  # NOTE: Keep in sync with photos_manager/__version__
+version = "0.6.0"  # NOTE: Keep in sync with photos_manager/__version__
 packages = [ { include = "photos_manager" } ]
 
 [tool.setuptools]
@@ -237,7 +237,7 @@ style = "google"
 # commitizen configuration (version bumping and changelog)
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.5.0"
+version = "0.6.0"
 version_scheme = "semver"
 update_changelog_on_bump = true
 tag_format = "v$version"
