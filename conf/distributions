@@ -1,0 +1,7 @@
+Origin: photos-manager
+Label: photos-manager
+Codename: stable
+Architectures: amd64
+Components: main
+SignWith: B0831C009EBDCD8B
+Description: photos-manager-cli APT repository
