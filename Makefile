@@ -1,6 +1,7 @@
 .PHONY: help install install-dev test test-verbose coverage lint lint-fix format format-check type-check \
         docstring-check docstring-badge complexity pre-commit pre-commit-install \
-        docs-serve docs-build clean git-clean check-all build run ci update lock shell version
+        docs-serve docs-build clean git-clean check-all build run ci update lock shell version \
+        deb deb-deps
 
 # Default target
 .DEFAULT_GOAL := help
@@ -106,3 +107,11 @@ shell: ## Open a Poetry shell
 
 version: ## Show current version
 	poetry run photos --version
+
+deb-deps: ## Install Debian packaging dependencies
+	sudo apt install -y build-essential debhelper dh-virtualenv devscripts dpkg-dev \
+		libheif-dev python3 python3-dev python3-setuptools python3-venv python3-virtualenv
+
+deb: ## Build .deb package locally
+	dpkg-buildpackage -us -uc -b
+	@echo "Package built: $$(ls -1t ../photos-manager-cli_*.deb | head -1)"
