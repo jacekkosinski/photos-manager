@@ -1,0 +1,106 @@
+name: Build and publish Debian package
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:trixie
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential \
+            debhelper \
+            dh-virtualenv \
+            devscripts \
+            dpkg-dev \
+            libheif-dev \
+            python3 \
+            python3-dev \
+            python3-setuptools \
+            python3-venv \
+            python3-virtualenv
+
+      - name: Update debian/changelog from tag
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          DEBEMAIL: "jacek.kosinski@softflow.tech"
+          DEBFULLNAME: "Jacek Kosinski"
+        run: |
+          VERSION="${TAG_NAME#v}"
+          dch --newversion "${VERSION}-1" \
+            --distribution stable \
+            --force-distribution \
+            "Release ${VERSION}"
+
+      - name: Build .deb package
+        run: |
+          dpkg-buildpackage -us -uc -b
+          mkdir -p /tmp/deb-output
+          cp ../*.deb /tmp/deb-output/
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-package
+          path: /tmp/deb-output/*.deb
+
+  publish-repo:
+    needs: build-deb
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-package
+          path: artifacts
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Import GPG key and configure agent
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          printf "allow-loopback-pinentry\nallow-preset-passphrase\ndefault-cache-ttl 7200\nmax-cache-ttl 7200\n" > ~/.gnupg/gpg-agent.conf
+          echo "pinentry-mode loopback" > ~/.gnupg/gpg.conf
+          echo "${GPG_PRIVATE_KEY}" | gpg --batch --import
+          gpg-connect-agent reloadagent /bye
+          echo "test" | gpg --batch --pinentry-mode loopback \
+            --passphrase-fd 3 --sign --armor 3<<< "${GPG_PASSPHRASE}" > /dev/null
+
+      - name: Install reprepro
+        run: sudo apt-get update && sudo apt-get install -y reprepro
+
+      - name: Add .deb to APT repository
+        run: |
+          cd gh-pages
+          reprepro remove stable photos-manager-cli || true
+          reprepro includedeb stable ../artifacts/*.deb
+
+      - name: Push updated APT repository
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          cd gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: update APT repo for ${TAG_NAME}" || echo "No changes to commit"
+          git push
