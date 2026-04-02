@@ -1,0 +1,5 @@
+photos-manager-cli (0.0.0-1) stable; urgency=medium
+
+  * Initial Debian package release
+
+ -- Jacek Kosiński <jacek.kosinski@softflow.tech>  Thu, 02 Apr 2026 12:00:00 +0200

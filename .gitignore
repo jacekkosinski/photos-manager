@@ -72,6 +72,17 @@ site/
 # interrogate
 interrogate_badge.svg
 
+# Debian packaging
+*.deb
+*.changes
+*.buildinfo
+debian/.debhelper/
+debian/photos-manager-cli/
+debian/files
+
+# Design specs (working documents, not committed)
+docs/superpowers/
+
 # Project specific
 *.db
 *.sqlite

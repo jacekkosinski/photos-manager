@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+export DH_VIRTUALENV_INSTALL_ROOT=/usr/lib
+
+%:
+	dh $@ --with python-virtualenv
+
+override_dh_dwz:
+
+override_dh_strip:
+
+override_dh_shlibdeps:
+
+override_dh_virtualenv:
+	# --no-build-isolation: pip must use preinstalled setuptools/wheel from the
+	# venv rather than creating a temporary build env (which lacks them).
+	dh_virtualenv \
+		--python /usr/bin/python3 \
+		--install-suffix photos-manager \
+		--preinstall "setuptools>=68" \
+		--preinstall "wheel" \
+		--extra-pip-arg "--no-build-isolation" \
+		--extras exif
