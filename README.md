@@ -1,5 +1,13 @@
 # Photos Manager CLI
 
+[![Build .deb](https://github.com/jacekkosinski/photos-manager/actions/workflows/build-deb.yml/badge.svg)](https://github.com/jacekkosinski/photos-manager/actions/workflows/build-deb.yml)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![mypy: strict](https://img.shields.io/badge/mypy-strict-blue.svg)](https://mypy-lang.org/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+[![interrogate](./interrogate_badge.svg)](https://interrogate.readthedocs.io/)
+
 Modern command-line tool for managing photo archives built with Python 3.12.
 
 This toolkit provides utilities for generating and managing metadata about photo
