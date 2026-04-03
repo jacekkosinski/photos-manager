@@ -1,0 +1,5 @@
+Component: main
+Origin: photos-manager
+Label: photos-manager
+Architecture: amd64
+Description: photos-manager-cli APT repository

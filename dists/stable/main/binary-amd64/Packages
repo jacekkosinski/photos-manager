@@ -1,0 +1,20 @@
+Package: photos-manager-cli
+Version: 0.6.0-1
+Architecture: amd64
+Maintainer: Jacek Kosiński <jacek.kosinski@softflow.tech>
+Installed-Size: 69473
+Depends: python3 (>= 3.12), libheif1
+Priority: optional
+Section: utils
+Filename: pool/main/p/photos-manager-cli/photos-manager-cli_0.6.0-1_amd64.deb
+Size: 14265996
+SHA256: 2b89d4c767096c2c31b8b478a82214d071e80b59eafca480d50856a0259699ea
+SHA1: 4795b3d901cdee981c123f01ece77054c5f2a1b8
+MD5sum: 28671c0370e8e5923e07640f390cbd33
+Description: CLI toolkit for photo archive management
+ Photos Manager CLI provides tools for finding duplicates, fixing timestamps,
+ managing metadata, verifying integrity, and synchronizing photo archives.
+ .
+ Subcommands: find, prepare, locate, index, series, exifdates, fixdates,
+ manifest, info, verify, sync.
+

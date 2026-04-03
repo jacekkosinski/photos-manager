@@ -1,0 +1,19 @@
+Origin: photos-manager
+Label: photos-manager
+Codename: stable
+Date: Thu, 02 Apr 2026 22:34:22 UTC
+Architectures: amd64
+Components: main
+Description: photos-manager-cli APT repository
+MD5Sum:
+ ac5e83d9064702155d4b37c069d3b831 786 main/binary-amd64/Packages
+ 86a08776790b07963903e04872356d00 531 main/binary-amd64/Packages.gz
+ faf0d196904f898ac419a1b5d0243b3a 128 main/binary-amd64/Release
+SHA1:
+ dd94428c3ac4744fd9b87a69ebd65d413ac78277 786 main/binary-amd64/Packages
+ 391aa95463158bb15e1c213bc04ad270e489cb69 531 main/binary-amd64/Packages.gz
+ 04d5a9b7d3542e011f299222c163c4c438946990 128 main/binary-amd64/Release
+SHA256:
+ 31c22c7f18be60b169478a3a8195344c22c696d42c78a01701322a1e57097dd0 786 main/binary-amd64/Packages
+ b53948332437b22499fd332cd6afcbe359739233bd65695c7a0778cd39ec9911 531 main/binary-amd64/Packages.gz
+ 7d199fd6e69d556b61b66c4bfcf9e71c8db57ada8d7ea3883d070321db3bfcea 128 main/binary-amd64/Release

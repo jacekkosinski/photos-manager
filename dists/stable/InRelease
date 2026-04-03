@@ -1,0 +1,38 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Origin: photos-manager
+Label: photos-manager
+Codename: stable
+Date: Thu, 02 Apr 2026 22:34:22 UTC
+Architectures: amd64
+Components: main
+Description: photos-manager-cli APT repository
+MD5Sum:
+ ac5e83d9064702155d4b37c069d3b831 786 main/binary-amd64/Packages
+ 86a08776790b07963903e04872356d00 531 main/binary-amd64/Packages.gz
+ faf0d196904f898ac419a1b5d0243b3a 128 main/binary-amd64/Release
+SHA1:
+ dd94428c3ac4744fd9b87a69ebd65d413ac78277 786 main/binary-amd64/Packages
+ 391aa95463158bb15e1c213bc04ad270e489cb69 531 main/binary-amd64/Packages.gz
+ 04d5a9b7d3542e011f299222c163c4c438946990 128 main/binary-amd64/Release
+SHA256:
+ 31c22c7f18be60b169478a3a8195344c22c696d42c78a01701322a1e57097dd0 786 main/binary-amd64/Packages
+ b53948332437b22499fd332cd6afcbe359739233bd65695c7a0778cd39ec9911 531 main/binary-amd64/Packages.gz
+ 7d199fd6e69d556b61b66c4bfcf9e71c8db57ada8d7ea3883d070321db3bfcea 128 main/binary-amd64/Release
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAEBCgAdFiEEI/JWS1guP+wsz0N3sIMcAJ69zYsFAmnO7u4ACgkQsIMcAJ69
+zYtI0g/+MJNn6BqjYP3O97Z69ELvVxw/Q74wtjEr/lQDDDkflnsPc7K4+oWmkuXb
+JkgWiK+aXjMkSYM67wsrKN6QcZuTkYjLa0Cu24Mvjw7zkkY4XZrM+7T8OdDKirqQ
+TYrUOPXCHG8KpRiem2XbvxMLSDTDRH7m/bjbufG+OjIXTkZ3yAGIGgaQOxnqJZDG
+ihLXQDU7VAZg2zm/fmelRuRF3gEzxVOdjmDh9HjPIg9S+SBlAFm0Qm8aq+/LZlTj
+cyAhIJ+Vr/OT7wG59GUvLYYaaAg0TpN7Xj+ogn0WivV4JVt249UrG3MdiiiFlAJc
+BcSf3SKnhPDSQELLMkZN9XtaXgNgpFtMYqgabSXRZgylgxIBNLXF9Tq1Wlwckh7f
+VXlYsLYGdWsbuLVe799ccJPlrrBgKuNzqa9V2tVh03WeoPHNFi/DU49OMAiV7WBA
+zJmjiwYUY6NRscz4i6Rd+GQv+JXBiOx1yENpL1K239rp6LrimrU+Y5ZzKBCV3no2
+CCIR9BFISnZz2+xoeqzVrFJv03eoolhnm1S+JU4mR+Tet0aZ9sj5d3NDVGkXwLks
+AhsYZ+eHTeWwichUHV3735LL7vRStHLyYGCmjjezoUEpnxmVsLfzqqCLnmEIRK/U
+Y/ZuI0oYUbNm35LcmwcMR8/qYPI4myVsQ4Dm17JJUwTVAajCl3Q=
+=7apu
+-----END PGP SIGNATURE-----
