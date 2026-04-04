@@ -383,6 +383,7 @@ def find_gap_match(
 
     # Sort by gap tightness (tightest first)
     def gap_size(m: GapMatch) -> int:
+        """Return the numeric gap between surrounding sequence numbers for sorting."""
         lo, hi = m.gap
         if lo is not None and hi is not None:
             return hi - lo
