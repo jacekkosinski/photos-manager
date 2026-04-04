@@ -78,7 +78,6 @@ clean: ## Clean up generated files
 	find . -type f -name "*.pyo" -delete
 	find . -type f -name ".coverage" -delete
 	find . -type f -name "coverage.xml" -delete
-	find . -type f -name "interrogate_badge.svg" -delete
 
 git-clean: ## Clean up git repository (prune, gc, remove stale branches)
 	@git remote | grep -q origin && git remote prune origin || true

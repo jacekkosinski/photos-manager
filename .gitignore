@@ -69,9 +69,6 @@ site/
 # Ruff
 .ruff_cache/
 
-# interrogate
-interrogate_badge.svg
-
 # Debian packaging
 *.deb
 *.changes
