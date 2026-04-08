@@ -444,25 +444,6 @@ def _get_current_path(item: Path, path_map: dict[Path, Path]) -> Path:
     return item
 
 
-def _update_paths_for_dry_run(all_items: list[Path], path_map: dict[Path, Path]) -> list[Path]:
-    """Update paths based on rename map for dry-run mode.
-
-    Args:
-        all_items: List of original paths.
-        path_map: Mapping of old paths to new paths.
-
-    Returns:
-        List of updated paths.
-    """
-    updated_items = []
-    for item in all_items:
-        current = path_map.get(item, item)
-        if current == item:
-            current = _get_current_path(item, path_map)
-        updated_items.append(current)
-    return updated_items
-
-
 def _process_filenames(
     all_items: list[Path], dry_run: bool, root: Path | None = None
 ) -> tuple[bool, dict[Path, Path]]:
@@ -635,13 +616,11 @@ def process_directory(
     name_errors, path_map = _process_filenames(all_items, dry_run, root=root)
     total_changes = len(path_map)
 
-    # Re-scan or update paths after renames
+    # Re-scan paths after renames (only needed when files were actually renamed)
     if not dry_run and path_map:
         new_directory = path_map.get(directory, directory)
         items = get_items_depth_first(new_directory)
         all_items = [*items, new_directory]
-    elif path_map:
-        all_items = _update_paths_for_dry_run(all_items, path_map)
 
     # Phase 2-4: Fix permissions and ownership
     file_perm_errors, file_perm_count = _process_file_permissions(all_items, dry_run, root=root)
