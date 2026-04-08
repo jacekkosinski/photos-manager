@@ -12,12 +12,12 @@ Install photos-manager-cli on a Debian-based NAS with automatic updates.
 
 ```bash
 # Import the GPG signing key
-curl -fsSL https://softflow-tech.github.io/photos-manager/gpg.key \
-  | sudo gpg --dearmor -o /usr/share/keyrings/photos-manager.gpg
+curl -fsSL https://jacekkosinski.github.io/photos-manager/gpg.key \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/photos-manager.gpg
 
 # Add APT source
-echo "deb [signed-by=/usr/share/keyrings/photos-manager.gpg] \
-  https://softflow-tech.github.io/photos-manager stable main" \
+echo "deb [signed-by=/etc/apt/keyrings/photos-manager.gpg] \
+  https://jacekkosinski.github.io/photos-manager stable main" \
   | sudo tee /etc/apt/sources.list.d/photos-manager.list
 
 # Install
@@ -57,9 +57,9 @@ sudo apt-get install -f   # install missing dependencies
 
 ```bash
 # Re-import the key
-sudo rm /usr/share/keyrings/photos-manager.gpg
-curl -fsSL https://softflow-tech.github.io/photos-manager/gpg.key \
-  | sudo gpg --dearmor -o /usr/share/keyrings/photos-manager.gpg
+sudo rm /etc/apt/keyrings/photos-manager.gpg
+curl -fsSL https://jacekkosinski.github.io/photos-manager/gpg.key \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/photos-manager.gpg
 ```
 
 **Python version too old:** The package requires Python 3.12+. Check your
